@@ -1,0 +1,1182 @@
+import Foundation
+import DFTCore
+import LogicIR
+import PDKCore
+import XcircuitePackage
+
+public struct DeterministicATPGEngine: ATPGExecuting {
+    public let artifactStore: any DFTArtifactStoring
+    public let designLoader: (any DFTDesignLoading)?
+    public let cellLibraryLoader: (any DFTCellLibraryLoading)?
+    public let faultExtractor: any DFTFaultExtracting
+    public let simulator: any GateLevelSimulating
+    public let sequentialSimulator: any GateLevelSequentialSimulating
+    public let transitionSimulator: any GateLevelTransitionSimulating
+    public let processFaultModel: (any DFTProcessFaultModeling)?
+    public let implementationID: String
+
+    public init(
+        artifactStore: any DFTArtifactStoring = InMemoryDFTArtifactStore(),
+        designLoader: (any DFTDesignLoading)? = nil,
+        cellLibraryLoader: (any DFTCellLibraryLoading)? = nil,
+        faultExtractor: any DFTFaultExtracting = GateLevelFaultExtractor(),
+        simulator: any GateLevelSimulating = GateLevelCombinationalSimulator(),
+        sequentialSimulator: any GateLevelSequentialSimulating = GateLevelSequentialSimulator(),
+        transitionSimulator: any GateLevelTransitionSimulating = GateLevelTransitionSimulator(),
+        processFaultModel: (any DFTProcessFaultModeling)? = nil,
+        implementationID: String = "native-deterministic-atpg"
+    ) {
+        self.artifactStore = artifactStore
+        self.designLoader = designLoader
+        self.cellLibraryLoader = cellLibraryLoader
+        self.faultExtractor = faultExtractor
+        self.simulator = simulator
+        self.sequentialSimulator = sequentialSimulator
+        self.transitionSimulator = transitionSimulator
+        self.processFaultModel = processFaultModel
+        self.implementationID = implementationID
+    }
+
+    public func execute(
+        _ request: DFTRequest
+    ) async throws -> XcircuiteEngineResultEnvelope<DFTPayload> {
+        let startedAt = Date()
+        let engineID = "dft.atpg"
+        do {
+            try Task.checkCancellation()
+            let issues = request.validationIssues(for: .atpg)
+            guard issues.isEmpty else {
+                return DFTExecutionSupport.envelope(
+                    request: request,
+                    engineID: engineID,
+                    implementationID: implementationID,
+                    status: .blocked,
+                    diagnostics: DFTExecutionSupport.diagnostics(for: issues),
+                    payload: DFTPayload(
+                        transformedDesign: nil,
+                        faultCoverage: nil,
+                        qualification: qualification,
+                        assumptions: ["coverage was not reported because the fault universe or ATPG prerequisites are invalid"]
+                    ),
+                    startedAt: startedAt
+                )
+            }
+            guard var configuration = request.atpgConfiguration else {
+                return blocked(
+                    request: request,
+                    engineID: engineID,
+                    startedAt: startedAt,
+                    code: "DFT_ATPG_PREREQUISITE_MISSING",
+                    message: "Fault universe and ATPG configuration are required."
+                )
+            }
+            if configuration.maximumPatternCount <= 0 || configuration.patternLength <= 0 || configuration.abortLimit < 0 {
+                return blocked(
+                    request: request,
+                    engineID: engineID,
+                    startedAt: startedAt,
+                    code: "DFT_ATPG_CONFIGURATION_INVALID",
+                    message: "ATPG pattern count and length must be positive and abort limit cannot be negative.",
+                    entity: "atpgConfiguration",
+                    actions: ["provide_positive_atpg_limits"]
+                )
+            }
+
+            if let cellLibraryReference = request.cellLibrary {
+                guard let cellLibraryLoader else {
+                    return blocked(
+                        request: request,
+                        engineID: engineID,
+                        startedAt: startedAt,
+                        code: "DFT_CELL_LIBRARY_LOADER_MISSING",
+                        message: "ATPG cannot use a process-scoped cell library without a manifest loader.",
+                        entity: cellLibraryReference.artifact.path,
+                        actions: ["provide_cell_library_loader", "persist_cell_library_manifest"]
+                    )
+                }
+                let manifest: DFTCellLibraryManifest
+                do {
+                    manifest = try cellLibraryLoader.load(cellLibraryReference)
+                    try validate(cellLibrary: manifest, reference: cellLibraryReference, pdk: request.pdk)
+                } catch {
+                    return blocked(
+                        request: request,
+                        engineID: engineID,
+                        startedAt: startedAt,
+                        code: "DFT_CELL_LIBRARY_LOAD_FAILED",
+                        message: error.localizedDescription,
+                        entity: cellLibraryReference.artifact.path,
+                        actions: ["verify_cell_library_digest", "align_cell_library_with_pdk", "attach_qualification_evidence"]
+                    )
+                }
+                configuration = configuration.replacingSequentialCellContracts(
+                    manifest.bindings.map(\.sequentialCellContract)
+                )
+            }
+
+            let faultSource = configuration.faultSource ?? .declaredUniverse
+            let universe: DFTFaultUniverse
+            let gateSnapshot: LogicDesignSnapshot?
+            switch faultSource {
+            case .declaredUniverse:
+                guard let declaredUniverse = request.faultUniverse else {
+                    return blocked(
+                        request: request,
+                        engineID: engineID,
+                        startedAt: startedAt,
+                        code: "DFT_FAULT_UNIVERSE_MISSING",
+                        message: "Declared-universe ATPG requires a fault universe.",
+                        entity: "faultUniverse",
+                        actions: ["declare_fault_universe", "select_gate_level_fault_source"]
+                    )
+                }
+                universe = declaredUniverse
+                gateSnapshot = nil
+            case .gateLevel:
+                guard let designLoader else {
+                    return blocked(
+                        request: request,
+                        engineID: engineID,
+                        startedAt: startedAt,
+                        code: "DFT_DESIGN_LOADER_MISSING",
+                        message: "Gate-level ATPG requires a canonical LogicDesignSnapshot loader.",
+                        entity: "design",
+                        actions: ["inject_design_loader", "provide_gate_level_design_artifact"]
+                    )
+                }
+                let loadedSnapshot: LogicDesignSnapshot
+                do {
+                    loadedSnapshot = try designLoader.load(request.design)
+                } catch {
+                    return blocked(
+                        request: request,
+                        engineID: engineID,
+                        startedAt: startedAt,
+                        code: "DFT_DESIGN_LOAD_FAILED",
+                        message: "Could not load the canonical design for gate-level ATPG: \(error.localizedDescription)",
+                        entity: request.design.artifact.path,
+                        actions: ["verify_design_artifact_integrity", "repair_gate_level_snapshot"]
+                    )
+                }
+                do {
+                    universe = try faultExtractor.extract(
+                        from: loadedSnapshot,
+                        reference: request.design
+                    )
+                } catch {
+                    return blocked(
+                        request: request,
+                        engineID: engineID,
+                        startedAt: startedAt,
+                        code: "DFT_FAULT_EXTRACTION_FAILED",
+                        message: "Could not derive a gate-level fault universe: \(error.localizedDescription)",
+                        entity: request.design.artifact.path,
+                        actions: ["repair_gate_connectivity", "use_declared_fault_universe"]
+                    )
+                }
+                gateSnapshot = loadedSnapshot
+            }
+
+            let universeDigest = try DFTDeterministicHasher().digest(universe)
+            let seed = configuration.randomSeed ?? DFTDeterministicHasher().seed(for: universeDigest)
+            let excluded = Set(universe.excludedFaultIDs)
+            let activeFaults = universe.faults
+                .filter { !excluded.contains($0.id) }
+                .sorted { $0.id < $1.id }
+
+            var outcomes: [DFTFaultOutcome] = []
+            var patterns: [DFTTestPattern] = []
+            var diagnostics: [XcircuiteEngineDiagnostic] = []
+            var transitionSnapshot: LogicDesignSnapshot?
+            var abortedCount = 0
+            var untestableCount = 0
+            if faultSource == .declaredUniverse,
+               activeFaults.contains(where: { $0.family == .transition }),
+               let designLoader {
+                do {
+                    transitionSnapshot = try designLoader.load(request.design)
+                } catch {
+                    diagnostics.append(XcircuiteEngineDiagnostic(
+                        severity: .error,
+                        code: "DFT_TRANSITION_DESIGN_LOAD_FAILED",
+                        message: "Transition-fault ATPG could not load the canonical design: \(error.localizedDescription)",
+                        entity: request.design.artifact.path,
+                        suggestedActions: ["verify_design_artifact_integrity", "use_a_declared_fault_model"]
+                    ))
+                }
+            }
+            if faultSource == .gateLevel {
+                guard let gateSnapshot else {
+                    return blocked(
+                        request: request,
+                        engineID: engineID,
+                        startedAt: startedAt,
+                        code: "DFT_GATE_LEVEL_SNAPSHOT_MISSING",
+                        message: "Gate-level ATPG could not retain the loaded canonical design.",
+                        entity: "design"
+                    )
+                }
+                do {
+                    let search = try searchGateLevel(
+                        snapshot: gateSnapshot,
+                        faults: activeFaults,
+                        configuration: configuration,
+                        sequentialSimulator: sequentialSimulator
+                    )
+                    outcomes = search.outcomes
+                    patterns = search.patterns
+                    diagnostics.append(contentsOf: search.diagnostics)
+                    abortedCount = search.abortedCount
+                    untestableCount = search.untestableCount
+                } catch let error as GateLevelATPGError {
+                    return blocked(
+                        request: request,
+                        engineID: engineID,
+                        startedAt: startedAt,
+                        code: "DFT_GATE_LEVEL_ATPG_BLOCKED",
+                        message: error.localizedDescription,
+                        entity: "faultUniverse",
+                        actions: ["reduce_primary_input_width", "increase_pattern_length", "qualify_supported_gate_cells"]
+                    )
+                } catch let error as GateLevelSimulationError {
+                    return blocked(
+                        request: request,
+                        engineID: engineID,
+                        startedAt: startedAt,
+                        code: "DFT_GATE_LEVEL_SIMULATION_BLOCKED",
+                        message: error.localizedDescription,
+                        entity: "faultUniverse",
+                        actions: ["qualify_gate_cell_semantics", "repair_gate_connectivity", "use_declared_fault_universe"]
+                    )
+                } catch {
+                    return blocked(
+                        request: request,
+                        engineID: engineID,
+                        startedAt: startedAt,
+                        code: "DFT_GATE_LEVEL_ATPG_FAILED",
+                        message: "Gate-level ATPG failed: \(error.localizedDescription)",
+                        entity: "faultUniverse"
+                    )
+                }
+            } else {
+              for (index, fault) in activeFaults.enumerated() {
+                try Task.checkCancellation()
+                if index >= configuration.maximumPatternCount {
+                    abortedCount += 1
+                    outcomes.append(DFTFaultOutcome(
+                        faultID: fault.id,
+                        status: .aborted,
+                        reason: "pattern budget exhausted"
+                    ))
+                    continue
+                }
+                if fault.location.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    untestableCount += 1
+                    outcomes.append(DFTFaultOutcome(
+                        faultID: fault.id,
+                        status: .untestable,
+                        reason: "fault location is unavailable"
+                    ))
+                    diagnostics.append(XcircuiteEngineDiagnostic(
+                        severity: .error,
+                        code: "DFT_FAULT_LOCATION_MISSING",
+                        message: "Fault \(fault.id) cannot be modeled without a location.",
+                        entity: fault.id,
+                        suggestedActions: ["declare_fault_location"]
+                    ))
+                    continue
+                }
+                if fault.family == .transition {
+                    guard let transitionSnapshot,
+                          fault.transitionDirection != nil else {
+                        abortedCount += 1
+                        outcomes.append(DFTFaultOutcome(
+                            faultID: fault.id,
+                            status: .aborted,
+                            reason: "transition direction or canonical combinational design is unavailable"
+                        ))
+                        diagnostics.append(XcircuiteEngineDiagnostic(
+                            severity: .error,
+                            code: "DFT_FAULT_SEMANTICS_UNAVAILABLE",
+                            message: "Transition fault \(fault.id) requires an explicit direction and a canonical combinational design.",
+                            entity: fault.id,
+                            suggestedActions: ["declare_transition_direction", "inject_design_loader", "use_a_qualified_transition_backend"]
+                        ))
+                        continue
+                    }
+                    do {
+                        guard let bits = try searchTransitionFault(
+                            snapshot: transitionSnapshot,
+                            fault: fault,
+                            configuration: configuration
+                        ) else {
+                            untestableCount += 1
+                            outcomes.append(DFTFaultOutcome(
+                                faultID: fault.id,
+                                status: .untestable,
+                                reason: "no bounded launch/capture input pair changed an observable output"
+                            ))
+                            continue
+                        }
+                        let patternID = "pattern-\(patterns.count + 1)"
+                        patterns.append(DFTTestPattern(
+                            id: patternID,
+                            bits: bits,
+                            faultIDs: [fault.id]
+                        ))
+                        outcomes.append(DFTFaultOutcome(
+                            faultID: fault.id,
+                            status: .detected,
+                            patternID: patternID,
+                            reason: "detected by bounded combinational launch/capture simulation"
+                        ))
+                    } catch let error as GateLevelATPGError {
+                        abortedCount += 1
+                        outcomes.append(DFTFaultOutcome(
+                            faultID: fault.id,
+                            status: .aborted,
+                            reason: error.localizedDescription
+                        ))
+                        diagnostics.append(XcircuiteEngineDiagnostic(
+                            severity: .error,
+                            code: "DFT_FAULT_SEMANTICS_UNAVAILABLE",
+                            message: error.localizedDescription,
+                            entity: fault.id,
+                            suggestedActions: ["reduce_transition_vector_width", "use_a_qualified_transition_backend"]
+                        ))
+                    } catch let error as GateLevelSimulationError {
+                        abortedCount += 1
+                        outcomes.append(DFTFaultOutcome(
+                            faultID: fault.id,
+                            status: .aborted,
+                            reason: error.localizedDescription
+                        ))
+                        diagnostics.append(XcircuiteEngineDiagnostic(
+                            severity: .error,
+                            code: "DFT_FAULT_SEMANTICS_UNAVAILABLE",
+                            message: error.localizedDescription,
+                            entity: fault.id,
+                            suggestedActions: ["qualify_combinational_transition_semantics", "use_a_declared_fault_model"]
+                        ))
+                    }
+                    continue
+                }
+                if fault.family == .processSpecific {
+                    guard let processFamily = fault.processFamily,
+                          configuration.supportedProcessFamilies.contains(processFamily) else {
+                        abortedCount += 1
+                        outcomes.append(DFTFaultOutcome(
+                            faultID: fault.id,
+                            status: .aborted,
+                            reason: "process fault family is not declared in the ATPG configuration"
+                        ))
+                        diagnostics.append(XcircuiteEngineDiagnostic(
+                            severity: .error,
+                            code: "DFT_PROCESS_FAULT_FAMILY_UNDECLARED",
+                            message: "ATPG cannot evaluate process-specific fault \(fault.id) without a declared process family.",
+                            entity: fault.id,
+                            suggestedActions: ["declare_process_fault_family", "inject_a_qualified_process_fault_model"]
+                        ))
+                        continue
+                    }
+                    guard let processFaultModel else {
+                        abortedCount += 1
+                        outcomes.append(DFTFaultOutcome(
+                            faultID: fault.id,
+                            status: .aborted,
+                            reason: "no process-specific fault model was injected"
+                        ))
+                        diagnostics.append(XcircuiteEngineDiagnostic(
+                            severity: .error,
+                            code: "DFT_PROCESS_FAULT_MODEL_MISSING",
+                            message: "Process-specific fault \(fault.id) requires an injected and separately qualified fault model.",
+                            entity: fault.id,
+                            suggestedActions: ["inject_a_qualified_process_fault_model", "use_a_supported_fault_family"]
+                        ))
+                        continue
+                    }
+                    guard processFaultModel.supports(processFamily: processFamily) else {
+                        abortedCount += 1
+                        outcomes.append(DFTFaultOutcome(
+                            faultID: fault.id,
+                            status: .aborted,
+                            modelID: processFaultModel.modelID,
+                            reason: "injected process-specific fault model does not support the declared family"
+                        ))
+                        diagnostics.append(XcircuiteEngineDiagnostic(
+                            severity: .error,
+                            code: "DFT_PROCESS_FAULT_MODEL_UNSUPPORTED",
+                            message: "Injected process fault model \(processFaultModel.modelID) does not support family \(processFamily).",
+                            entity: fault.id,
+                            suggestedActions: ["select_a_model_for_the_process_family", "use_a_supported_fault_family"]
+                        ))
+                        continue
+                    }
+                    let modelResult: DFTProcessFaultModelResult
+                    do {
+                        modelResult = try await processFaultModel.evaluate(
+                            fault: fault,
+                            request: request,
+                            configuration: configuration
+                        )
+                    } catch is CancellationError {
+                        throw CancellationError()
+                    } catch {
+                        abortedCount += 1
+                        outcomes.append(DFTFaultOutcome(
+                            faultID: fault.id,
+                            status: .aborted,
+                            modelID: processFaultModel.modelID,
+                            reason: "process fault model failed: \(error.localizedDescription)"
+                        ))
+                        diagnostics.append(XcircuiteEngineDiagnostic(
+                            severity: .error,
+                            code: "DFT_PROCESS_FAULT_MODEL_FAILED",
+                            message: "Process fault model \(processFaultModel.modelID) failed for \(fault.id): \(error.localizedDescription)",
+                            entity: fault.id,
+                            suggestedActions: ["inspect_process_fault_model_diagnostics", "retain_model_failure_artifact"]
+                        ))
+                        continue
+                    }
+                    guard modelResult.modelID == processFaultModel.modelID,
+                          !modelResult.reason.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                        abortedCount += 1
+                        outcomes.append(DFTFaultOutcome(
+                            faultID: fault.id,
+                            status: .aborted,
+                            modelID: processFaultModel.modelID,
+                            reason: "process fault model returned an invalid result identity"
+                        ))
+                        diagnostics.append(XcircuiteEngineDiagnostic(
+                            severity: .error,
+                            code: "DFT_PROCESS_FAULT_MODEL_INVALID_RESULT",
+                            message: "Process fault model returned an invalid identity or empty reason for \(fault.id).",
+                            entity: fault.id,
+                            suggestedActions: ["repair_process_fault_model_result"]
+                        ))
+                        continue
+                    }
+                    switch modelResult.status {
+                    case .detected:
+                        guard let patternBits = modelResult.patternBits,
+                              patternBits.count == configuration.patternLength,
+                              patternBits.allSatisfy({ $0 == "0" || $0 == "1" }) else {
+                            abortedCount += 1
+                            outcomes.append(DFTFaultOutcome(
+                                faultID: fault.id,
+                                status: .aborted,
+                                modelID: processFaultModel.modelID,
+                                reason: "process fault model returned an invalid detected pattern"
+                            ))
+                            diagnostics.append(XcircuiteEngineDiagnostic(
+                                severity: .error,
+                                code: "DFT_PROCESS_FAULT_MODEL_INVALID_PATTERN",
+                                message: "Process fault model returned a non-binary pattern with the wrong length for \(fault.id).",
+                                entity: fault.id,
+                                suggestedActions: ["repair_process_fault_pattern", "align_pattern_length"]
+                            ))
+                            continue
+                        }
+                        let patternID = "pattern-\(patterns.count + 1)"
+                        patterns.append(DFTTestPattern(
+                            id: patternID,
+                            bits: patternBits,
+                            faultIDs: [fault.id]
+                        ))
+                        outcomes.append(DFTFaultOutcome(
+                            faultID: fault.id,
+                            status: .detected,
+                            patternID: patternID,
+                            modelID: modelResult.modelID,
+                            reason: "detected by process fault model \(modelResult.modelID): \(modelResult.reason)"
+                        ))
+                    case .untestable:
+                        untestableCount += 1
+                        outcomes.append(DFTFaultOutcome(
+                            faultID: fault.id,
+                            status: .untestable,
+                            modelID: modelResult.modelID,
+                            reason: modelResult.reason
+                        ))
+                    case .aborted:
+                        abortedCount += 1
+                        outcomes.append(DFTFaultOutcome(
+                            faultID: fault.id,
+                            status: .aborted,
+                            modelID: modelResult.modelID,
+                            reason: modelResult.reason
+                        ))
+                    }
+                    continue
+                }
+                guard supports(fault: fault, configuration: configuration) else {
+                    abortedCount += 1
+                    outcomes.append(DFTFaultOutcome(
+                        faultID: fault.id,
+                        status: .aborted,
+                        reason: "fault family semantics are unavailable to this backend"
+                    ))
+                    diagnostics.append(XcircuiteEngineDiagnostic(
+                        severity: .error,
+                        code: "DFT_FAULT_SEMANTICS_UNAVAILABLE",
+                        message: "ATPG was blocked for fault \(fault.id) because no declared backend model is available for family \(fault.family.rawValue).",
+                        entity: fault.id,
+                        suggestedActions: ["provide_qualified_process_fault_model"]
+                    ))
+                    continue
+                }
+                let patternID = "pattern-\(index + 1)"
+                let pattern = DFTTestPattern(
+                    id: patternID,
+                    bits: patternBits(for: fault.id, seed: seed, length: configuration.patternLength),
+                    faultIDs: [fault.id]
+                )
+                patterns.append(pattern)
+                outcomes.append(DFTFaultOutcome(
+                    faultID: fault.id,
+                    status: .detected,
+                    patternID: patternID,
+                    reason: "detected by deterministic declared-fault model"
+                ))
+              }
+            }
+
+            let detectedCount = outcomes.filter { $0.status == .detected }.count
+            let denominator = activeFaults.count
+            let coverage: Double? = abortedCount > configuration.abortLimit || untestableCount > 0
+                ? nil
+                : (denominator == 0 ? nil : Double(detectedCount) / Double(denominator))
+            let evidence = DFTCoverageEvidence(
+                faultUniverseName: universe.name,
+                faultUniverseRevision: universe.revision,
+                faultUniverseDigest: universeDigest,
+                declaredFaultCount: universe.faults.count,
+                excludedFaultCount: excluded.count,
+                detectedFaultCount: detectedCount,
+                untestableFaultCount: untestableCount,
+                abortedFaultCount: abortedCount,
+                coverage: coverage,
+                assumptions: [
+                    "one deterministic pattern is generated per modeled fault",
+                    "coverage denominator is active declared faults after exclusions",
+                    "process-specific results require an injected model, validated model result and independent qualification",
+                    faultSource == .gateLevel
+                        ? "fault universe was extracted from driven nets in the canonical gate design"
+                        : "fault universe was supplied by the request"
+                ],
+                qualification: qualification,
+                outcomes: outcomes
+            )
+            let patternSet = DFTTestPatternSet(
+                format: configuration.patternFormat.rawValue,
+                seed: seed,
+                faultUniverseDigest: universeDigest,
+                patterns: patterns
+            )
+            let evidenceData = try DFTArtifactJSONEncoder().encode(evidence)
+            let evidenceReference = try await artifactStore.store(
+                DFTArtifactContent(
+                    artifactID: "dft-coverage-evidence",
+                    fileName: "coverage-evidence.json",
+                    kind: .report,
+                    format: .json,
+                    data: evidenceData
+                ),
+                runID: request.runID
+            )
+            var artifacts = [evidenceReference]
+            if !patterns.isEmpty {
+                let patternsData = try DeterministicTestPatternCodec().encode(
+                    patternSet,
+                    format: configuration.patternFormat
+                )
+                let patternReference = try await artifactStore.store(
+                    DFTArtifactContent(
+                        artifactID: "dft-patterns",
+                        fileName: "patterns.\(configuration.patternFormat.rawValue.lowercased())",
+                        kind: .testPattern,
+                        format: fileFormat(for: configuration.patternFormat),
+                        data: patternsData
+                    ),
+                    runID: request.runID
+                )
+                artifacts.append(patternReference)
+            }
+
+            let isBlocked = abortedCount > configuration.abortLimit || untestableCount > 0
+            if isBlocked {
+                diagnostics.append(XcircuiteEngineDiagnostic(
+                    severity: .error,
+                    code: "DFT_ATPG_BLOCKED",
+                    message: "ATPG produced partial evidence but cannot claim coverage because unsupported or untestable faults remain.",
+                    suggestedActions: ["qualify_missing_fault_semantics", "increase_pattern_budget", "review_fault_exclusions"]
+                ))
+            } else if abortedCount > 0 {
+                diagnostics.append(XcircuiteEngineDiagnostic(
+                    severity: .warning,
+                    code: "DFT_ATPG_ABORTS_WITHIN_POLICY",
+                    message: "ATPG completed with \(abortedCount) aborted fault(s) within the declared abort limit."
+                ))
+            }
+            diagnostics.insert(
+                XcircuiteEngineDiagnostic(
+                    severity: .info,
+                    code: "DFT_ATPG_COMPLETED",
+                    message: faultSource == .gateLevel
+                        ? "Exhaustive gate-level ATPG generated \(patterns.count) pattern(s) for \(activeFaults.count) extracted fault(s)."
+                        : "Generated \(patterns.count) deterministic pattern(s) for \(activeFaults.count) active fault(s)."
+                ),
+                at: 0
+            )
+
+            return DFTExecutionSupport.envelope(
+                request: request,
+                engineID: engineID,
+                implementationID: implementationID,
+                status: isBlocked ? .blocked : .completed,
+                diagnostics: diagnostics,
+                artifacts: artifacts,
+                payload: DFTPayload(
+                    transformedDesign: nil,
+                    faultCoverage: coverage,
+                    patterns: patternSet,
+                    coverageEvidence: evidence,
+                    qualification: qualification,
+                    assumptions: evidence.assumptions
+                ),
+                startedAt: startedAt,
+                seed: seed
+            )
+        } catch is CancellationError {
+            return DFTExecutionSupport.envelope(
+                request: request,
+                engineID: engineID,
+                implementationID: implementationID,
+                status: .cancelled,
+                diagnostics: [
+                    XcircuiteEngineDiagnostic(
+                        severity: .warning,
+                        code: "DFT_EXECUTION_CANCELLED",
+                        message: "ATPG was cancelled before completion."
+                    )
+                ],
+                payload: DFTPayload(
+                    transformedDesign: nil,
+                    faultCoverage: nil,
+                    qualification: qualification
+                ),
+                startedAt: startedAt
+            )
+        }
+    }
+
+    public var capabilityReport: DFTCapabilityReport {
+        DFTCapabilityReport(
+            engineID: "dft.atpg",
+            implementationID: implementationID,
+            implementationVersion: DFTExecutionSupport.implementationVersion,
+            capabilities: [
+                "stuck_at_faults": .available,
+                "transition_faults": .available,
+                "gate_level_fault_extraction": .available,
+                "gate_level_combinational_atpg": .available,
+                "sequential_atpg": .available,
+                "sequential_control_semantics": .available,
+                "sequential_transition_faults": .available,
+                "process_specific_faults": .blocked,
+                "coverage_evidence": .available,
+                "stil_export": .available,
+                "wgl_export": .available
+            ],
+            limitations: [
+                "Gate-level ATPG currently supports exhaustive binary simulation for a qualified combinational primitive subset.",
+                "Bounded sequential ATPG supports explicit DFF/SDFF SI/SE, reset/set polarity/timing/edge semantics, level-sensitive latches and bounded transition faults; unknown primitives and process-qualified timing remain blocked.",
+                "Process-specific fault families require an injected model with validated results; family declarations alone do not provide semantics, and independent qualification remains required."
+            ],
+            qualification: qualification
+        )
+    }
+
+    private func supports(
+        fault: DFTFault,
+        configuration: DFTATPGConfiguration
+    ) -> Bool {
+        switch fault.family {
+        case .stuckAt:
+            return fault.stuckAtValue != nil
+        case .transition:
+            return false
+        case .processSpecific:
+            return false
+        }
+    }
+
+    private func validate(
+        cellLibrary: DFTCellLibraryManifest,
+        reference: DFTCellLibraryReference,
+        pdk: PDKReference
+    ) throws {
+        try DFTCellLibraryManifestCodec.validate(cellLibrary)
+        guard cellLibrary.processID == pdk.processID else {
+            throw DFTCellLibraryError.referenceMismatch(
+                field: "processID",
+                expected: pdk.processID,
+                actual: cellLibrary.processID
+            )
+        }
+        guard cellLibrary.version == pdk.version else {
+            throw DFTCellLibraryError.referenceMismatch(
+                field: "version",
+                expected: pdk.version,
+                actual: cellLibrary.version
+            )
+        }
+        guard cellLibrary.pdkDigest == pdk.digest else {
+            throw DFTCellLibraryError.referenceMismatch(
+                field: "pdkDigest",
+                expected: pdk.digest,
+                actual: cellLibrary.pdkDigest
+            )
+        }
+        guard reference.processID == pdk.processID,
+              reference.version == pdk.version else {
+            throw DFTCellLibraryError.invalidManifest(
+                "cell library reference does not identify the request PDK"
+            )
+        }
+    }
+
+    private func searchGateLevel(
+        snapshot: LogicDesignSnapshot,
+        faults: [DFTFault],
+        configuration: DFTATPGConfiguration,
+        sequentialSimulator: any GateLevelSequentialSimulating
+    ) throws -> GateLevelATPGSearchResult {
+        guard let gate = snapshot.gate,
+              let module = gate.modules.first(where: { $0.name == gate.topModuleName }) else {
+            throw GateLevelATPGError.gateDesignMissing
+        }
+        let inputPorts = module.ports
+            .filter { $0.direction == .input }
+            .sorted { $0.name < $1.name }
+        let inputLimit = configuration.maximumExhaustiveInputCount ?? 16
+        guard inputPorts.count <= inputLimit else {
+            throw GateLevelATPGError.inputWidthExceedsLimit(
+                count: inputPorts.count,
+                limit: inputLimit
+            )
+        }
+        guard configuration.patternLength >= inputPorts.count else {
+            throw GateLevelATPGError.patternLengthInsufficient(
+                required: inputPorts.count,
+                actual: configuration.patternLength
+            )
+        }
+        let hasSequentialCells = module.cells.contains { cell in
+            let normalized = cell.type
+                .uppercased()
+                .replacingOccurrences(of: "_", with: "")
+                .replacingOccurrences(of: "-", with: "")
+            return normalized.hasPrefix("DFF")
+                || normalized.hasPrefix("SDFF")
+                || normalized.hasPrefix("SCAN")
+                || normalized.hasPrefix("LATCH")
+        }
+        if hasSequentialCells {
+            guard let cycleLimit = configuration.maximumSequentialCycleCount else {
+                throw GateLevelATPGError.sequentialSemanticsUnavailable
+            }
+            guard cycleLimit > 0 else {
+                throw GateLevelATPGError.sequentialCycleLimitInvalid
+            }
+            return try searchSequentialGateLevel(
+                snapshot: snapshot,
+                module: module,
+                faults: faults,
+                configuration: configuration,
+                cycleLimit: cycleLimit,
+                simulator: sequentialSimulator
+            )
+        }
+        let candidateCount = 1 << inputPorts.count
+        var outcomes: [DFTFaultOutcome] = []
+        var patterns: [DFTTestPattern] = []
+        var diagnostics: [XcircuiteEngineDiagnostic] = [
+            XcircuiteEngineDiagnostic(
+                severity: .info,
+                code: "DFT_GATE_LEVEL_FAULT_EXTRACTION_COMPLETED",
+                message: "Extracted \(faults.count) stuck-at fault(s) from driven nets in \(gate.topModuleName)."
+            )
+        ]
+        var abortedCount = 0
+        var untestableCount = 0
+
+        for fault in faults {
+            try Task.checkCancellation()
+            if patterns.count >= configuration.maximumPatternCount {
+                abortedCount += 1
+                outcomes.append(DFTFaultOutcome(
+                    faultID: fault.id,
+                    status: .aborted,
+                    reason: "pattern budget exhausted before a detecting pattern was allocated"
+                ))
+                continue
+            }
+
+            var detectingAssignment: Int?
+            for assignment in 0..<candidateCount {
+                try Task.checkCancellation()
+                var inputValues: [String: Bool] = [:]
+                for (index, port) in inputPorts.enumerated() {
+                    inputValues[port.name] = (assignment & (1 << index)) != 0
+                }
+                do {
+                    let good = try simulator.simulate(
+                        snapshot: snapshot,
+                        inputs: inputValues,
+                        fault: nil
+                    )
+                    let faulty = try simulator.simulate(
+                        snapshot: snapshot,
+                        inputs: inputValues,
+                        fault: fault
+                    )
+                    if good.observedValues != faulty.observedValues {
+                        detectingAssignment = assignment
+                        break
+                    }
+                } catch let error as GateLevelSimulationError {
+                    if case .sequentialControlConflict = error {
+                        continue
+                    }
+                    throw GateLevelATPGError.simulationFailed(
+                        faultID: fault.id,
+                        message: error.localizedDescription
+                    )
+                }
+            }
+
+            guard let detectingAssignment else {
+                untestableCount += 1
+                outcomes.append(DFTFaultOutcome(
+                    faultID: fault.id,
+                    status: .untestable,
+                    reason: "no exhaustive primary-input assignment changed an observable primary output"
+                ))
+                diagnostics.append(XcircuiteEngineDiagnostic(
+                    severity: .warning,
+                    code: "DFT_GATE_LEVEL_FAULT_UNTESTABLE",
+                    message: "No detecting pattern was found for gate-level fault \(fault.id).",
+                    entity: fault.id,
+                    suggestedActions: ["review_fault_observability", "add_scan_observation_points"]
+                ))
+                continue
+            }
+
+            let patternID = "pattern-\(patterns.count + 1)"
+            patterns.append(DFTTestPattern(
+                id: patternID,
+                bits: patternBits(for: detectingAssignment, inputCount: inputPorts.count, length: configuration.patternLength),
+                faultIDs: [fault.id]
+            ))
+            outcomes.append(DFTFaultOutcome(
+                faultID: fault.id,
+                status: .detected,
+                patternID: patternID,
+                reason: "detected by exhaustive binary gate-level simulation"
+            ))
+        }
+
+        diagnostics.append(XcircuiteEngineDiagnostic(
+            severity: .info,
+            code: "DFT_GATE_LEVEL_ATPG_COMPLETED",
+            message: "Evaluated up to \(candidateCount) primary-input assignment(s) per extracted fault."
+        ))
+        return GateLevelATPGSearchResult(
+            outcomes: outcomes,
+            patterns: patterns,
+            diagnostics: diagnostics,
+            abortedCount: abortedCount,
+            untestableCount: untestableCount
+        )
+    }
+
+    private func searchSequentialGateLevel(
+        snapshot: LogicDesignSnapshot,
+        module: GateModule,
+        faults: [DFTFault],
+        configuration: DFTATPGConfiguration,
+        cycleLimit: Int,
+        simulator: any GateLevelSequentialSimulating
+    ) throws -> GateLevelATPGSearchResult {
+        let inputPorts = module.ports
+            .filter { $0.direction == .input }
+            .sorted { $0.name < $1.name }
+        let totalInputCount = inputPorts.count * cycleLimit
+        let inputLimit = configuration.maximumExhaustiveInputCount ?? 16
+        guard totalInputCount <= inputLimit else {
+            throw GateLevelATPGError.inputWidthExceedsLimit(
+                count: totalInputCount,
+                limit: inputLimit
+            )
+        }
+        guard configuration.patternLength >= totalInputCount else {
+            throw GateLevelATPGError.patternLengthInsufficient(
+                required: totalInputCount,
+                actual: configuration.patternLength
+            )
+        }
+        let candidateCount = 1 << totalInputCount
+        var outcomes: [DFTFaultOutcome] = []
+        var patterns: [DFTTestPattern] = []
+        var diagnostics: [XcircuiteEngineDiagnostic] = [
+            XcircuiteEngineDiagnostic(
+                severity: .info,
+                code: "DFT_GATE_LEVEL_SEQUENTIAL_SEMANTICS_ENABLED",
+                message: "Evaluating bounded DFF and scan-cell state transitions over \(cycleLimit) capture cycle(s)."
+            )
+        ]
+        var abortedCount = 0
+        var untestableCount = 0
+
+        for fault in faults {
+            try Task.checkCancellation()
+            if patterns.count >= configuration.maximumPatternCount {
+                abortedCount += 1
+                outcomes.append(DFTFaultOutcome(
+                    faultID: fault.id,
+                    status: .aborted,
+                    reason: "pattern budget exhausted before a detecting sequential pattern was allocated"
+                ))
+                continue
+            }
+            var detectingAssignment: Int?
+            for assignment in 0..<candidateCount {
+                try Task.checkCancellation()
+                var cycles: [[String: Bool]] = []
+                for cycle in 0..<cycleLimit {
+                    var inputs: [String: Bool] = [:]
+                    for (portIndex, port) in inputPorts.enumerated() {
+                        let bitIndex = cycle * inputPorts.count + portIndex
+                        inputs[port.name] = (assignment & (1 << bitIndex)) != 0
+                    }
+                    cycles.append(inputs)
+                }
+                do {
+                    let good = try simulator.simulate(
+                        snapshot: snapshot,
+                        inputCycles: cycles,
+                        initialState: [:],
+                        fault: nil,
+                        sequentialContracts: configuration.sequentialCellContracts
+                    )
+                    let faulty = try simulator.simulate(
+                        snapshot: snapshot,
+                        inputCycles: cycles,
+                        initialState: [:],
+                        fault: fault,
+                        sequentialContracts: configuration.sequentialCellContracts
+                    )
+                    if good.observedValues != faulty.observedValues {
+                        detectingAssignment = assignment
+                        break
+                    }
+                } catch let error as GateLevelSimulationError {
+                    if case .sequentialControlConflict = error {
+                        continue
+                    }
+                    throw GateLevelATPGError.simulationFailed(
+                        faultID: fault.id,
+                        message: error.localizedDescription
+                    )
+                }
+            }
+            guard let detectingAssignment else {
+                untestableCount += 1
+                outcomes.append(DFTFaultOutcome(
+                    faultID: fault.id,
+                    status: .untestable,
+                    reason: "no bounded sequential input sequence changed an observable primary output"
+                ))
+                continue
+            }
+            let patternID = "pattern-\(patterns.count + 1)"
+            patterns.append(DFTTestPattern(
+                id: patternID,
+                bits: sequentialPatternBits(
+                    for: detectingAssignment,
+                    inputCount: totalInputCount,
+                    length: configuration.patternLength
+                ),
+                faultIDs: [fault.id]
+            ))
+            outcomes.append(DFTFaultOutcome(
+                faultID: fault.id,
+                status: .detected,
+                patternID: patternID,
+                reason: "detected by bounded sequential DFF simulation"
+            ))
+        }
+
+        diagnostics.append(XcircuiteEngineDiagnostic(
+            severity: .info,
+            code: "DFT_GATE_LEVEL_SEQUENTIAL_ATPG_COMPLETED",
+            message: "Evaluated up to \(candidateCount) sequential input sequence(s) per extracted fault."
+        ))
+        return GateLevelATPGSearchResult(
+            outcomes: outcomes,
+            patterns: patterns,
+            diagnostics: diagnostics,
+            abortedCount: abortedCount,
+            untestableCount: untestableCount
+        )
+    }
+
+    private func searchTransitionFault(
+        snapshot: LogicDesignSnapshot,
+        fault: DFTFault,
+        configuration: DFTATPGConfiguration
+    ) throws -> String? {
+        guard let gate = snapshot.gate,
+              let module = gate.modules.first(where: { $0.name == gate.topModuleName }) else {
+            throw GateLevelATPGError.gateDesignMissing
+        }
+        let inputPorts = module.ports
+            .filter { $0.direction == .input }
+            .sorted { $0.name < $1.name }
+        let totalInputCount = inputPorts.count * 2
+        let inputLimit = configuration.maximumExhaustiveInputCount ?? 16
+        guard totalInputCount <= inputLimit else {
+            throw GateLevelATPGError.inputWidthExceedsLimit(
+                count: totalInputCount,
+                limit: inputLimit
+            )
+        }
+        guard configuration.patternLength >= totalInputCount else {
+            throw GateLevelATPGError.patternLengthInsufficient(
+                required: totalInputCount,
+                actual: configuration.patternLength
+            )
+        }
+        let candidateCount = 1 << totalInputCount
+        for assignment in 0..<candidateCount {
+            try Task.checkCancellation()
+            var launch: [String: Bool] = [:]
+            var capture: [String: Bool] = [:]
+            for (index, port) in inputPorts.enumerated() {
+                launch[port.name] = (assignment & (1 << index)) != 0
+                capture[port.name] = (assignment & (1 << (inputPorts.count + index))) != 0
+            }
+            let transition: GateLevelTransitionSimulationResult
+            do {
+                transition = try transitionSimulator.simulate(
+                    snapshot: snapshot,
+                    launchInputs: launch,
+                    captureInputs: capture,
+                    fault: fault,
+                    sequentialContracts: configuration.sequentialCellContracts
+                )
+            } catch let error as GateLevelSimulationError {
+                if case .sequentialControlConflict = error {
+                    continue
+                }
+                throw error
+            }
+            let goodCapture = transition.goodCaptureObservedValues ?? transition.launchObservedValues
+            if goodCapture != transition.captureObservedValues {
+                return patternBits(
+                    for: assignment,
+                    inputCount: totalInputCount,
+                    length: configuration.patternLength
+                )
+            }
+        }
+        return nil
+    }
+
+    private func sequentialPatternBits(for assignment: Int, inputCount: Int, length: Int) -> String {
+        var bits = Array(repeating: "0", count: length)
+        for index in 0..<inputCount {
+            bits[index] = (assignment & (1 << index)) == 0 ? "0" : "1"
+        }
+        return bits.joined()
+    }
+
+    private func fileFormat(for format: DFTTestPatternFormat) -> XcircuiteFileFormat {
+        switch format {
+        case .json:
+            return .json
+        case .stil:
+            return .stil
+        case .wgl:
+            return .wgl
+        }
+    }
+
+    private func patternBits(for faultID: String, seed: UInt64, length: Int) -> String {
+        let digest = XcircuiteHasher().sha256(
+            data: Data("\(seed):\(faultID)".utf8)
+        )
+        let bytes = Array(digest.utf8)
+        return (0..<length).map { index in
+            let byte = bytes[index % bytes.count]
+            let bit = (byte >> UInt8(index % 8)) & 1
+            return bit == 0 ? "0" : "1"
+        }.joined()
+    }
+
+    private func patternBits(for assignment: Int, inputCount: Int, length: Int) -> String {
+        var bits = Array(repeating: "0", count: length)
+        for index in 0..<inputCount {
+            bits[index] = (assignment & (1 << index)) == 0 ? "0" : "1"
+        }
+        return bits.joined()
+    }
+
+    private var qualification: DFTQualificationProvenance {
+        DFTQualificationProvenance(
+            status: .smokeChecked,
+            notes: ["deterministic declared-fault model; no external ATPG oracle correlation"]
+        )
+    }
+
+    private func blocked(
+        request: DFTRequest,
+        engineID: String,
+        startedAt: Date,
+        code: String,
+        message: String,
+        entity: String? = nil,
+        actions: [String] = []
+    ) -> XcircuiteEngineResultEnvelope<DFTPayload> {
+        DFTExecutionSupport.envelope(
+            request: request,
+            engineID: engineID,
+            implementationID: implementationID,
+            status: .blocked,
+            diagnostics: [
+                XcircuiteEngineDiagnostic(
+                    severity: .error,
+                    code: code,
+                    message: message,
+                    entity: entity,
+                    suggestedActions: actions
+                )
+            ],
+            payload: DFTPayload(
+                transformedDesign: nil,
+                faultCoverage: nil,
+                qualification: qualification
+            ),
+            startedAt: startedAt
+        )
+    }
+}
+
+private struct GateLevelATPGSearchResult {
+    var outcomes: [DFTFaultOutcome]
+    var patterns: [DFTTestPattern]
+    var diagnostics: [XcircuiteEngineDiagnostic]
+    var abortedCount: Int
+    var untestableCount: Int
+}

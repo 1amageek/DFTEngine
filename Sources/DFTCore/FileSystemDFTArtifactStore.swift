@@ -1,0 +1,99 @@
+import Foundation
+import CircuiteFoundation
+import XcircuitePackage
+
+public actor FileSystemDFTArtifactStore: DFTArtifactStoring {
+    public let rootURL: URL
+
+    public init(rootURL: URL) {
+        self.rootURL = rootURL.standardizedFileURL
+    }
+
+    public func store(
+        _ content: DFTArtifactContent,
+        runID: String
+    ) async throws -> XcircuiteFileReference {
+        try Self.validate(runID: runID, content: content)
+        let directory = rootURL
+            .appending(path: "dft")
+            .appending(path: "runs")
+            .appending(path: runID)
+        do {
+            try FileManager.default.createDirectory(
+                at: directory,
+                withIntermediateDirectories: true
+            )
+        } catch {
+            throw DFTArtifactStoreError.directoryCreationFailed(error.localizedDescription)
+        }
+        let destination = directory.appending(path: content.fileName)
+        let resolvedRoot = rootURL.resolvingSymlinksInPath()
+        let resolvedDirectory = directory.resolvingSymlinksInPath()
+        let resolvedDestination = destination.resolvingSymlinksInPath()
+        guard Self.isInside(resolvedDirectory, root: resolvedRoot),
+              Self.isInside(resolvedDestination, root: resolvedRoot) else {
+            throw DFTArtifactStoreError.pathOutsideRoot(
+                "dft/runs/\(runID)/\(content.fileName)"
+            )
+        }
+        if FileManager.default.fileExists(atPath: destination.path) {
+            let existingData: Data
+            do {
+                existingData = try Data(contentsOf: destination)
+            } catch {
+                throw DFTArtifactStoreError.writeFailed(error.localizedDescription)
+            }
+            guard existingData == content.data else {
+                throw DFTArtifactStoreError.artifactConflict(
+                    "dft/runs/\(runID)/\(content.fileName)"
+                )
+            }
+        } else {
+            do {
+                try content.data.write(to: destination, options: .atomic)
+            } catch {
+                throw DFTArtifactStoreError.writeFailed(error.localizedDescription)
+            }
+        }
+        return XcircuiteFileReference(
+            artifactID: content.artifactID,
+            path: "dft/runs/\(runID)/\(content.fileName)",
+            kind: content.kind,
+            format: content.format,
+            sha256: XcircuiteHasher().sha256(data: content.data),
+            byteCount: Int64(content.data.count),
+            producedByRunID: runID
+        )
+    }
+
+    private static func isInside(_ candidate: URL, root: URL) -> Bool {
+        let rootPath = root.path.hasSuffix("/") ? root.path : root.path + "/"
+        return candidate.path == root.path || candidate.path.hasPrefix(rootPath)
+    }
+
+    private static func validate(
+        runID: String,
+        content: DFTArtifactContent
+    ) throws {
+        guard isSafeComponent(runID) else {
+            throw DFTArtifactStoreError.invalidRunID(runID)
+        }
+        guard isSafeComponent(content.fileName) else {
+            throw DFTArtifactStoreError.invalidFileName(content.fileName)
+        }
+        do {
+            _ = try ArtifactID(rawValue: content.artifactID)
+        } catch {
+            throw DFTArtifactStoreError.invalidArtifactID(content.artifactID)
+        }
+    }
+
+    private static func isSafeComponent(_ value: String) -> Bool {
+        !value.isEmpty
+            && value != "."
+            && value != ".."
+            && !value.contains("/")
+            && !value.contains("\\")
+            && !value.unicodeScalars.contains(where: CharacterSet.controlCharacters.contains)
+    }
+}

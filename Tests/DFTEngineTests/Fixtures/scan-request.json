@@ -1,0 +1,107 @@
+{
+  "schemaVersion" : 1,
+  "runID" : "fixture-scan",
+  "inputs" : [
+    {
+      "artifactID" : "design",
+      "path" : "design.json",
+      "kind" : "netlist",
+      "format" : "JSON",
+      "sha256" : "ceb2a27440cfad92ad81272660aacdebf3509cdf609ee1aba26f9be1aa0d0820",
+      "byteCount" : 2333
+    },
+    {
+      "artifactID" : "cell-library",
+      "path" : "cell-library.json",
+      "kind" : "technology",
+      "format" : "JSON",
+      "sha256" : "e45e491f6cd635fce5ee5f6aa8078e944323083eb812d9ee1a1315ba09d9bac0",
+      "byteCount" : 515
+    }
+  ],
+  "design" : {
+    "artifact" : {
+      "artifactID" : "design",
+      "path" : "design.json",
+      "kind" : "netlist",
+      "format" : "JSON",
+      "sha256" : "ceb2a27440cfad92ad81272660aacdebf3509cdf609ee1aba26f9be1aa0d0820",
+      "byteCount" : 2333
+    },
+    "topDesignName" : "top",
+    "designDigest" : "6ca9e7c9b9fb67998b742c7f3f02b6bdc093eaf7baedf1fc216c3cd0e1cd1fb5"
+  },
+  "cellLibrary" : {
+    "artifact" : {
+      "artifactID" : "cell-library",
+      "path" : "cell-library.json",
+      "kind" : "technology",
+      "format" : "JSON",
+      "sha256" : "e45e491f6cd635fce5ee5f6aa8078e944323083eb812d9ee1a1315ba09d9bac0",
+      "byteCount" : 515
+    },
+    "processID" : "fixture-process",
+    "version" : "1",
+    "manifestDigest" : "e25e0777725954a5d91eda79d6947931ef1b7b982f510ef0373c34bb5968b6bc"
+  },
+  "constraints" : {
+    "artifact" : {
+      "artifactID" : "constraints",
+      "path" : "constraints.sdc",
+      "kind" : "constraint",
+      "format" : "SDC",
+      "sha256" : "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "byteCount" : 10
+    },
+    "modeIDs" : [ "test" ]
+  },
+  "pdk" : {
+    "manifest" : {
+      "artifactID" : "pdk",
+      "path" : "pdk.json",
+      "kind" : "technology",
+      "format" : "JSON",
+      "sha256" : "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "byteCount" : 10
+    },
+    "processID" : "fixture-process",
+    "version" : "1",
+    "digest" : "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+  },
+  "operation" : "scanInsertion",
+  "scanArchitecture" : {
+    "name" : "core-scan",
+    "clocks" : [
+      {
+        "id" : "clk",
+        "signalName" : "scan_clk",
+        "periodNanoseconds" : 10,
+        "dutyCycle" : 0.5,
+        "isGenerated" : false
+      }
+    ],
+    "resets" : [],
+    "domains" : [
+      {
+        "id" : "core",
+        "clockID" : "clk",
+        "resetID" : null,
+        "chainCount" : 2,
+        "estimatedElementCount" : 5,
+        "maximumChainLength" : null
+      }
+    ],
+    "compression" : null,
+    "scanEnableSignal" : "scan_en",
+    "testModeSignal" : "test_mode",
+    "scanInPrefix" : "scan_in",
+    "scanOutPrefix" : "scan_out"
+  },
+  "insertionPolicy" : {
+    "scanCellName" : "SDFF",
+    "preserveFunctionalPorts" : true,
+    "requireTestMode" : true,
+    "generateDesignDiff" : true,
+    "allowUnknownCells" : false
+  }
+}
