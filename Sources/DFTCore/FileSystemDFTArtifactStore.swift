@@ -1,6 +1,5 @@
 import Foundation
 import CircuiteFoundation
-import XcircuitePackage
 
 public actor FileSystemDFTArtifactStore: DFTArtifactStoring {
     public let rootURL: URL
@@ -12,7 +11,7 @@ public actor FileSystemDFTArtifactStore: DFTArtifactStoring {
     public func store(
         _ content: DFTArtifactContent,
         runID: String
-    ) async throws -> XcircuiteFileReference {
+    ) async throws -> DFTArtifactReference {
         try Self.validate(runID: runID, content: content)
         let directory = rootURL
             .appending(path: "dft")
@@ -55,14 +54,18 @@ public actor FileSystemDFTArtifactStore: DFTArtifactStoring {
                 throw DFTArtifactStoreError.writeFailed(error.localizedDescription)
             }
         }
-        return XcircuiteFileReference(
-            artifactID: content.artifactID,
-            path: "dft/runs/\(runID)/\(content.fileName)",
-            kind: content.kind,
-            format: content.format,
-            sha256: XcircuiteHasher().sha256(data: content.data),
-            byteCount: Int64(content.data.count),
-            producedByRunID: runID
+        let artifactPath = "dft/runs/\(runID)/\(content.fileName)"
+        let digest = try SHA256ContentDigester().digest(data: content.data)
+        return ArtifactReference(
+            id: try ArtifactID(rawValue: content.artifactID),
+            locator: ArtifactLocator(
+                location: try ArtifactLocation(workspaceRelativePath: artifactPath),
+                role: .output,
+                kind: content.kind,
+                format: content.format
+            ),
+            digest: digest,
+            byteCount: UInt64(content.data.count)
         )
     }
 

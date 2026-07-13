@@ -1,6 +1,5 @@
 import Foundation
 import CircuiteFoundation
-import XcircuitePackage
 
 public actor FileSystemDFTOracleArtifactLoader: DFTOracleArtifactLoading {
     public let rootURL: URL
@@ -9,14 +8,9 @@ public actor FileSystemDFTOracleArtifactLoader: DFTOracleArtifactLoading {
         self.rootURL = rootURL.standardizedFileURL
     }
 
-    public func load(_ reference: XcircuiteFileReference) async throws -> Data {
+    public func load(_ reference: DFTArtifactReference) async throws -> Data {
         try Self.validate(reference)
-        guard let expectedByteCount = reference.byteCount else {
-            throw DFTOracleArtifactError.missingByteCount(reference.path)
-        }
-        guard expectedByteCount >= 0 else {
-            throw DFTOracleArtifactError.invalidByteCount(reference.path)
-        }
+        let expectedByteCount = reference.byteCount
         guard let expectedDigest = reference.sha256 else {
             throw DFTOracleArtifactError.missingDigest(reference.path)
         }
@@ -35,14 +29,14 @@ public actor FileSystemDFTOracleArtifactLoader: DFTOracleArtifactLoading {
                 message: error.localizedDescription
             )
         }
-        if expectedByteCount != Int64(data.count) {
+        if expectedByteCount != UInt64(data.count) {
             throw DFTOracleArtifactError.byteCountMismatch(
                 path: reference.path,
-                expected: expectedByteCount,
+                expected: Int64(expectedByteCount),
                 actual: Int64(data.count)
             )
         }
-        let actualDigest = XcircuiteHasher().sha256(data: data)
+        let actualDigest = DFTHasher().sha256(data: data)
         guard expectedDigest.caseInsensitiveCompare(actualDigest) == .orderedSame else {
             throw DFTOracleArtifactError.digestMismatch(
                 path: reference.path,
@@ -53,7 +47,7 @@ public actor FileSystemDFTOracleArtifactLoader: DFTOracleArtifactLoading {
         return data
     }
 
-    private static func validate(_ reference: XcircuiteFileReference) throws {
+    private static func validate(_ reference: DFTArtifactReference) throws {
         guard let artifactID = reference.artifactID else {
             throw DFTOracleArtifactError.missingArtifactID(reference.path)
         }

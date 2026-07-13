@@ -64,12 +64,12 @@ enum DFTCLI {
         }
         let projectRoot = URL(fileURLWithPath: outputDirectory)
         let store = FileSystemDFTArtifactStore(rootURL: projectRoot)
-        let envelope = try await DefaultDFTEngine(
+        let result = try await DefaultDFTEngine(
             artifactStore: store,
             designLoader: FileSystemDFTDesignLoader(rootURL: projectRoot),
             cellLibraryLoader: FileSystemDFTCellLibraryLoader(rootURL: projectRoot)
         ).execute(request)
-        let data = try DFTArtifactJSONEncoder().encode(envelope)
+        let data = try DFTArtifactJSONEncoder().encode(result)
         if let resultPath {
             do {
                 try FileManager.default.createDirectory(
@@ -83,7 +83,7 @@ enum DFTCLI {
         } else {
             writeOutput(String(decoding: data, as: UTF8.self))
         }
-        switch envelope.status {
+        switch result.status {
         case .completed:
             return 0
         case .blocked:
@@ -158,7 +158,7 @@ enum DFTCLI {
       dft-engine capabilities
       dft-engine execute --request <request.json> --output-dir <project-root> [--result <result.json>]
 
-    The execute command emits a complete result envelope. Blocked executions use exit code 2.
+    The execute command emits a complete DFT result. Blocked executions use exit code 2.
     """
 }
 

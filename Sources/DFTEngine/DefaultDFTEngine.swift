@@ -3,7 +3,6 @@ import BISTEngine
 import DFTCore
 import Foundation
 import ScanInsertion
-import XcircuitePackage
 
 public struct DefaultDFTEngine: DFTEngineExecuting {
     public let scanInsertion: any ScanInserting
@@ -73,15 +72,15 @@ public struct DefaultDFTEngine: DFTEngineExecuting {
 
     public func execute(
         _ request: DFTRequest
-    ) async throws -> XcircuiteEngineResultEnvelope<DFTPayload> {
+    ) async throws -> DFTResult {
         guard let operation = request.operation else {
-            return DFTExecutionSupport.envelope(
+            return DFTExecutionSupport.result(
                 request: request,
                 engineID: "dft",
                 implementationID: "default-router",
                 status: .blocked,
                 diagnostics: [
-                    XcircuiteEngineDiagnostic(
+                    DFTDiagnostic(
                         severity: .error,
                         code: "DFT_OPERATION_MISSING",
                         message: "The umbrella DFT engine requires an explicit operation.",

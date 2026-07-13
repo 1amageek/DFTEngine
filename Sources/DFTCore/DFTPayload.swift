@@ -1,12 +1,11 @@
 import Foundation
-import XcircuitePackage
 import LogicIR
 
 public struct DFTPayload: Sendable, Hashable, Codable {
     public var transformedDesign: LogicDesignReference?
     public var faultCoverage: Double?
     public var scanPlan: DFTScanPlan?
-    public var designDiff: XcircuiteDesignDiff?
+    public var designDiff: DFTDesignDiff?
     public var patterns: DFTTestPatternSet?
     public var coverageEvidence: DFTCoverageEvidence?
     public var bistStructure: DFTBISTStructure?
@@ -17,7 +16,7 @@ public struct DFTPayload: Sendable, Hashable, Codable {
         transformedDesign: LogicDesignReference?,
         faultCoverage: Double?,
         scanPlan: DFTScanPlan? = nil,
-        designDiff: XcircuiteDesignDiff? = nil,
+        designDiff: DFTDesignDiff? = nil,
         patterns: DFTTestPatternSet? = nil,
         coverageEvidence: DFTCoverageEvidence? = nil,
         bistStructure: DFTBISTStructure? = nil,
@@ -52,7 +51,7 @@ public struct DFTPayload: Sendable, Hashable, Codable {
         transformedDesign = try container.decodeIfPresent(LogicDesignReference.self, forKey: .transformedDesign)
         faultCoverage = try container.decodeIfPresent(Double.self, forKey: .faultCoverage)
         scanPlan = try container.decodeIfPresent(DFTScanPlan.self, forKey: .scanPlan)
-        designDiff = try container.decodeIfPresent(XcircuiteDesignDiff.self, forKey: .designDiff)
+        designDiff = try container.decodeIfPresent(DFTDesignDiff.self, forKey: .designDiff)
         patterns = try container.decodeIfPresent(DFTTestPatternSet.self, forKey: .patterns)
         coverageEvidence = try container.decodeIfPresent(DFTCoverageEvidence.self, forKey: .coverageEvidence)
         bistStructure = try container.decodeIfPresent(DFTBISTStructure.self, forKey: .bistStructure)

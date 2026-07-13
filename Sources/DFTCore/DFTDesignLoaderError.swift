@@ -1,8 +1,8 @@
 import Foundation
-import XcircuitePackage
+import CircuiteFoundation
 
 public enum DFTDesignLoaderError: Error, LocalizedError, Sendable, Hashable {
-    case unsupportedFormat(XcircuiteFileFormat)
+    case unsupportedFormat(ArtifactFormat)
     case invalidPath(String)
     case readFailed(path: String, message: String)
     case byteCountMismatch(path: String, expected: Int64, actual: Int64)

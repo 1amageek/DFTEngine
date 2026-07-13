@@ -1,5 +1,4 @@
 import Foundation
-import XcircuitePackage
 
 public struct DFTQualificationEvidence: Sendable, Hashable, Codable {
     public static let currentSchemaVersion = 1
@@ -15,7 +14,7 @@ public struct DFTQualificationEvidence: Sendable, Hashable, Codable {
     public var passedCaseCount: Int
     public var oracleEvidenceDigest: String
     public var approvedBy: String?
-    public var artifacts: [XcircuiteFileReference]
+    public var artifacts: [DFTArtifactReference]
 
     public init(
         evidenceID: String,
@@ -28,7 +27,7 @@ public struct DFTQualificationEvidence: Sendable, Hashable, Codable {
         passedCaseCount: Int,
         oracleEvidenceDigest: String,
         approvedBy: String? = nil,
-        artifacts: [XcircuiteFileReference] = [],
+        artifacts: [DFTArtifactReference] = [],
         schemaVersion: Int = DFTQualificationEvidence.currentSchemaVersion
     ) {
         self.schemaVersion = schemaVersion

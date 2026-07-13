@@ -1,5 +1,4 @@
 import Foundation
-import XcircuitePackage
 
 public struct DFTOracleCorrelationEngine: DFTOracleCorrelating {
     public let artifactLoader: (any DFTOracleArtifactLoading)?
@@ -68,7 +67,7 @@ public struct DFTOracleCorrelationEngine: DFTOracleCorrelating {
             processID: corpus.processID,
             pdkDigest: corpus.pdkDigest,
             corpusDigest: corpusDigest,
-            oracleEvidenceDigest: XcircuiteHasher().sha256(data: Data(evidenceMaterial.utf8)),
+            oracleEvidenceDigest: DFTHasher().sha256(data: Data(evidenceMaterial.utf8)),
             status: status,
             totalCaseCount: corpus.cases.count,
             passedCaseCount: passedCaseCount,
@@ -113,13 +112,13 @@ public struct DFTOracleCorrelationEngine: DFTOracleCorrelating {
         }
     }
 
-    private func validate(artifact: XcircuiteFileReference, caseID: String) throws {
+    private func validate(artifact: DFTArtifactReference, caseID: String) throws {
         guard artifact.artifactID?.isEmpty == false,
               !artifact.path.isEmpty,
               !artifact.path.hasPrefix("/"),
               !artifact.path.split(separator: "/").contains(".."),
               artifact.sha256.map(isSHA256) == true,
-              artifact.byteCount.map({ $0 >= 0 }) == true else {
+              artifact.byteCount >= 0 else {
             throw DFTOracleCorrelationError.invalidCorpus(
                 "oracle artifact for case " + caseID + " must be project-relative and integrity-addressed"
             )

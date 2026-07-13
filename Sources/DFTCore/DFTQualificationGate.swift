@@ -1,6 +1,5 @@
 import Foundation
 import CircuiteFoundation
-import XcircuitePackage
 
 public struct DFTQualificationGate: Sendable {
     public init() {}
@@ -73,7 +72,7 @@ public struct DFTQualificationGate: Sendable {
         value.count == 64 && value.allSatisfy { $0.isHexDigit }
     }
 
-    private func isValidArtifact(_ artifact: XcircuiteFileReference) -> Bool {
+    private func isValidArtifact(_ artifact: DFTArtifactReference) -> Bool {
         guard let artifactID = artifact.artifactID,
               !artifactID.isEmpty,
               !artifact.path.isEmpty,
@@ -83,9 +82,7 @@ public struct DFTQualificationGate: Sendable {
               !artifact.path.unicodeScalars.contains(where: CharacterSet.controlCharacters.contains),
               !artifact.path.split(separator: "/", omittingEmptySubsequences: false)
                 .contains(where: { $0.isEmpty || $0 == "." || $0 == ".." }),
-              isSHA256(artifact.sha256 ?? ""),
-              let byteCount = artifact.byteCount,
-              byteCount >= 0 else {
+              isSHA256(artifact.sha256 ?? "") else {
             return false
         }
         guard artifactID.trimmingCharacters(in: .whitespacesAndNewlines) == artifactID else {

@@ -1,5 +1,4 @@
 import Foundation
-import XcircuitePackage
 
 public struct FileSystemDFTCellLibraryLoader: DFTCellLibraryLoading {
     public let rootURL: URL
@@ -22,15 +21,15 @@ public struct FileSystemDFTCellLibraryLoader: DFTCellLibraryLoading {
                 message: error.localizedDescription
             )
         }
-        if let expected = reference.artifact.byteCount, expected != Int64(data.count) {
+        if reference.artifact.byteCount != UInt64(data.count) {
             throw DFTCellLibraryError.byteCountMismatch(
                 path: reference.artifact.path,
-                expected: expected,
+                expected: Int64(reference.artifact.byteCount),
                 actual: Int64(data.count)
             )
         }
         if let expected = reference.artifact.sha256 {
-            let actual = XcircuiteHasher().sha256(data: data)
+            let actual = DFTHasher().sha256(data: data)
             guard actual == expected else {
                 throw DFTCellLibraryError.artifactDigestMismatch(
                     path: reference.artifact.path,

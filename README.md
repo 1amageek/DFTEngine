@@ -4,7 +4,7 @@ Scan, ATPG and built-in self-test transformation contracts.
 
 ## Status
 
-This repository contains the typed DFT contracts, a canonical gate-level scan transformation, process-scoped scan-cell binding, Liberty timing/legal-cell validation, gate-level combinational and bounded sequential ATPG, explicit reset/set and transition semantics, an explicit process-specific fault-model boundary, canonical logic-BIST transformation, a typed memory-macro adapter boundary with process-qualified result gating, strict STIL/WGL codecs, an external-tool envelope adapter, retained oracle correlation, immutable artifact stores, a DFT release eligibility gate, a CircuiteFoundation evidence projection and a headless JSON CLI.
+This repository contains the typed DFT contracts, a canonical gate-level scan transformation, process-scoped scan-cell binding, Liberty timing/legal-cell validation, gate-level combinational and bounded sequential ATPG, explicit reset/set and transition semantics, an explicit process-specific fault-model boundary, canonical logic-BIST transformation, a typed memory-macro execution boundary with process-qualified result gating, strict STIL/WGL codecs, external-tool execution, retained oracle correlation, immutable Foundation artifact stores, a DFT release eligibility gate, and a headless JSON CLI.
 
 The native execution and evidence contracts through M7 are implemented and tested. Production qualification remains intentionally gated by independently generated PDK, macro, oracle, equivalence, DRC, LVS, PEX and human-review evidence. No backend self-promotes fixture or smoke evidence to foundry qualification.
 
@@ -40,33 +40,34 @@ The native implementations are:
 | `DeterministicATPGEngine` | declared-fault ATPG, extracted combinational stuck-at ATPG, bounded DFF/SDFF state ATPG, explicit reset/set contracts, level-sensitive latch semantics, directed combinational/sequential transition ATPG and injected process-specific fault-model evaluation | Unknown primitives and process-qualified timing block coverage; `supportedProcessFamilies` is declarative only and does not replace a separately qualified injected model |
 | `DeterministicBISTEngine` | canonical logic-BIST gate transformation, structure, design diff | Native memory macros and helper-cell legality remain blocked pending qualification; external memory results require process-qualified evidence |
 | `DFTFoundationEvidence` | Stable CircuiteFoundation artifact, evidence and diagnostic projection | Rejects missing identity, digest, byte count and invalid locations rather than inventing metadata |
-| `DFTFoundationEngine` | Foundation `Engine` adapter for the DFT execution contract | Preserves the legacy result envelope behind the adapter and exposes verified inputs, provenance, artifacts and diagnostics |
+| `DFTFoundationEngine` | Foundation `Engine` implementation for the DFT execution contract | Returns the domain-owned `DFTResult` directly |
 
 ## Contract
 
 Every executing product uses:
 
 - a `CircuiteFoundation.Engine`-compatible, protocol-first execution surface;
-- a `Codable`, `Hashable`, `Sendable` request conforming to `XcircuiteEngineRequest`;
-- `XcircuiteEngineResultEnvelope<Payload>` for status, diagnostics, artifacts and execution metadata;
+- a `Codable`, `Hashable`, `Sendable` request conforming to `DFTExecutionRequest`;
+- `DFTResult` for status, diagnostics, Foundation artifacts and execution metadata;
 - protocol-first dependency injection;
-- immutable `XcircuiteFileReference` inputs and outputs;
+- immutable Foundation `ArtifactReference` inputs and outputs;
 - explicit blocked, failed and cancelled states.
 
-The Foundation boundary is deliberately an adapter boundary. Domain engines
-continue to return the complete DFT result envelope; `DFTFoundationEngine`
-projects verified artifacts, diagnostics and execution provenance into
-`DFTFoundationEvidence` without inventing missing IDs, digests or timestamps.
+Domain engines return `DFTResult` directly. `DFTFoundationEvidence` can publish
+verified artifacts, diagnostics and execution provenance without inventing
+missing IDs, digests or timestamps.
 
 ## Xcircuite integration
 
 Xcircuite records every DFT mutation as a new LogicDesignReference and requires formal equivalence or approved test-mode exceptions before physical design.
 
-The library does not depend on the Xcircuite runtime. Xcircuite owns the adapter to `DesignFlowKernel.FlowStageExecutor`, artifact persistence, qualification gates, repair loops and human approval.
+The library does not depend on the Xcircuite runtime. The owning flow package
+connects `DFTResult` to `DesignFlowKernel`, artifact persistence,
+qualification gates, repair loops and human approval.
 
 ## Oracle qualification
 
-`DFTOracleCorpus` describes process-scoped cases with request digests, normalized oracle expectation artifacts and PDK identity. `DFTOracleCorrelationEngine` verifies retained artifact byte counts and SHA-256 digests, decodes the normalized expectations, compares native envelopes and emits a deterministic correlation digest. A mismatched or incomplete corpus cannot create `DFTQualificationEvidence`; the qualification gate still requires explicit approval and process/PDK identity.
+`DFTOracleCorpus` describes process-scoped cases with request digests, normalized oracle expectation artifacts and PDK identity. `DFTOracleCorrelationEngine` verifies retained artifact byte counts and SHA-256 digests, decodes the normalized expectations, compares native results and emits a deterministic correlation digest. A mismatched or incomplete corpus cannot create `DFTQualificationEvidence`; the qualification gate still requires explicit approval and process/PDK identity.
 
 Process-specific ATPG is intentionally an integration boundary. `DFTProcessFaultModeling` is injected by the integrating project and returns a typed result that the engine validates before creating a pattern or coverage outcome. Model injection is not process qualification; the result still requires independent oracle and ToolQualification evidence before release.
 
@@ -107,7 +108,7 @@ swift run dft-engine execute \
   --result /tmp/dft-result.json
 ```
 
-The CLI preserves the complete result envelope and writes artifacts below
+The CLI preserves the complete DFT result and writes artifacts below
 `dft/runs/<run-id>/`. Exit codes are:
 
 | Exit code | Meaning |
@@ -139,4 +140,6 @@ injected and validated model remains blocked.
 
 ## Xcircuite integration
 
-`Xcircuite.DFTFlowStageExecutor` executes a project-relative request headlessly, injects either a test double or `DefaultDFTEngine`, verifies returned artifact integrity, and maps the result to `FlowStageResult`. `XcircuiteFlowStageExecutorSpec.dft` exposes the same adapter from a JSON flow specification.
+The owning flow integration executes a project-relative request headlessly,
+injects either a test double or `DefaultDFTEngine`, verifies returned
+Foundation artifact integrity, and maps the result to its flow stage result.

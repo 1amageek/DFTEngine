@@ -1,18 +1,17 @@
 import Foundation
-import XcircuitePackage
 import LogicIR
 import TimingCore
 import PDKCore
 
-public struct DFTRequest: XcircuiteEngineRequest {
+public struct DFTRequest: DFTExecutionRequest {
     public static let currentSchemaVersion = 1
 
     public var schemaVersion: Int
     public var runID: String
-    public var inputs: [XcircuiteFileReference]
+    public var inputs: [DFTArtifactReference]
 
     public var design: LogicDesignReference
-    public var constraints: TimingConstraintReference
+    public var constraints: DFTConstraintReference
     public var pdk: PDKReference
     public var cellLibrary: DFTCellLibraryReference?
 
@@ -26,9 +25,9 @@ public struct DFTRequest: XcircuiteEngineRequest {
 
     public init(
         runID: String,
-        inputs: [XcircuiteFileReference],
+        inputs: [DFTArtifactReference],
         design: LogicDesignReference,
-        constraints: TimingConstraintReference,
+        constraints: DFTConstraintReference,
         pdk: PDKReference,
         cellLibrary: DFTCellLibraryReference? = nil,
         operation: DFTOperation? = nil,

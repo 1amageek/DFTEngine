@@ -2,7 +2,6 @@ import Foundation
 import DFTCore
 import LogicIR
 import PDKCore
-import XcircuitePackage
 
 public struct DeterministicATPGEngine: ATPGExecuting {
     public let artifactStore: any DFTArtifactStoring
@@ -39,14 +38,14 @@ public struct DeterministicATPGEngine: ATPGExecuting {
 
     public func execute(
         _ request: DFTRequest
-    ) async throws -> XcircuiteEngineResultEnvelope<DFTPayload> {
+    ) async throws -> DFTResult {
         let startedAt = Date()
         let engineID = "dft.atpg"
         do {
             try Task.checkCancellation()
             let issues = request.validationIssues(for: .atpg)
             guard issues.isEmpty else {
-                return DFTExecutionSupport.envelope(
+                return DFTExecutionSupport.result(
                     request: request,
                     engineID: engineID,
                     implementationID: implementationID,
@@ -186,7 +185,7 @@ public struct DeterministicATPGEngine: ATPGExecuting {
 
             var outcomes: [DFTFaultOutcome] = []
             var patterns: [DFTTestPattern] = []
-            var diagnostics: [XcircuiteEngineDiagnostic] = []
+            var diagnostics: [DFTDiagnostic] = []
             var transitionSnapshot: LogicDesignSnapshot?
             var abortedCount = 0
             var untestableCount = 0
@@ -196,7 +195,7 @@ public struct DeterministicATPGEngine: ATPGExecuting {
                 do {
                     transitionSnapshot = try designLoader.load(request.design)
                 } catch {
-                    diagnostics.append(XcircuiteEngineDiagnostic(
+                    diagnostics.append(DFTDiagnostic(
                         severity: .error,
                         code: "DFT_TRANSITION_DESIGN_LOAD_FAILED",
                         message: "Transition-fault ATPG could not load the canonical design: \(error.localizedDescription)",
@@ -277,7 +276,7 @@ public struct DeterministicATPGEngine: ATPGExecuting {
                         status: .untestable,
                         reason: "fault location is unavailable"
                     ))
-                    diagnostics.append(XcircuiteEngineDiagnostic(
+                    diagnostics.append(DFTDiagnostic(
                         severity: .error,
                         code: "DFT_FAULT_LOCATION_MISSING",
                         message: "Fault \(fault.id) cannot be modeled without a location.",
@@ -295,7 +294,7 @@ public struct DeterministicATPGEngine: ATPGExecuting {
                             status: .aborted,
                             reason: "transition direction or canonical combinational design is unavailable"
                         ))
-                        diagnostics.append(XcircuiteEngineDiagnostic(
+                        diagnostics.append(DFTDiagnostic(
                             severity: .error,
                             code: "DFT_FAULT_SEMANTICS_UNAVAILABLE",
                             message: "Transition fault \(fault.id) requires an explicit direction and a canonical combinational design.",
@@ -337,7 +336,7 @@ public struct DeterministicATPGEngine: ATPGExecuting {
                             status: .aborted,
                             reason: error.localizedDescription
                         ))
-                        diagnostics.append(XcircuiteEngineDiagnostic(
+                        diagnostics.append(DFTDiagnostic(
                             severity: .error,
                             code: "DFT_FAULT_SEMANTICS_UNAVAILABLE",
                             message: error.localizedDescription,
@@ -351,7 +350,7 @@ public struct DeterministicATPGEngine: ATPGExecuting {
                             status: .aborted,
                             reason: error.localizedDescription
                         ))
-                        diagnostics.append(XcircuiteEngineDiagnostic(
+                        diagnostics.append(DFTDiagnostic(
                             severity: .error,
                             code: "DFT_FAULT_SEMANTICS_UNAVAILABLE",
                             message: error.localizedDescription,
@@ -370,7 +369,7 @@ public struct DeterministicATPGEngine: ATPGExecuting {
                             status: .aborted,
                             reason: "process fault family is not declared in the ATPG configuration"
                         ))
-                        diagnostics.append(XcircuiteEngineDiagnostic(
+                        diagnostics.append(DFTDiagnostic(
                             severity: .error,
                             code: "DFT_PROCESS_FAULT_FAMILY_UNDECLARED",
                             message: "ATPG cannot evaluate process-specific fault \(fault.id) without a declared process family.",
@@ -386,7 +385,7 @@ public struct DeterministicATPGEngine: ATPGExecuting {
                             status: .aborted,
                             reason: "no process-specific fault model was injected"
                         ))
-                        diagnostics.append(XcircuiteEngineDiagnostic(
+                        diagnostics.append(DFTDiagnostic(
                             severity: .error,
                             code: "DFT_PROCESS_FAULT_MODEL_MISSING",
                             message: "Process-specific fault \(fault.id) requires an injected and separately qualified fault model.",
@@ -403,7 +402,7 @@ public struct DeterministicATPGEngine: ATPGExecuting {
                             modelID: processFaultModel.modelID,
                             reason: "injected process-specific fault model does not support the declared family"
                         ))
-                        diagnostics.append(XcircuiteEngineDiagnostic(
+                        diagnostics.append(DFTDiagnostic(
                             severity: .error,
                             code: "DFT_PROCESS_FAULT_MODEL_UNSUPPORTED",
                             message: "Injected process fault model \(processFaultModel.modelID) does not support family \(processFamily).",
@@ -429,7 +428,7 @@ public struct DeterministicATPGEngine: ATPGExecuting {
                             modelID: processFaultModel.modelID,
                             reason: "process fault model failed: \(error.localizedDescription)"
                         ))
-                        diagnostics.append(XcircuiteEngineDiagnostic(
+                        diagnostics.append(DFTDiagnostic(
                             severity: .error,
                             code: "DFT_PROCESS_FAULT_MODEL_FAILED",
                             message: "Process fault model \(processFaultModel.modelID) failed for \(fault.id): \(error.localizedDescription)",
@@ -447,7 +446,7 @@ public struct DeterministicATPGEngine: ATPGExecuting {
                             modelID: processFaultModel.modelID,
                             reason: "process fault model returned an invalid result identity"
                         ))
-                        diagnostics.append(XcircuiteEngineDiagnostic(
+                        diagnostics.append(DFTDiagnostic(
                             severity: .error,
                             code: "DFT_PROCESS_FAULT_MODEL_INVALID_RESULT",
                             message: "Process fault model returned an invalid identity or empty reason for \(fault.id).",
@@ -468,7 +467,7 @@ public struct DeterministicATPGEngine: ATPGExecuting {
                                 modelID: processFaultModel.modelID,
                                 reason: "process fault model returned an invalid detected pattern"
                             ))
-                            diagnostics.append(XcircuiteEngineDiagnostic(
+                            diagnostics.append(DFTDiagnostic(
                                 severity: .error,
                                 code: "DFT_PROCESS_FAULT_MODEL_INVALID_PATTERN",
                                 message: "Process fault model returned a non-binary pattern with the wrong length for \(fault.id).",
@@ -516,7 +515,7 @@ public struct DeterministicATPGEngine: ATPGExecuting {
                         status: .aborted,
                         reason: "fault family semantics are unavailable to this backend"
                     ))
-                    diagnostics.append(XcircuiteEngineDiagnostic(
+                    diagnostics.append(DFTDiagnostic(
                         severity: .error,
                         code: "DFT_FAULT_SEMANTICS_UNAVAILABLE",
                         message: "ATPG was blocked for fault \(fault.id) because no declared backend model is available for family \(fault.family.rawValue).",
@@ -605,21 +604,21 @@ public struct DeterministicATPGEngine: ATPGExecuting {
 
             let isBlocked = abortedCount > configuration.abortLimit || untestableCount > 0
             if isBlocked {
-                diagnostics.append(XcircuiteEngineDiagnostic(
+                diagnostics.append(DFTDiagnostic(
                     severity: .error,
                     code: "DFT_ATPG_BLOCKED",
                     message: "ATPG produced partial evidence but cannot claim coverage because unsupported or untestable faults remain.",
                     suggestedActions: ["qualify_missing_fault_semantics", "increase_pattern_budget", "review_fault_exclusions"]
                 ))
             } else if abortedCount > 0 {
-                diagnostics.append(XcircuiteEngineDiagnostic(
+                diagnostics.append(DFTDiagnostic(
                     severity: .warning,
                     code: "DFT_ATPG_ABORTS_WITHIN_POLICY",
                     message: "ATPG completed with \(abortedCount) aborted fault(s) within the declared abort limit."
                 ))
             }
             diagnostics.insert(
-                XcircuiteEngineDiagnostic(
+                DFTDiagnostic(
                     severity: .info,
                     code: "DFT_ATPG_COMPLETED",
                     message: faultSource == .gateLevel
@@ -629,7 +628,7 @@ public struct DeterministicATPGEngine: ATPGExecuting {
                 at: 0
             )
 
-            return DFTExecutionSupport.envelope(
+            return DFTExecutionSupport.result(
                 request: request,
                 engineID: engineID,
                 implementationID: implementationID,
@@ -648,13 +647,13 @@ public struct DeterministicATPGEngine: ATPGExecuting {
                 seed: seed
             )
         } catch is CancellationError {
-            return DFTExecutionSupport.envelope(
+            return DFTExecutionSupport.result(
                 request: request,
                 engineID: engineID,
                 implementationID: implementationID,
                 status: .cancelled,
                 diagnostics: [
-                    XcircuiteEngineDiagnostic(
+                    DFTDiagnostic(
                         severity: .warning,
                         code: "DFT_EXECUTION_CANCELLED",
                         message: "ATPG was cancelled before completion."
@@ -801,8 +800,8 @@ public struct DeterministicATPGEngine: ATPGExecuting {
         let candidateCount = 1 << inputPorts.count
         var outcomes: [DFTFaultOutcome] = []
         var patterns: [DFTTestPattern] = []
-        var diagnostics: [XcircuiteEngineDiagnostic] = [
-            XcircuiteEngineDiagnostic(
+        var diagnostics: [DFTDiagnostic] = [
+            DFTDiagnostic(
                 severity: .info,
                 code: "DFT_GATE_LEVEL_FAULT_EXTRACTION_COMPLETED",
                 message: "Extracted \(faults.count) stuck-at fault(s) from driven nets in \(gate.topModuleName)."
@@ -863,7 +862,7 @@ public struct DeterministicATPGEngine: ATPGExecuting {
                     status: .untestable,
                     reason: "no exhaustive primary-input assignment changed an observable primary output"
                 ))
-                diagnostics.append(XcircuiteEngineDiagnostic(
+                diagnostics.append(DFTDiagnostic(
                     severity: .warning,
                     code: "DFT_GATE_LEVEL_FAULT_UNTESTABLE",
                     message: "No detecting pattern was found for gate-level fault \(fault.id).",
@@ -887,7 +886,7 @@ public struct DeterministicATPGEngine: ATPGExecuting {
             ))
         }
 
-        diagnostics.append(XcircuiteEngineDiagnostic(
+        diagnostics.append(DFTDiagnostic(
             severity: .info,
             code: "DFT_GATE_LEVEL_ATPG_COMPLETED",
             message: "Evaluated up to \(candidateCount) primary-input assignment(s) per extracted fault."
@@ -929,8 +928,8 @@ public struct DeterministicATPGEngine: ATPGExecuting {
         let candidateCount = 1 << totalInputCount
         var outcomes: [DFTFaultOutcome] = []
         var patterns: [DFTTestPattern] = []
-        var diagnostics: [XcircuiteEngineDiagnostic] = [
-            XcircuiteEngineDiagnostic(
+        var diagnostics: [DFTDiagnostic] = [
+            DFTDiagnostic(
                 severity: .info,
                 code: "DFT_GATE_LEVEL_SEQUENTIAL_SEMANTICS_ENABLED",
                 message: "Evaluating bounded DFF and scan-cell state transitions over \(cycleLimit) capture cycle(s)."
@@ -1018,7 +1017,7 @@ public struct DeterministicATPGEngine: ATPGExecuting {
             ))
         }
 
-        diagnostics.append(XcircuiteEngineDiagnostic(
+        diagnostics.append(DFTDiagnostic(
             severity: .info,
             code: "DFT_GATE_LEVEL_SEQUENTIAL_ATPG_COMPLETED",
             message: "Evaluated up to \(candidateCount) sequential input sequence(s) per extracted fault."
@@ -1102,7 +1101,7 @@ public struct DeterministicATPGEngine: ATPGExecuting {
         return bits.joined()
     }
 
-    private func fileFormat(for format: DFTTestPatternFormat) -> XcircuiteFileFormat {
+    private func fileFormat(for format: DFTTestPatternFormat) -> ArtifactFormat {
         switch format {
         case .json:
             return .json
@@ -1114,7 +1113,7 @@ public struct DeterministicATPGEngine: ATPGExecuting {
     }
 
     private func patternBits(for faultID: String, seed: UInt64, length: Int) -> String {
-        let digest = XcircuiteHasher().sha256(
+        let digest = DFTHasher().sha256(
             data: Data("\(seed):\(faultID)".utf8)
         )
         let bytes = Array(digest.utf8)
@@ -1148,14 +1147,14 @@ public struct DeterministicATPGEngine: ATPGExecuting {
         message: String,
         entity: String? = nil,
         actions: [String] = []
-    ) -> XcircuiteEngineResultEnvelope<DFTPayload> {
-        DFTExecutionSupport.envelope(
+    ) -> DFTResult {
+        DFTExecutionSupport.result(
             request: request,
             engineID: engineID,
             implementationID: implementationID,
             status: .blocked,
             diagnostics: [
-                XcircuiteEngineDiagnostic(
+                DFTDiagnostic(
                     severity: .error,
                     code: code,
                     message: message,
@@ -1176,7 +1175,7 @@ public struct DeterministicATPGEngine: ATPGExecuting {
 private struct GateLevelATPGSearchResult {
     var outcomes: [DFTFaultOutcome]
     var patterns: [DFTTestPattern]
-    var diagnostics: [XcircuiteEngineDiagnostic]
+    var diagnostics: [DFTDiagnostic]
     var abortedCount: Int
     var untestableCount: Int
 }

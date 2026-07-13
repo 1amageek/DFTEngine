@@ -2,7 +2,7 @@ import DFTCore
 import Foundation
 import LogicIR
 import Testing
-import XcircuitePackage
+import CircuiteFoundation
 
 @Suite("DFT oracle correlation")
 struct DFTOracleCorrelationTests {
@@ -129,7 +129,7 @@ struct DFTOracleCorrelationTests {
                     expectedDetectedFaultIDs: ["fault-1"],
                     expectedCoverage: 1.0
                 ),
-                oracleArtifact: XcircuiteFileReference(
+                oracleArtifact: testArtifact(
                     artifactID: "oracle-case-1",
                     path: "qualification/oracle-case-1.json",
                     kind: .report,
@@ -153,12 +153,12 @@ struct DFTOracleCorrelationTests {
             expectedCoverage: 1.0
         )
         let oracleData = try DFTArtifactJSONEncoder().encode(expectation)
-        let oracleArtifact = XcircuiteFileReference(
+        let oracleArtifact = testArtifact(
             artifactID: "oracle-case-1",
             path: "qualification/oracle-case-1.json",
             kind: .report,
             format: .json,
-            sha256: XcircuiteHasher().sha256(data: oracleData),
+            sha256: try SHA256ContentDigester().digest(data: oracleData, using: .sha256).hexadecimalValue,
             byteCount: Int64(oracleData.count)
         )
         let corpus = DFTOracleCorpus(
@@ -180,7 +180,7 @@ struct DFTOracleCorrelationTests {
     private func makeResult(
         faultUniverseDigest: String,
         faultID: String = "fault-1"
-    ) -> XcircuiteEngineResultEnvelope<DFTPayload> {
+    ) -> DFTResult {
         let coverage = DFTCoverageEvidence(
             faultUniverseName: "fixture-faults",
             faultUniverseRevision: "r1",
@@ -200,11 +200,11 @@ struct DFTOracleCorrelationTests {
                 reason: "fixture"
             )]
         )
-        return XcircuiteEngineResultEnvelope(
+        return DFTResult(
             schemaVersion: 1,
             runID: "native-run",
             status: .completed,
-            metadata: XcircuiteEngineExecutionMetadata(
+            metadata: DFTExecutionMetadata(
                 engineID: "dft.atpg",
                 implementationID: "native-deterministic-atpg",
                 implementationVersion: "1",

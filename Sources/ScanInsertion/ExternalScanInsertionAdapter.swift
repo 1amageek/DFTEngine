@@ -1,6 +1,5 @@
 import DFTCore
 import Foundation
-import XcircuitePackage
 
 public struct ExternalScanInsertionAdapter: ScanInserting {
     public let executor: DFTExternalToolExecutor
@@ -14,7 +13,7 @@ public struct ExternalScanInsertionAdapter: ScanInserting {
 
     public func execute(
         _ request: DFTRequest
-    ) async throws -> XcircuiteEngineResultEnvelope<DFTPayload> {
+    ) async throws -> DFTResult {
         try await executor.execute(request)
     }
 }

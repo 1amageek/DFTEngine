@@ -2,7 +2,6 @@ import Foundation
 import DFTCore
 import LogicIR
 import PDKCore
-import XcircuitePackage
 
 public struct DeterministicScanInsertionEngine: ScanInserting {
     public let artifactStore: any DFTArtifactStoring
@@ -24,14 +23,14 @@ public struct DeterministicScanInsertionEngine: ScanInserting {
 
     public func execute(
         _ request: DFTRequest
-    ) async throws -> XcircuiteEngineResultEnvelope<DFTPayload> {
+    ) async throws -> DFTResult {
         let startedAt = Date()
         let engineID = "dft.scan-insertion"
         do {
             try Task.checkCancellation()
             let issues = request.validationIssues(for: .scanInsertion)
             guard issues.isEmpty else {
-                return DFTExecutionSupport.envelope(
+                return DFTExecutionSupport.result(
                     request: request,
                     engineID: engineID,
                     implementationID: implementationID,
@@ -94,7 +93,7 @@ public struct DeterministicScanInsertionEngine: ScanInserting {
                     startedAt: startedAt,
                     code: "DFT_CELL_LIBRARY_LOADER_MISSING",
                     message: "Scan insertion cannot verify the process-scoped cell library manifest.",
-                    entity: cellLibraryReference.artifact.path,
+                    entity: cellLibraryReference.artifact.locator.path,
                     actions: ["provide_cell_library_loader", "persist_cell_library_manifest"]
                 )
             }
@@ -111,7 +110,7 @@ public struct DeterministicScanInsertionEngine: ScanInserting {
                     startedAt: startedAt,
                     code: "DFT_CELL_LIBRARY_LOAD_FAILED",
                     message: error.localizedDescription,
-                    entity: cellLibraryReference.artifact.path,
+                    entity: cellLibraryReference.artifact.locator.path,
                     actions: ["verify_cell_library_digest", "align_cell_library_with_pdk", "attach_qualification_evidence"]
                 )
             }
@@ -190,7 +189,7 @@ public struct DeterministicScanInsertionEngine: ScanInserting {
                 runID: request.runID
             )
             let transformedDesign = LogicDesignReference(
-                artifact: transformedReference,
+                artifact: transformedReference.locator,
                 topDesignName: request.design.topDesignName,
                 designDigest: transform.snapshot.designDigest ?? "",
                 provenance: LogicDesignProvenance(
@@ -204,33 +203,47 @@ public struct DeterministicScanInsertionEngine: ScanInserting {
             )
 
             var artifacts = [transformedReference]
-            var designDiff: XcircuiteDesignDiff?
+            var designDiff: DFTDesignDiff?
             if policy.generateDesignDiff {
                 let changes = transform.transformedCellIDs.map { cellID in
-                    XcircuiteDesignDiffChange(
+                    DFTDesignDiffChange(
                         changeID: "transform-\(cellID)",
-                        domain: .netlist,
-                        operation: .replace,
+                        domain: .circuit,
+                        operation: .modify,
                         path: "gate.modules[\(request.design.topDesignName)].cells[\(cellID)]",
                         after: .string("scan cell \(policy.scanCellName) with SI/SE/TM connectivity"),
                         summary: "Transform sequential cell \(cellID) into a scan cell."
                     )
                 }
                 let generatedChanges = changes + transform.helperCellIDs.map { cellID in
-                    XcircuiteDesignDiffChange(
+                    DFTDesignDiffChange(
                         changeID: "add-\(cellID)",
-                        domain: .netlist,
+                        domain: .circuit,
                         operation: .add,
                         path: "gate.modules[\(request.design.topDesignName)].cells[\(cellID)]",
                         after: .string("DFT scan observability helper"),
                         summary: "Add scan observability helper cell \(cellID)."
                     )
                 }
-                let diff = XcircuiteDesignDiff(
+                guard let baseReference = request.inputs.first(where: {
+                    $0.locator == request.design.artifact
+                }) else {
+                    return blocked(
+                        request: request,
+                        engineID: engineID,
+                        implementationID: implementationID,
+                        startedAt: startedAt,
+                        code: "DFT_DESIGN_INPUT_MISSING",
+                        message: "The source design artifact is missing from the request input set.",
+                        entity: request.design.topDesignName,
+                        actions: ["include_source_design_artifact"]
+                    )
+                }
+                let diff = DFTDesignDiff(
                     runID: request.runID,
                     title: "Insert scan architecture \(architecture.name)",
                     actor: "DFTEngine/\(implementationID)",
-                    baseSnapshot: request.design.artifact,
+                    baseSnapshot: baseReference,
                     proposedSnapshot: transformedReference,
                     changes: generatedChanges
                 )
@@ -249,13 +262,13 @@ public struct DeterministicScanInsertionEngine: ScanInserting {
                 designDiff = diff
             }
 
-            return DFTExecutionSupport.envelope(
+            return DFTExecutionSupport.result(
                 request: request,
                 engineID: engineID,
                 implementationID: implementationID,
                 status: .completed,
                 diagnostics: [
-                    XcircuiteEngineDiagnostic(
+                    DFTDiagnostic(
                         severity: .info,
                         code: "DFT_SCAN_INSERTION_COMPLETED",
                         message: "Generated \(plan.chains.count) scan chain(s) for \(architecture.name) using \(cellLibrary.bindings.count) cell-library binding contract(s).",
@@ -274,13 +287,13 @@ public struct DeterministicScanInsertionEngine: ScanInserting {
                 startedAt: startedAt
             )
         } catch is CancellationError {
-            return DFTExecutionSupport.envelope(
+            return DFTExecutionSupport.result(
                 request: request,
                 engineID: engineID,
                 implementationID: implementationID,
                 status: .cancelled,
                 diagnostics: [
-                    XcircuiteEngineDiagnostic(
+                    DFTDiagnostic(
                         severity: .warning,
                         code: "DFT_EXECUTION_CANCELLED",
                         message: "Scan insertion was cancelled before completion."
@@ -378,14 +391,14 @@ public struct DeterministicScanInsertionEngine: ScanInserting {
         message: String,
         entity: String? = nil,
         actions: [String] = []
-    ) -> XcircuiteEngineResultEnvelope<DFTPayload> {
-        DFTExecutionSupport.envelope(
+    ) -> DFTResult {
+        DFTExecutionSupport.result(
             request: request,
             engineID: engineID,
             implementationID: implementationID,
             status: .blocked,
             diagnostics: [
-                XcircuiteEngineDiagnostic(
+                DFTDiagnostic(
                     severity: .error,
                     code: code,
                     message: message,

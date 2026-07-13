@@ -1,18 +1,17 @@
 import Foundation
-import XcircuitePackage
 
 public struct DFTArtifactContent: Sendable, Hashable {
     public var artifactID: String
     public var fileName: String
-    public var kind: XcircuiteFileKind
-    public var format: XcircuiteFileFormat
+    public var kind: ArtifactKind
+    public var format: ArtifactFormat
     public var data: Data
 
     public init(
         artifactID: String,
         fileName: String,
-        kind: XcircuiteFileKind,
-        format: XcircuiteFileFormat,
+        kind: ArtifactKind,
+        format: ArtifactFormat,
         data: Data
     ) {
         self.artifactID = artifactID

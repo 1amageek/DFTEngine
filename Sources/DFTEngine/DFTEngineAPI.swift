@@ -44,7 +44,7 @@ public enum DFTEngineAPI {
         cellLibraryLoader: (any DFTCellLibraryLoading)? = nil
     ) -> DFTFoundationEngine {
         DFTFoundationEngine(
-            legacyEngine: defaultEngine(
+            engine: defaultEngine(
                 artifactStore: artifactStore,
                 designLoader: designLoader,
                 cellLibraryLoader: cellLibraryLoader

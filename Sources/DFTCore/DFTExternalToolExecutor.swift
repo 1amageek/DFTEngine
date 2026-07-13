@@ -1,6 +1,5 @@
 import Foundation
 import CircuiteFoundation
-import XcircuitePackage
 
 public struct DFTExternalToolExecutor: Sendable {
     public let runner: any DFTExternalToolRunning
@@ -16,7 +15,7 @@ public struct DFTExternalToolExecutor: Sendable {
 
     public func execute(
         _ request: DFTRequest
-    ) async throws -> XcircuiteEngineResultEnvelope<DFTPayload> {
+    ) async throws -> DFTResult {
         let requestData: Data
         do {
             requestData = try DFTArtifactJSONEncoder().encode(request)
@@ -34,60 +33,54 @@ public struct DFTExternalToolExecutor: Sendable {
             )
         }
         let responseData = output.standardOutput
-        let envelope: XcircuiteEngineResultEnvelope<DFTPayload>
+        let result: DFTResult
         do {
             let decoder = JSONDecoder()
             decoder.dateDecodingStrategy = .iso8601
-            envelope = try decoder.decode(
-                XcircuiteEngineResultEnvelope<DFTPayload>.self,
+            result = try decoder.decode(
+                DFTResult.self,
                 from: responseData
             )
         } catch {
             throw DFTExternalToolError.responseDecodingFailed(error.localizedDescription)
         }
-        guard envelope.schemaVersion == DFTRequest.currentSchemaVersion else {
-            throw DFTExternalToolError.schemaVersionMismatch(envelope.schemaVersion)
+        guard result.schemaVersion == DFTRequest.currentSchemaVersion else {
+            throw DFTExternalToolError.schemaVersionMismatch(result.schemaVersion)
         }
-        guard envelope.runID == request.runID else {
+        guard result.runID == request.runID else {
             throw DFTExternalToolError.runIDMismatch(
                 expected: request.runID,
-                actual: envelope.runID
+                actual: result.runID
             )
         }
-        guard envelope.metadata.engineID == runner.descriptor.engineID else {
+        guard result.metadata.engineID == runner.descriptor.engineID else {
             throw DFTExternalToolError.descriptorMismatch(
                 expected: runner.descriptor.engineID,
-                actual: envelope.metadata.engineID
+                actual: result.metadata.engineID
             )
         }
-        guard envelope.metadata.implementationID == runner.descriptor.implementationID else {
+        guard result.metadata.implementationID == runner.descriptor.implementationID else {
             throw DFTExternalToolError.implementationMismatch(
                 expected: runner.descriptor.implementationID,
-                actual: envelope.metadata.implementationID
+                actual: result.metadata.implementationID
             )
         }
-        guard envelope.metadata.implementationVersion == runner.descriptor.implementationVersion else {
+        guard result.metadata.implementationVersion == runner.descriptor.implementationVersion else {
             throw DFTExternalToolError.implementationVersionMismatch(
                 expected: runner.descriptor.implementationVersion,
-                actual: envelope.metadata.implementationVersion
+                actual: result.metadata.implementationVersion
             )
         }
-        guard envelope.metadata.startedAt.timeIntervalSinceReferenceDate.isFinite,
-              envelope.metadata.completedAt.timeIntervalSinceReferenceDate.isFinite else {
+        guard result.metadata.startedAt.timeIntervalSinceReferenceDate.isFinite,
+              result.metadata.completedAt.timeIntervalSinceReferenceDate.isFinite else {
             throw DFTExternalToolError.invalidExecutionMetadata(
                 "execution timestamps must be finite"
             )
         }
-        guard envelope.metadata.completedAt >= envelope.metadata.startedAt else {
+        guard result.metadata.completedAt >= result.metadata.startedAt else {
             throw DFTExternalToolError.invalidExecutionMetadata("completedAt precedes startedAt")
         }
-        for artifact in envelope.artifacts {
-            guard artifact.producedByRunID == nil || artifact.producedByRunID == request.runID else {
-                throw DFTExternalToolError.invalidArtifactReference(
-                    path: artifact.path,
-                    message: "producedByRunID must match the request run ID"
-                )
-            }
+        for artifact in result.artifacts {
             do {
                 _ = try DFTFoundationEvidence.artifactReference(from: artifact)
             } catch {
@@ -98,12 +91,12 @@ public struct DFTExternalToolExecutor: Sendable {
             }
         }
         guard let artifactStore else {
-            return envelope
+            return result
         }
         let responseReference = try await artifactStore.store(
             DFTArtifactContent(
-                artifactID: "dft-external-result-envelope",
-                fileName: "external-result-envelope.json",
+                artifactID: "dft-external-result",
+                fileName: "external-result-result.json",
                 kind: .report,
                 format: .json,
                 data: responseData
@@ -130,14 +123,14 @@ public struct DFTExternalToolExecutor: Sendable {
             ),
             runID: request.runID
         )
-        return XcircuiteEngineResultEnvelope(
-            schemaVersion: envelope.schemaVersion,
-            runID: envelope.runID,
-            status: envelope.status,
-            diagnostics: envelope.diagnostics,
-            artifacts: envelope.artifacts + [responseReference, stdoutReference, stderrReference],
-            metadata: envelope.metadata,
-            payload: envelope.payload
+        return DFTResult(
+            schemaVersion: result.schemaVersion,
+            runID: result.runID,
+            status: result.status,
+            diagnostics: result.diagnostics,
+            artifacts: result.artifacts + [responseReference, stdoutReference, stderrReference],
+            metadata: result.metadata,
+            payload: result.payload
         )
     }
 }

@@ -1,5 +1,4 @@
 import Foundation
-import XcircuitePackage
 
 public enum DFTCellLibraryManifestCodec {
     public static func encode(_ manifest: DFTCellLibraryManifest) throws -> Data {
@@ -13,7 +12,7 @@ public enum DFTCellLibraryManifestCodec {
     }
 
     public static func digest(_ manifest: DFTCellLibraryManifest) throws -> String {
-        XcircuiteHasher().sha256(data: try encode(manifest))
+        DFTHasher().sha256(data: try encode(manifest))
     }
 
     public static func validate(_ manifest: DFTCellLibraryManifest) throws {

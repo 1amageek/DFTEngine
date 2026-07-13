@@ -1,5 +1,4 @@
 import Foundation
-import XcircuitePackage
 
 public struct DFTExecutionSupport: Sendable {
     public static let implementationVersion = "1.0.0"
@@ -12,8 +11,8 @@ public struct DFTExecutionSupport: Sendable {
         startedAt: Date,
         completedAt: Date,
         seed: UInt64? = nil
-    ) -> XcircuiteEngineExecutionMetadata {
-        XcircuiteEngineExecutionMetadata(
+    ) -> DFTExecutionMetadata {
+        DFTExecutionMetadata(
             engineID: engineID,
             implementationID: implementationID,
             implementationVersion: implementationVersion,
@@ -25,9 +24,9 @@ public struct DFTExecutionSupport: Sendable {
 
     public static func diagnostics(
         for issues: [DFTRequestValidationIssue]
-    ) -> [XcircuiteEngineDiagnostic] {
+    ) -> [DFTDiagnostic] {
         issues.map { issue in
-            XcircuiteEngineDiagnostic(
+            DFTDiagnostic(
                 severity: .error,
                 code: issue.code,
                 message: issue.message,
@@ -37,18 +36,18 @@ public struct DFTExecutionSupport: Sendable {
         }
     }
 
-    public static func envelope(
+    public static func result(
         request: DFTRequest,
         engineID: String,
         implementationID: String,
-        status: XcircuiteEngineExecutionStatus,
-        diagnostics: [XcircuiteEngineDiagnostic],
-        artifacts: [XcircuiteFileReference] = [],
+        status: DFTExecutionStatus,
+        diagnostics: [DFTDiagnostic],
+        artifacts: [DFTArtifactReference] = [],
         payload: DFTPayload,
         startedAt: Date,
         seed: UInt64? = nil
-    ) -> XcircuiteEngineResultEnvelope<DFTPayload> {
-        XcircuiteEngineResultEnvelope(
+    ) -> DFTResult {
+        DFTResult(
             schemaVersion: DFTRequest.currentSchemaVersion,
             runID: request.runID,
             status: status,

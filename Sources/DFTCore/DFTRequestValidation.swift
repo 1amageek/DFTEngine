@@ -1,6 +1,5 @@
 import CircuiteFoundation
 import Foundation
-import XcircuitePackage
 
 public extension DFTRequest {
     func validationIssues(for operation: DFTOperation) -> [DFTRequestValidationIssue] {
@@ -59,7 +58,7 @@ public extension DFTRequest {
                 suggestedActions: ["recompute_design_digest"]
             ))
         }
-        issues.append(contentsOf: validateArtifact(
+        issues.append(contentsOf: validateLocator(
             design.artifact,
             entity: "design.artifact"
         ))
@@ -254,7 +253,7 @@ public extension DFTRequest {
     }
 
     private func validateArtifact(
-        _ artifact: XcircuiteFileReference,
+        _ artifact: DFTArtifactReference,
         entity: String
     ) -> [DFTRequestValidationIssue] {
         var issues: [DFTRequestValidationIssue] = []
@@ -302,24 +301,22 @@ public extension DFTRequest {
                 suggestedActions: ["recompute_artifact_digest"]
             ))
         }
-        guard let byteCount = artifact.byteCount else {
-            issues.append(DFTRequestValidationIssue(
-                code: "DFT_ARTIFACT_BYTE_COUNT_MISSING",
-                message: "Artifact references require a byte count.",
-                entity: "\(entity).byteCount",
-                suggestedActions: ["verify_artifact_integrity"]
-            ))
-            return issues
-        }
-        if byteCount < 0 {
-            issues.append(DFTRequestValidationIssue(
-                code: "DFT_ARTIFACT_BYTE_COUNT_INVALID",
-                message: "Artifact byte counts must be non-negative.",
-                entity: "\(entity).byteCount",
-                suggestedActions: ["recompute_artifact_metadata"]
-            ))
-        }
         return issues
+    }
+
+    private func validateLocator(
+        _ locator: ArtifactLocator,
+        entity: String
+    ) -> [DFTRequestValidationIssue] {
+        guard !locator.path.isEmpty else {
+            return [DFTRequestValidationIssue(
+                code: "DFT_ARTIFACT_PATH_INVALID",
+                message: "Artifact locators require a non-empty path.",
+                entity: "\(entity).path",
+                suggestedActions: ["provide_a_safe_project_relative_path"]
+            )]
+        }
+        return []
     }
 
     private func isSHA256(_ value: String) -> Bool {

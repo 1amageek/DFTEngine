@@ -1,6 +1,5 @@
 import Foundation
 import CircuiteFoundation
-import XcircuitePackage
 
 public actor InMemoryDFTOracleArtifactLoader: DFTOracleArtifactLoading {
     private let artifacts: [String: Data]
@@ -9,7 +8,7 @@ public actor InMemoryDFTOracleArtifactLoader: DFTOracleArtifactLoading {
         self.artifacts = artifacts
     }
 
-    public func load(_ reference: XcircuiteFileReference) async throws -> Data {
+    public func load(_ reference: DFTArtifactReference) async throws -> Data {
         try Self.validate(reference)
         guard let data = artifacts[reference.path] else {
             throw DFTOracleArtifactError.readFailed(
@@ -17,23 +16,16 @@ public actor InMemoryDFTOracleArtifactLoader: DFTOracleArtifactLoading {
                 message: "artifact is not present in the in-memory corpus"
             )
         }
-        guard let expectedByteCount = reference.byteCount else {
-            throw DFTOracleArtifactError.missingByteCount(reference.path)
-        }
-        guard expectedByteCount >= 0 else {
-            throw DFTOracleArtifactError.invalidByteCount(reference.path)
-        }
-        if expectedByteCount != Int64(data.count) {
+        let expectedByteCount = reference.byteCount
+        if expectedByteCount != UInt64(data.count) {
             throw DFTOracleArtifactError.byteCountMismatch(
                 path: reference.path,
-                expected: expectedByteCount,
+                expected: Int64(expectedByteCount),
                 actual: Int64(data.count)
             )
         }
-        guard let expectedDigest = reference.sha256 else {
-            throw DFTOracleArtifactError.missingDigest(reference.path)
-        }
-        let actualDigest = XcircuiteHasher().sha256(data: data)
+        let expectedDigest = reference.digest.hexadecimalValue
+        let actualDigest = DFTHasher().sha256(data: data)
         guard expectedDigest.caseInsensitiveCompare(actualDigest) == .orderedSame else {
             throw DFTOracleArtifactError.digestMismatch(
                 path: reference.path,
@@ -44,7 +36,7 @@ public actor InMemoryDFTOracleArtifactLoader: DFTOracleArtifactLoading {
         return data
     }
 
-    private static func validate(_ reference: XcircuiteFileReference) throws {
+    private static func validate(_ reference: DFTArtifactReference) throws {
         guard let artifactID = reference.artifactID else {
             throw DFTOracleArtifactError.missingArtifactID(reference.path)
         }
@@ -56,9 +48,7 @@ public actor InMemoryDFTOracleArtifactLoader: DFTOracleArtifactLoading {
         guard isSafePath(reference.path) else {
             throw DFTOracleArtifactError.invalidReference(reference.path)
         }
-        guard let digest = reference.sha256 else {
-            throw DFTOracleArtifactError.missingDigest(reference.path)
-        }
+        let digest = reference.digest.hexadecimalValue
         guard digest.count == 64, digest.allSatisfy(\.isHexDigit) else {
             throw DFTOracleArtifactError.invalidDigest(reference.path)
         }

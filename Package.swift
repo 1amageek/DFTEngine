@@ -14,7 +14,6 @@ let package = Package(
     ],
     dependencies: [
         .package(path: "../CircuiteFoundation"),
-        .package(path: "../XcircuitePackage"),
         .package(path: "../LogicDesign"),
         .package(path: "../TimingEngine"),
         .package(path: "../PDKKit"),
@@ -25,7 +24,6 @@ let package = Package(
             name: "DFTCore",
             dependencies: [
                 .product(name: "CircuiteFoundation", package: "CircuiteFoundation"),
-                .product(name: "XcircuitePackage", package: "XcircuitePackage"),
                 .product(name: "LogicIR", package: "LogicDesign"),
                 .product(name: "TimingCore", package: "TimingEngine"),
                 .product(name: "PDKCore", package: "PDKKit"),
@@ -35,7 +33,6 @@ let package = Package(
         .target(
             name: "ScanInsertion",
             dependencies: [
-                .product(name: "XcircuitePackage", package: "XcircuitePackage"),
                 .product(name: "PDKCore", package: "PDKKit"),
                 "DFTCore"
             ]
@@ -43,7 +40,6 @@ let package = Package(
         .target(
             name: "ATPGEngine",
             dependencies: [
-                .product(name: "XcircuitePackage", package: "XcircuitePackage"),
                 .product(name: "LogicIR", package: "LogicDesign"),
                 .product(name: "PDKCore", package: "PDKKit"),
                 "DFTCore",
@@ -51,7 +47,7 @@ let package = Package(
         ),
         .target(
             name: "BISTEngine",
-            dependencies: [.product(name: "XcircuitePackage", package: "XcircuitePackage"), "DFTCore"]
+            dependencies: ["DFTCore"]
         ),
         .target(
             name: "DFTEngine",

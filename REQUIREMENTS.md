@@ -26,7 +26,7 @@ Create testable silicon structures and qualified manufacturing-test artifacts wi
 
 - Public execution surfaces are protocol-first, Sendable and dependency-injected.
 - Requests and payloads are Codable, Hashable and schema-versioned.
-- Inputs and outputs use immutable XcircuiteFileReference artifacts.
+- Inputs and outputs use immutable CircuiteFoundation `ArtifactReference` values.
 - Diagnostics contain a stable code, severity, affected entity and suggested actions.
 - Unsupported semantics and missing prerequisites produce blocked results.
 - Native and external-tool backends conform to identical request and payload schemas.

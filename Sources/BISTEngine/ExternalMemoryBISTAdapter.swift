@@ -1,6 +1,5 @@
 import DFTCore
 import Foundation
-import XcircuitePackage
 
 public struct ExternalMemoryBISTAdapter: BISTExecuting {
     public let executor: DFTExternalToolExecutor
@@ -14,7 +13,7 @@ public struct ExternalMemoryBISTAdapter: BISTExecuting {
 
     public func execute(
         _ request: DFTRequest
-    ) async throws -> XcircuiteEngineResultEnvelope<DFTPayload> {
+    ) async throws -> DFTResult {
         guard request.operation == .bist else {
             throw DFTMemoryBISTAdapterError.operationMismatch
         }

@@ -1,14 +1,13 @@
 import Foundation
-import XcircuitePackage
 
 public struct DFTCellLibraryReference: Sendable, Hashable, Codable {
-    public var artifact: XcircuiteFileReference
+    public var artifact: DFTArtifactReference
     public var processID: String
     public var version: String
     public var manifestDigest: String
 
     public init(
-        artifact: XcircuiteFileReference,
+        artifact: DFTArtifactReference,
         processID: String,
         version: String,
         manifestDigest: String

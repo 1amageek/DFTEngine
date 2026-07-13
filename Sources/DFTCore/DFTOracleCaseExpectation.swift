@@ -1,8 +1,7 @@
 import Foundation
-import XcircuitePackage
 
 public struct DFTOracleCaseExpectation: Sendable, Hashable, Codable {
-    public var expectedStatus: XcircuiteEngineExecutionStatus
+    public var expectedStatus: DFTExecutionStatus
     public var expectedTransformedDesignDigest: String?
     public var expectedFaultUniverseDigest: String?
     public var expectedDetectedFaultIDs: [String]
@@ -13,7 +12,7 @@ public struct DFTOracleCaseExpectation: Sendable, Hashable, Codable {
     public var expectedBISTStructureDigest: String?
 
     public init(
-        expectedStatus: XcircuiteEngineExecutionStatus,
+        expectedStatus: DFTExecutionStatus,
         expectedTransformedDesignDigest: String? = nil,
         expectedFaultUniverseDigest: String? = nil,
         expectedDetectedFaultIDs: [String] = [],

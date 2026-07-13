@@ -1,5 +1,5 @@
 import Testing
-import XcircuitePackage
+import CircuiteFoundation
 @testable import DFTCore
 @testable import ScanInsertion
 @testable import ATPGEngine
@@ -95,8 +95,8 @@ struct ContractTests {
         #expect(didThrow)
     }
 
-    private func qualificationArtifact() -> XcircuiteFileReference {
-        XcircuiteFileReference(
+    private func qualificationArtifact() -> ArtifactReference {
+        testArtifact(
             artifactID: "qualification-corpus",
             path: "qualification/corpus.json",
             kind: .report,

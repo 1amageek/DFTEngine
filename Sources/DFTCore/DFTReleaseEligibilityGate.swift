@@ -1,13 +1,12 @@
 import Foundation
 import CircuiteFoundation
-import XcircuitePackage
 
 public struct DFTReleaseEligibilityGate: Sendable {
     public init() {}
 
     public func evaluate(
         request: DFTRequest,
-        result: XcircuiteEngineResultEnvelope<DFTPayload>,
+        result: DFTResult,
         downstreamEvidence: [DFTReleaseDownstreamEvidence],
         approval: DFTReleaseReviewApproval? = nil,
         sourceStageID: String = "dft",
@@ -49,12 +48,12 @@ public struct DFTReleaseEligibilityGate: Sendable {
                     "design diff run ID (designDiff.runID) does not match request run ID (request.runID)"
                 )
             }
-            guard designDiff.baseSnapshot == request.design.artifact else {
+            guard designDiff.baseSnapshot?.locator == request.design.artifact else {
                 throw DFTReleaseEligibilityError.designDiffInvalid(
                     "design diff base snapshot does not match the requested source design artifact"
                 )
             }
-            guard designDiff.proposedSnapshot == transformedDesign.artifact else {
+            guard designDiff.proposedSnapshot?.locator == transformedDesign.artifact else {
                 throw DFTReleaseEligibilityError.designDiffInvalid(
                     "design diff proposed snapshot does not match the transformed design artifact"
                 )
@@ -134,7 +133,7 @@ public struct DFTReleaseEligibilityGate: Sendable {
     }
 
     private func validatedArtifactIDs(
-        _ artifacts: [XcircuiteFileReference]
+        _ artifacts: [DFTArtifactReference]
     ) throws -> [String] {
         guard !artifacts.isEmpty else {
             throw DFTReleaseEligibilityError.invalidArtifactReference(
@@ -158,8 +157,7 @@ public struct DFTReleaseEligibilityGate: Sendable {
             guard let digest = artifact.sha256,
                   digest.count == 64,
                   digest.allSatisfy(\.isHexDigit),
-                  let byteCount = artifact.byteCount,
-                  byteCount >= 0 else {
+                  artifact.byteCount >= 0 else {
                 throw DFTReleaseEligibilityError.invalidArtifactReference(
                     "artifact \(artifactID) requires SHA-256 and non-negative byte count"
                 )

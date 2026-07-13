@@ -1,6 +1,5 @@
 import Foundation
 import LogicIR
-import XcircuitePackage
 
 public struct FileSystemDFTDesignLoader: DFTDesignLoading {
     public let rootURL: URL
@@ -23,25 +22,6 @@ public struct FileSystemDFTDesignLoader: DFTDesignLoading {
                 message: error.localizedDescription
             )
         }
-        if let expectedByteCount = reference.artifact.byteCount,
-           expectedByteCount != Int64(data.count) {
-            throw DFTDesignLoaderError.byteCountMismatch(
-                path: reference.artifact.path,
-                expected: expectedByteCount,
-                actual: Int64(data.count)
-            )
-        }
-        if let expectedDigest = reference.artifact.sha256 {
-            let actualDigest = XcircuiteHasher().sha256(data: data)
-            guard expectedDigest == actualDigest else {
-                throw DFTDesignLoaderError.artifactDigestMismatch(
-                    path: reference.artifact.path,
-                    expected: expectedDigest,
-                    actual: actualDigest
-                )
-            }
-        }
-
         let snapshot: LogicDesignSnapshot
         do {
             snapshot = try LogicDesignSnapshotCodec.decode(data)

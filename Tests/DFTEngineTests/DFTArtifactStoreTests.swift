@@ -1,7 +1,7 @@
 import DFTCore
 import Foundation
 import Testing
-import XcircuitePackage
+import CircuiteFoundation
 
 @Suite("DFT artifact stores")
 struct DFTArtifactStoreTests {

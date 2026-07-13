@@ -9,7 +9,6 @@ import PDKCore
 import ScanInsertion
 import Testing
 import TimingCore
-import XcircuitePackage
 
 @Suite("DFTEngine implementation")
 struct DFTEngineImplementationTests {
@@ -42,7 +41,7 @@ struct DFTEngineImplementationTests {
 
         #expect(result.status == .completed)
         #expect(result.payload.scanPlan?.chains.map(\.estimatedElementCount) == [3, 2])
-        #expect(result.payload.transformedDesign?.artifact.sha256 != nil)
+        #expect(result.artifacts.contains { $0.locator == result.payload.transformedDesign?.artifact })
         #expect(result.payload.transformedDesign?.provenance?.sourceDesignDigest == sourceDigest)
         #expect(result.payload.transformedDesign?.provenance?.transformationID == "dft-scan-insertion")
         #expect(result.payload.designDiff?.changes.count == 7)
@@ -767,11 +766,11 @@ struct DFTEngineImplementationTests {
         #expect(qualifiedBoundary.status == .blocked)
         #expect(qualifiedBoundary.diagnostics.contains { $0.code == "DFT_BIST_MEMORY_MACRO_UNSUPPORTED" })
 
-        var unqualifiedResponse = XcircuiteEngineResultEnvelope(
+        var unqualifiedResponse = DFTResult(
             schemaVersion: DFTRequest.currentSchemaVersion,
             runID: "run-bist",
-            status: XcircuiteEngineExecutionStatus.completed,
-            metadata: XcircuiteEngineExecutionMetadata(
+            status: DFTExecutionStatus.completed,
+            metadata: DFTExecutionMetadata(
                 engineID: "external.atpg",
             implementationID: "stub-atpg",
             implementationVersion: "1.0.0",
@@ -818,9 +817,9 @@ struct DFTEngineImplementationTests {
         #expect(decoded == request)
     }
 
-    @Test("DFT projects its legacy result into stable Foundation evidence")
+    @Test("DFT projects its domain result into stable Foundation evidence")
     func foundationEvidenceProjectionPreservesArtifactIdentity() throws {
-        let artifact = XcircuiteFileReference(
+        let artifact = testArtifact(
             artifactID: "dft-result",
             path: "dft/runs/run-foundation/result.json",
             kind: .report,
@@ -829,17 +828,17 @@ struct DFTEngineImplementationTests {
             byteCount: 12
         )
         let timestamp = Date(timeIntervalSince1970: 10)
-        let result = XcircuiteEngineResultEnvelope(
+        let result = DFTResult(
             schemaVersion: DFTRequest.currentSchemaVersion,
             runID: "run-foundation",
             status: .completed,
-            diagnostics: [XcircuiteEngineDiagnostic(
+            diagnostics: [DFTDiagnostic(
                 severity: .warning,
                 code: "DFT_FIXTURE_WARNING",
                 message: "Fixture warning."
             )],
             artifacts: [artifact],
-            metadata: XcircuiteEngineExecutionMetadata(
+            metadata: DFTExecutionMetadata(
                 engineID: "dft.atpg",
                 implementationID: "fixture-atpg",
                 implementationVersion: "1",
@@ -873,21 +872,21 @@ struct DFTEngineImplementationTests {
         #expect(foundationEvidence.evidence.provenance == provenance)
     }
 
-    @Test("DFT Foundation projection rejects artifacts without identity")
-    func foundationEvidenceProjectionRejectsMissingArtifactIdentity() throws {
+    @Test("DFT Foundation projection derives identity when producer omits one")
+    func foundationEvidenceProjectionDerivesMissingArtifactIdentity() throws {
         let timestamp = Date(timeIntervalSince1970: 10)
-        let result = XcircuiteEngineResultEnvelope(
+        let result = DFTResult(
             schemaVersion: DFTRequest.currentSchemaVersion,
             runID: "run-foundation",
             status: .completed,
-            artifacts: [XcircuiteFileReference(
+            artifacts: [testArtifact(
                 path: "result.json",
                 kind: .report,
                 format: .json,
                 sha256: String(repeating: "a", count: 64),
                 byteCount: 1
             )],
-            metadata: XcircuiteEngineExecutionMetadata(
+            metadata: DFTExecutionMetadata(
                 engineID: "dft.atpg",
                 implementationID: "fixture-atpg",
                 implementationVersion: "1",
@@ -909,9 +908,8 @@ struct DFTEngineImplementationTests {
             completedAt: timestamp.addingTimeInterval(1)
         )
 
-        #expect(throws: DFTFoundationBoundaryError.self) {
-            try DFTFoundationEvidence(result: result, provenance: provenance)
-        }
+        let evidence = try DFTFoundationEvidence(result: result, provenance: provenance)
+        #expect(evidence.artifacts[0].artifactID.hasPrefix("derived-"))
     }
 
     @Test("STIL and WGL pattern artifacts round-trip")
@@ -975,7 +973,7 @@ struct DFTEngineImplementationTests {
             ),
             atpgConfiguration: DFTATPGConfiguration()
         )
-        let expected = DFTExecutionSupport.envelope(
+        let expected = DFTExecutionSupport.result(
             request: request,
             engineID: "external.atpg",
             implementationID: "stub-atpg",
@@ -988,7 +986,7 @@ struct DFTEngineImplementationTests {
 
         let result = try await ExternalATPGAdapter(runner: runner).execute(request)
 
-        #expect(result.status == .blocked)
+        #expect(result.status == DFTExecutionStatus.blocked)
         #expect(result.runID == request.runID)
         #expect(runner.descriptor.engineID == "external.atpg")
 
@@ -997,8 +995,8 @@ struct DFTEngineImplementationTests {
             runner: runner,
             artifactStore: store
         ).execute(request)
-        #expect(persisted.artifacts.compactMap(\.artifactID) == [
-            "dft-external-result-envelope",
+        #expect(persisted.artifacts.map(\.artifactID) == [
+            "dft-external-result",
             "dft-external-stdout",
             "dft-external-stderr",
         ])
@@ -1016,7 +1014,7 @@ struct DFTEngineImplementationTests {
         atpgConfiguration: DFTATPGConfiguration? = nil,
         bistConfiguration: DFTBISTConfiguration? = nil
     ) -> DFTRequest {
-        let designArtifact = XcircuiteFileReference(
+        let designArtifact = testArtifact(
             artifactID: "design",
             path: "design.json",
             kind: .netlist,
@@ -1029,12 +1027,12 @@ struct DFTEngineImplementationTests {
             runID: "run-\(operation.rawValue)",
             inputs: inputArtifacts,
             design: LogicDesignReference(
-                artifact: designArtifact,
+                artifact: designArtifact.locator,
                 topDesignName: "top",
                 designDigest: designDigest
             ),
-            constraints: TimingConstraintReference(
-                artifact: XcircuiteFileReference(
+            constraints: DFTConstraintReference(
+                artifact: testArtifact(
                     artifactID: "constraints",
                     path: "constraints.sdc",
                     kind: .constraint,
@@ -1045,7 +1043,7 @@ struct DFTEngineImplementationTests {
                 modeIDs: ["functional", "test"]
             ),
             pdk: PDKReference(
-                manifest: XcircuiteFileReference(
+                manifest: testArtifact(
                     artifactID: "pdk",
                     path: "pdk.json",
                     kind: .technology,
@@ -1283,7 +1281,7 @@ struct DFTEngineImplementationTests {
         manifest: DFTCellLibraryManifest
     ) throws -> DFTCellLibraryReference {
         DFTCellLibraryReference(
-            artifact: XcircuiteFileReference(
+            artifact: testArtifact(
                 artifactID: "cell-library",
                 path: "cell-library.json",
                 kind: .technology,

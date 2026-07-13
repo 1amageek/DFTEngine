@@ -1,5 +1,4 @@
 import Foundation
-import XcircuitePackage
 
 public struct DFTReleaseDownstreamEvidence: Sendable, Hashable, Codable {
     public enum Domain: String, Sendable, Hashable, Codable {
@@ -12,12 +11,12 @@ public struct DFTReleaseDownstreamEvidence: Sendable, Hashable, Codable {
 
     public var domain: Domain
     public var role: String
-    public var artifact: XcircuiteFileReference
+    public var artifact: DFTArtifactReference
 
     public init(
         domain: Domain,
         role: String,
-        artifact: XcircuiteFileReference
+        artifact: DFTArtifactReference
     ) {
         self.domain = domain
         self.role = role

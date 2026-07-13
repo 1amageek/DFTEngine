@@ -1,12 +1,11 @@
 import Foundation
 import DFTCore
-import XcircuitePackage
 
 public enum DFTMemoryBISTAdapterError: Error, LocalizedError, Sendable, Hashable {
     case operationMismatch
     case configurationMissing
     case bindingsMissing
-    case resultNotCompleted(XcircuiteEngineExecutionStatus)
+    case resultNotCompleted(DFTExecutionStatus)
     case qualificationInsufficient(DFTQualificationStatus)
 
     public var errorDescription: String? {

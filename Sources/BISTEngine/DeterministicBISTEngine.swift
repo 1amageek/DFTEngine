@@ -1,7 +1,6 @@
 import Foundation
 import DFTCore
 import LogicIR
-import XcircuitePackage
 
 public struct DeterministicBISTEngine: BISTExecuting {
     public let artifactStore: any DFTArtifactStoring
@@ -20,14 +19,14 @@ public struct DeterministicBISTEngine: BISTExecuting {
 
     public func execute(
         _ request: DFTRequest
-    ) async throws -> XcircuiteEngineResultEnvelope<DFTPayload> {
+    ) async throws -> DFTResult {
         let startedAt = Date()
         let engineID = "dft.bist"
         do {
             try Task.checkCancellation()
             let issues = request.validationIssues(for: .bist)
             guard issues.isEmpty else {
-                return DFTExecutionSupport.envelope(
+                return DFTExecutionSupport.result(
                     request: request,
                     engineID: engineID,
                     implementationID: implementationID,
@@ -218,7 +217,7 @@ public struct DeterministicBISTEngine: BISTExecuting {
                 runID: request.runID
             )
             let transformedDesign = LogicDesignReference(
-                artifact: transformedReference,
+                artifact: transformedReference.locator,
                 topDesignName: request.design.topDesignName,
                 designDigest: transform.snapshot.designDigest ?? "",
                 provenance: LogicDesignProvenance(
@@ -230,26 +229,39 @@ public struct DeterministicBISTEngine: BISTExecuting {
                     runID: request.runID
                 )
             )
-            let diff = XcircuiteDesignDiff(
+            guard let baseReference = request.inputs.first(where: {
+                $0.locator == request.design.artifact
+            }) else {
+                return blocked(
+                    request: request,
+                    engineID: engineID,
+                    startedAt: startedAt,
+                    code: "DFT_DESIGN_INPUT_MISSING",
+                    message: "The source design artifact is missing from the request input set.",
+                    entity: request.design.topDesignName,
+                    actions: ["include_source_design_artifact"]
+                )
+            }
+            let diff = DFTDesignDiff(
                 runID: request.runID,
                 title: "Insert \(configuration.kind.rawValue) BIST \(configuration.name)",
                 actor: "DFTEngine/\(implementationID)",
-                baseSnapshot: request.design.artifact,
+                baseSnapshot: baseReference,
                 proposedSnapshot: transformedReference,
                 changes: transform.generatedCellIDs.map { cellID in
-                    XcircuiteDesignDiffChange(
+                    DFTDesignDiffChange(
                         changeID: "add-\(cellID)",
-                        domain: .netlist,
+                        domain: .circuit,
                         operation: .add,
                         path: "gate.modules[\(request.design.topDesignName)].cells[\(cellID)]",
                         after: .string("canonical BIST helper cell"),
                         summary: "Add BIST helper cell \(cellID)."
                     )
                 } + transform.transformedTargetInstances.map { instanceName in
-                    XcircuiteDesignDiffChange(
+                    DFTDesignDiffChange(
                         changeID: "transform-\(instanceName)",
-                        domain: .netlist,
-                        operation: .replace,
+                        domain: .circuit,
+                        operation: .modify,
                         path: "gate.modules[\(request.design.topDesignName)].cells[\(instanceName)]",
                         after: .string("test-mode isolated BIST target binding"),
                         summary: "Add test-mode BIST isolation around target \(instanceName)."
@@ -268,13 +280,13 @@ public struct DeterministicBISTEngine: BISTExecuting {
                 runID: request.runID
             )
 
-            return DFTExecutionSupport.envelope(
+            return DFTExecutionSupport.result(
                 request: request,
                 engineID: engineID,
                 implementationID: implementationID,
                 status: .completed,
                 diagnostics: [
-                    XcircuiteEngineDiagnostic(
+                    DFTDiagnostic(
                         severity: .info,
                         code: "DFT_BIST_INSERTION_COMPLETED",
                         message: "Transformed canonical gate design for \(configuration.kind.rawValue) BIST \(configuration.name).",
@@ -294,13 +306,13 @@ public struct DeterministicBISTEngine: BISTExecuting {
                 seed: seed
             )
         } catch is CancellationError {
-            return DFTExecutionSupport.envelope(
+            return DFTExecutionSupport.result(
                 request: request,
                 engineID: engineID,
                 implementationID: implementationID,
                 status: .cancelled,
                 diagnostics: [
-                    XcircuiteEngineDiagnostic(
+                    DFTDiagnostic(
                         severity: .warning,
                         code: "DFT_EXECUTION_CANCELLED",
                         message: "BIST insertion was cancelled before completion."
@@ -353,14 +365,14 @@ public struct DeterministicBISTEngine: BISTExecuting {
         message: String,
         entity: String? = nil,
         actions: [String] = []
-    ) -> XcircuiteEngineResultEnvelope<DFTPayload> {
-        DFTExecutionSupport.envelope(
+    ) -> DFTResult {
+        DFTExecutionSupport.result(
             request: request,
             engineID: engineID,
             implementationID: implementationID,
             status: .blocked,
             diagnostics: [
-                XcircuiteEngineDiagnostic(
+                DFTDiagnostic(
                     severity: .error,
                     code: code,
                     message: message,

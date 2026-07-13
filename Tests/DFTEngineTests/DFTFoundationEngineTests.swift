@@ -5,14 +5,12 @@ import Foundation
 import LogicIR
 import PDKCore
 import Testing
-import TimingCore
-import XcircuitePackage
 
 @Suite("DFT Foundation execution")
 struct DFTFoundationEngineTests {
-    @Test("Foundation adapter records verified inputs and execution provenance")
-    func foundationAdapterPreservesProvenance() async throws {
-        let input = XcircuiteFileReference(
+    @Test("Foundation engine executes the DFT domain protocol directly")
+    func foundationEngineExecutesDomainProtocol() async throws {
+        let input = testArtifact(
             artifactID: "design-input",
             path: "design.json",
             kind: .netlist,
@@ -24,12 +22,12 @@ struct DFTFoundationEngineTests {
             runID: "foundation-run",
             inputs: [input],
             design: LogicDesignReference(
-                artifact: input,
+                artifact: input.locator,
                 topDesignName: "top",
                 designDigest: String(repeating: "b", count: 64)
             ),
-            constraints: TimingConstraintReference(
-                artifact: XcircuiteFileReference(
+            constraints: DFTConstraintReference(
+                artifact: testArtifact(
                     artifactID: "constraints",
                     path: "constraints.sdc",
                     kind: .constraint,
@@ -40,7 +38,7 @@ struct DFTFoundationEngineTests {
                 modeIDs: ["test"]
             ),
             pdk: PDKReference(
-                manifest: XcircuiteFileReference(
+                manifest: testArtifact(
                     artifactID: "pdk",
                     path: "pdk.json",
                     kind: .technology,
@@ -55,11 +53,11 @@ struct DFTFoundationEngineTests {
             operation: .atpg
         )
         let timestamp = Date(timeIntervalSince1970: 100)
-        let result = XcircuiteEngineResultEnvelope(
+        let result = DFTResult(
             schemaVersion: DFTRequest.currentSchemaVersion,
             runID: request.runID,
             status: .blocked,
-            metadata: XcircuiteEngineExecutionMetadata(
+            metadata: DFTExecutionMetadata(
                 engineID: "dft.atpg",
                 implementationID: "fixture",
                 implementationVersion: "1",
@@ -70,26 +68,22 @@ struct DFTFoundationEngineTests {
             payload: DFTPayload(transformedDesign: nil, faultCoverage: nil)
         )
 
-        let evidence = try await DFTFoundationEngine(
-            legacyEngine: StubDFTEngine(result: result)
+        let executed = try await DFTFoundationEngine(
+            engine: StubDFTEngine(result: result)
         ).execute(request)
 
-        #expect(evidence.evidence.provenance.inputs.count == 1)
-        #expect(evidence.evidence.provenance.inputs[0].id.rawValue == "design-input")
-        #expect(evidence.evidence.provenance.producer.identifier == "dft.atpg")
-        #expect(evidence.evidence.provenance.producer.build == "fixture")
-        #expect(evidence.evidence.provenance.randomSeed == 7)
-        #expect(evidence.evidence.provenance.designRevision?.hexadecimalValue == String(repeating: "b", count: 64))
-        #expect(evidence.evidence.provenance.configurationDigest?.algorithm == .sha256)
+        #expect(executed == result)
+        #expect(executed.metadata.engineID == "dft.atpg")
+        #expect(executed.metadata.seed == 7)
     }
 }
 
 private struct StubDFTEngine: DFTEngineExecuting {
-    let result: XcircuiteEngineResultEnvelope<DFTPayload>
+    let result: DFTResult
 
     func execute(
         _ request: DFTRequest
-    ) async throws -> XcircuiteEngineResultEnvelope<DFTPayload> {
+    ) async throws -> DFTResult {
         result
     }
 }

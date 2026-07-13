@@ -1,5 +1,4 @@
 import Foundation
-import XcircuitePackage
 
 public extension DFTOracleCorrelationResult {
     func makeQualificationEvidence(
@@ -7,7 +6,7 @@ public extension DFTOracleCorrelationResult {
         engineID: String,
         implementationID: String,
         approvedBy: String?,
-        artifacts: [XcircuiteFileReference] = []
+        artifacts: [DFTArtifactReference] = []
     ) throws -> DFTQualificationEvidence {
         guard status == .correlated else {
             throw DFTQualificationError.invalidEvidence(

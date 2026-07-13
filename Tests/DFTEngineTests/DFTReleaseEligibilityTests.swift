@@ -4,7 +4,7 @@ import LogicIR
 import PDKCore
 import Testing
 import TimingCore
-import XcircuitePackage
+import CircuiteFoundation
 
 @Suite("DFT release eligibility")
 struct DFTReleaseEligibilityTests {
@@ -18,16 +18,16 @@ struct DFTReleaseEligibilityTests {
         ]
         let payload = DFTPayload(
             transformedDesign: LogicDesignReference(
-                artifact: artifacts[0],
+                artifact: artifacts[0].locator,
                 topDesignName: "top",
                 designDigest: digest
             ),
             faultCoverage: nil,
-            designDiff: XcircuiteDesignDiff(
+            designDiff: DFTDesignDiff(
                 runID: request.runID,
                 title: "Qualified scan insertion",
                 actor: "dft",
-                baseSnapshot: request.design.artifact,
+                baseSnapshot: request.inputs[0],
                 proposedSnapshot: artifacts[0],
                 changes: []
             ),
@@ -39,12 +39,12 @@ struct DFTReleaseEligibilityTests {
                 pdkDigest: request.pdk.digest
             )
         )
-        let result = XcircuiteEngineResultEnvelope(
+        let result = DFTResult(
             schemaVersion: DFTRequest.currentSchemaVersion,
             runID: request.runID,
             status: .completed,
             artifacts: artifacts,
-            metadata: XcircuiteEngineExecutionMetadata(
+            metadata: DFTExecutionMetadata(
                 engineID: "dft.scan",
                 implementationID: "qualified-scan",
                 implementationVersion: "1",
@@ -76,8 +76,8 @@ struct DFTReleaseEligibilityTests {
             approval: approval
         )
 
-        #expect(eligibility.status == .eligible)
-        #expect(eligibility.reviewResumeContract.decision == .approved)
+        #expect(eligibility.status == DFTReleaseEligibilityStatus.eligible)
+        #expect(eligibility.reviewResumeContract.decision == DFTReleaseReviewResumeContract.Decision.approved)
         #expect(Set(eligibility.downstreamDomains) == Set(DFTReleaseDownstreamEvidence.Domain.allCases))
     }
 
@@ -87,16 +87,16 @@ struct DFTReleaseEligibilityTests {
         let transformed = artifact(id: "transformed-design", path: "dft/transformed.json")
         let payload = DFTPayload(
             transformedDesign: LogicDesignReference(
-                artifact: transformed,
+                artifact: transformed.locator,
                 topDesignName: "top",
                 designDigest: request.design.designDigest
             ),
             faultCoverage: nil,
-            designDiff: XcircuiteDesignDiff(
+            designDiff: DFTDesignDiff(
                 runID: request.runID,
                 title: "Qualified scan insertion",
                 actor: "dft",
-                baseSnapshot: request.design.artifact,
+                baseSnapshot: request.inputs[0],
                 proposedSnapshot: transformed,
                 changes: []
             ),
@@ -108,12 +108,12 @@ struct DFTReleaseEligibilityTests {
                 pdkDigest: String(repeating: "f", count: 64)
             )
         )
-        let result = XcircuiteEngineResultEnvelope(
+        let result = DFTResult(
             schemaVersion: DFTRequest.currentSchemaVersion,
             runID: request.runID,
             status: .completed,
             artifacts: [transformed, artifact(id: "design-diff", path: "dft/diff.json")],
-            metadata: XcircuiteEngineExecutionMetadata(
+            metadata: DFTExecutionMetadata(
                 engineID: "dft.scan",
                 implementationID: "qualified-scan",
                 implementationVersion: "1",
@@ -141,12 +141,12 @@ struct DFTReleaseEligibilityTests {
     @Test("release gate blocks smoke-qualified candidate before downstream signoff")
     func blocksSmokeQualification() throws {
         let request = makeRequest()
-        let result = XcircuiteEngineResultEnvelope(
+        let result = DFTResult(
             schemaVersion: DFTRequest.currentSchemaVersion,
             runID: request.runID,
             status: .completed,
             artifacts: [artifact(id: "transformed-design", path: "dft/transformed.json")],
-            metadata: XcircuiteEngineExecutionMetadata(
+            metadata: DFTExecutionMetadata(
                 engineID: "dft.scan",
                 implementationID: "native",
                 implementationVersion: "1",
@@ -155,16 +155,16 @@ struct DFTReleaseEligibilityTests {
             ),
             payload: DFTPayload(
                 transformedDesign: LogicDesignReference(
-                    artifact: artifact(id: "transformed-design", path: "dft/transformed.json"),
+                    artifact: artifact(id: "transformed-design", path: "dft/transformed.json").locator,
                     topDesignName: "top",
                     designDigest: String(repeating: "a", count: 64)
                 ),
                 faultCoverage: nil,
-                designDiff: XcircuiteDesignDiff(
+                designDiff: DFTDesignDiff(
                     runID: request.runID,
                     title: "Smoke scan insertion",
                     actor: "dft",
-                    baseSnapshot: request.design.artifact,
+                    baseSnapshot: request.inputs[0],
                     proposedSnapshot: artifact(id: "transformed-design", path: "dft/transformed.json"),
                     changes: []
                 ),
@@ -191,11 +191,11 @@ struct DFTReleaseEligibilityTests {
             runID: "release-run",
             inputs: [designArtifact],
             design: LogicDesignReference(
-                artifact: designArtifact,
+                artifact: designArtifact.locator,
                 topDesignName: "top",
                 designDigest: String(repeating: "c", count: 64)
             ),
-            constraints: TimingConstraintReference(
+            constraints: DFTConstraintReference(
                 artifact: artifact(id: "constraints", path: "test.sdc"),
                 modeIDs: ["test"]
             ),
@@ -209,8 +209,8 @@ struct DFTReleaseEligibilityTests {
         )
     }
 
-    private func artifact(id: String, path: String) -> XcircuiteFileReference {
-        XcircuiteFileReference(
+    private func artifact(id: String, path: String) -> ArtifactReference {
+        testArtifact(
             artifactID: id,
             path: path,
             kind: .report,
