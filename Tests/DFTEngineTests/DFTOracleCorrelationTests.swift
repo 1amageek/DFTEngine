@@ -135,7 +135,8 @@ struct DFTOracleCorrelationTests {
                     kind: .report,
                     format: .json,
                     sha256: String(repeating: "e", count: 64),
-                    byteCount: 128
+                    byteCount: 128,
+                    role: .output
                 )
             )]
         )
@@ -159,7 +160,8 @@ struct DFTOracleCorrelationTests {
             kind: .report,
             format: .json,
             sha256: try SHA256ContentDigester().digest(data: oracleData, using: .sha256).hexadecimalValue,
-            byteCount: Int64(oracleData.count)
+            byteCount: Int64(oracleData.count),
+            role: .output
         )
         let corpus = DFTOracleCorpus(
             corpusID: "fixture-oracle",

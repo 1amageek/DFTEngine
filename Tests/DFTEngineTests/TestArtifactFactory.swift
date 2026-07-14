@@ -9,7 +9,7 @@ func testArtifact(
     format: ArtifactFormat,
     sha256: String? = nil,
     byteCount: Int64? = nil,
-    role: ArtifactRole = .legacyUnspecified
+    role: ArtifactRole
 ) -> ArtifactReference {
     do {
         let location = try ArtifactLocation(workspaceRelativePath: path)

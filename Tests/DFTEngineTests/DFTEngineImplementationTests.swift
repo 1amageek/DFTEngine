@@ -825,7 +825,8 @@ struct DFTEngineImplementationTests {
             kind: .report,
             format: .json,
             sha256: String(repeating: "a", count: 64),
-            byteCount: 12
+            byteCount: 12,
+            role: .output
         )
         let timestamp = Date(timeIntervalSince1970: 10)
         let result = DFTResult(
@@ -884,7 +885,8 @@ struct DFTEngineImplementationTests {
                 kind: .report,
                 format: .json,
                 sha256: String(repeating: "a", count: 64),
-                byteCount: 1
+                byteCount: 1,
+                role: .output
             )],
             metadata: DFTExecutionMetadata(
                 engineID: "dft.atpg",
@@ -1020,7 +1022,8 @@ struct DFTEngineImplementationTests {
             kind: .netlist,
             format: .json,
             sha256: String(repeating: "a", count: 64),
-            byteCount: 10
+            byteCount: 10,
+            role: .input
         )
         let inputArtifacts = [designArtifact] + (cellLibrary.map { [$0.artifact] } ?? [])
         return DFTRequest(
@@ -1038,7 +1041,8 @@ struct DFTEngineImplementationTests {
                     kind: .constraint,
                     format: .sdc,
                     sha256: String(repeating: "c", count: 64),
-                    byteCount: 10
+                    byteCount: 10,
+                    role: .input
                 ),
                 modeIDs: ["functional", "test"]
             ),
@@ -1049,7 +1053,8 @@ struct DFTEngineImplementationTests {
                     kind: .technology,
                     format: .json,
                     sha256: String(repeating: "d", count: 64),
-                    byteCount: 10
+                    byteCount: 10,
+                    role: .input
                 ),
                 processID: "test-process",
                 version: "1",
@@ -1287,7 +1292,8 @@ struct DFTEngineImplementationTests {
                 kind: .technology,
                 format: .json,
                 sha256: String(repeating: "f", count: 64),
-                byteCount: 1
+                byteCount: 1,
+                role: .input
             ),
             processID: manifest.processID,
             version: manifest.version,

@@ -16,7 +16,8 @@ struct DFTFoundationEngineTests {
             kind: .netlist,
             format: .json,
             sha256: String(repeating: "a", count: 64),
-            byteCount: 10
+            byteCount: 10,
+            role: .input
         )
         let request = DFTRequest(
             runID: "foundation-run",
@@ -33,7 +34,8 @@ struct DFTFoundationEngineTests {
                     kind: .constraint,
                     format: .sdc,
                     sha256: String(repeating: "c", count: 64),
-                    byteCount: 4
+                    byteCount: 4,
+                    role: .input
                 ),
                 modeIDs: ["test"]
             ),
@@ -44,7 +46,8 @@ struct DFTFoundationEngineTests {
                     kind: .technology,
                     format: .json,
                     sha256: String(repeating: "d", count: 64),
-                    byteCount: 4
+                    byteCount: 4,
+                    role: .input
                 ),
                 processID: "fixture-process",
                 version: "1",

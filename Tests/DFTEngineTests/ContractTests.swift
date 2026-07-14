@@ -102,7 +102,8 @@ struct ContractTests {
             kind: .report,
             format: .json,
             sha256: String(repeating: "c", count: 64),
-            byteCount: 1
+            byteCount: 1,
+            role: .output
         )
     }
 }

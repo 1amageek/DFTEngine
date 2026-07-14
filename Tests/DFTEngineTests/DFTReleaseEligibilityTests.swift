@@ -216,7 +216,8 @@ struct DFTReleaseEligibilityTests {
             kind: .report,
             format: .json,
             sha256: String(repeating: "e", count: 64),
-            byteCount: 1
+            byteCount: 1,
+            role: .output
         )
     }
 }
