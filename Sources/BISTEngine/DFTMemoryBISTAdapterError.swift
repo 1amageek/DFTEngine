@@ -6,7 +6,7 @@ public enum DFTMemoryBISTAdapterError: Error, LocalizedError, Sendable, Hashable
     case configurationMissing
     case bindingsMissing
     case resultNotCompleted(DFTExecutionStatus)
-    case qualificationInsufficient(DFTQualificationStatus)
+    case toolTrustRejected(String)
 
     public var errorDescription: String? {
         switch self {
@@ -18,8 +18,8 @@ public enum DFTMemoryBISTAdapterError: Error, LocalizedError, Sendable, Hashable
             return "The memory BIST adapter requires complete macro port bindings."
         case .resultNotCompleted(let status):
             return "The memory BIST adapter returned a non-completed execution status: \(status.rawValue)."
-        case .qualificationInsufficient(let status):
-            return "The memory BIST adapter returned qualification status \(status.rawValue); process-qualified evidence is required."
+        case .toolTrustRejected(let toolID):
+            return "ToolQualification rejected memory BIST implementation \(toolID)."
         }
     }
 }

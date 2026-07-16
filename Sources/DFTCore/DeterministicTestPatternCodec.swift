@@ -12,9 +12,9 @@ public struct DeterministicTestPatternCodec: DFTTestPatternCoding {
         case .json:
             return try DFTArtifactJSONEncoder().encode(patternSet)
         case .stil:
-            return Data(stilText(for: patternSet).utf8)
+            return Data(try stilText(for: patternSet).utf8)
         case .wgl:
-            return Data(wglText(for: patternSet).utf8)
+            return Data(try wglText(for: patternSet).utf8)
         }
     }
 
@@ -41,11 +41,12 @@ public struct DeterministicTestPatternCodec: DFTTestPatternCoding {
         }
     }
 
-    private func stilText(for patternSet: DFTTestPatternSet) -> String {
+    private func stilText(for patternSet: DFTTestPatternSet) throws -> String {
         var lines = [
             "STIL 1.0;",
             "// seed=\(patternSet.seed)",
             "// faultUniverseDigest=\(patternSet.faultUniverseDigest)",
+            try faultMetadataLine(for: patternSet),
             "PatternBurst \"DFTEngine\" {",
             "  PatList {"
         ]
@@ -56,11 +57,12 @@ public struct DeterministicTestPatternCodec: DFTTestPatternCoding {
         return lines.joined(separator: "\n")
     }
 
-    private func wglText(for patternSet: DFTTestPatternSet) -> String {
+    private func wglText(for patternSet: DFTTestPatternSet) throws -> String {
         var lines = [
             "WGL 1.0;",
             "// seed=\(patternSet.seed)",
             "// faultUniverseDigest=\(patternSet.faultUniverseDigest)",
+            try faultMetadataLine(for: patternSet),
             "Patterns {"
         ]
         for pattern in patternSet.patterns {
@@ -85,6 +87,7 @@ public struct DeterministicTestPatternCodec: DFTTestPatternCoding {
             throw DFTPatternFormatError.malformedPattern("fault-universe digest must be a SHA-256 value")
         }
         try validateContainer(lines: lines, format: format)
+        let faultMetadata = try parseFaultMetadata(from: lines)
 
         var patterns: [DFTTestPattern] = []
         for line in lines {
@@ -147,6 +150,15 @@ public struct DeterministicTestPatternCodec: DFTTestPatternCoding {
             patterns.append(DFTTestPattern(id: id, bits: bits, faultIDs: []))
         }
 
+        let faultIDsByPatternID = try faultMetadata.validatedFaultIDs(patternIDs: patterns.map(\.id))
+        patterns = patterns.map { pattern in
+            DFTTestPattern(
+                id: pattern.id,
+                bits: pattern.bits,
+                faultIDs: faultIDsByPatternID[pattern.id] ?? []
+            )
+        }
+
         let result = DFTTestPatternSet(
             format: format.rawValue,
             seed: seed,
@@ -174,6 +186,14 @@ public struct DeterministicTestPatternCodec: DFTTestPatternCoding {
         }
         guard Set(patternSet.patterns.map { $0.bits.count }).count == 1 else {
             throw DFTPatternFormatError.malformedPattern("all pattern vectors must have the same width")
+        }
+        for pattern in patternSet.patterns {
+            guard pattern.faultIDs.allSatisfy({ !$0.isEmpty }),
+                  Set(pattern.faultIDs).count == pattern.faultIDs.count else {
+                throw DFTPatternFormatError.malformedPattern(
+                    "fault IDs for pattern \(pattern.id) must be non-empty and unique"
+                )
+            }
         }
     }
 
@@ -212,6 +232,37 @@ public struct DeterministicTestPatternCodec: DFTTestPatternCoding {
         }
         return line.components(separatedBy: "=").dropFirst().joined(separator: "=")
             .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private func faultMetadataLine(for patternSet: DFTTestPatternSet) throws -> String {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
+        let metadata = DFTTestPatternFaultMetadata(patterns: patternSet.patterns)
+        let data = try encoder.encode(metadata)
+        return "// dftFaultMetadata=\(data.base64EncodedString())"
+    }
+
+    private func parseFaultMetadata(from lines: [String]) throws -> DFTTestPatternFaultMetadata {
+        let prefix = "// dftFaultMetadata="
+        let matches = lines
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { $0.hasPrefix(prefix) }
+        guard matches.count == 1 else {
+            throw DFTPatternFormatError.malformedPattern("exactly one fault metadata record is required")
+        }
+        let encoded = String(matches[0].dropFirst(prefix.count))
+        guard let data = Data(base64Encoded: encoded) else {
+            throw DFTPatternFormatError.malformedPattern("fault metadata is not valid base64")
+        }
+        do {
+            return try JSONDecoder().decode(DFTTestPatternFaultMetadata.self, from: data)
+        } catch let error as DFTPatternFormatError {
+            throw error
+        } catch {
+            throw DFTPatternFormatError.malformedPattern(
+                "fault metadata is not valid JSON: \(error.localizedDescription)"
+            )
+        }
     }
 
     private func isPatternID(_ value: String) -> Bool {

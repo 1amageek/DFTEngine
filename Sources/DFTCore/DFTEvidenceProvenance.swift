@@ -1,7 +1,7 @@
 import Foundation
 
-public struct DFTQualificationProvenance: Sendable, Hashable, Codable {
-    public var status: DFTQualificationStatus
+public struct DFTEvidenceProvenance: Sendable, Hashable, Codable {
+    public var status: DFTEvidenceMaturity
     public var corpusRevision: String?
     public var oracleEvidence: String?
     public var processID: String?
@@ -10,7 +10,7 @@ public struct DFTQualificationProvenance: Sendable, Hashable, Codable {
     public var notes: [String]
 
     public init(
-        status: DFTQualificationStatus,
+        status: DFTEvidenceMaturity,
         corpusRevision: String? = nil,
         oracleEvidence: String? = nil,
         processID: String? = nil,
@@ -39,7 +39,7 @@ public struct DFTQualificationProvenance: Sendable, Hashable, Codable {
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        status = try container.decode(DFTQualificationStatus.self, forKey: .status)
+        status = try container.decode(DFTEvidenceMaturity.self, forKey: .status)
         corpusRevision = try container.decodeIfPresent(String.self, forKey: .corpusRevision)
         oracleEvidence = try container.decodeIfPresent(String.self, forKey: .oracleEvidence)
         processID = try container.decodeIfPresent(String.self, forKey: .processID)

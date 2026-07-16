@@ -9,6 +9,7 @@ import PDKCore
 import ScanInsertion
 import Testing
 import TimingCore
+import ToolQualification
 
 @Suite("DFTEngine implementation")
 struct DFTEngineImplementationTests {
@@ -500,8 +501,8 @@ struct DFTEngineImplementationTests {
                 scanInPinName: "SI",
                 scanEnablePinName: "SE"
             )],
-            qualification: DFTQualificationProvenance(
-                status: .corpusChecked,
+            evidenceProvenance: DFTEvidenceProvenance(
+                status: .corpusObserved,
                 corpusRevision: "fixture-m3"
             )
         )
@@ -625,7 +626,7 @@ struct DFTEngineImplementationTests {
         #expect(result.diagnostics.contains { $0.code == "DFT_PROCESS_FAULT_MODEL_MISSING" })
     }
 
-    @Test("process-specific ATPG requires an injected model and preserves smoke qualification")
+    @Test("process-specific ATPG requires an injected model and preserves smoke evidence")
     func processSpecificFaultModelIsExplicit() async throws {
         let universe = DFTFaultUniverse(
             name: "process-faults",
@@ -656,7 +657,7 @@ struct DFTEngineImplementationTests {
         #expect(result.payload.faultCoverage == 1)
         #expect(result.payload.patterns?.patterns.first?.bits == "11111111")
         #expect(result.payload.coverageEvidence?.outcomes.first?.modelID == "fixture-process-fault-model")
-        #expect(result.payload.qualification.status == .smokeChecked)
+        #expect(result.payload.evidenceProvenance.status == .smokeObserved)
         #expect(result.diagnostics.contains { $0.code == "DFT_ATPG_COMPLETED" })
     }
 
@@ -766,7 +767,7 @@ struct DFTEngineImplementationTests {
         #expect(qualifiedBoundary.status == .blocked)
         #expect(qualifiedBoundary.diagnostics.contains { $0.code == "DFT_BIST_MEMORY_MACRO_UNSUPPORTED" })
 
-        var unqualifiedResponse = DFTResult(
+        let externalResponse = DFTResult(
             schemaVersion: DFTRequest.currentSchemaVersion,
             runID: "run-bist",
             status: DFTExecutionStatus.completed,
@@ -781,25 +782,22 @@ struct DFTEngineImplementationTests {
             payload: DFTPayload(
                 transformedDesign: nil,
                 faultCoverage: nil,
-                qualification: DFTQualificationProvenance(status: .smokeChecked)
+                evidenceProvenance: DFTEvidenceProvenance(status: .smokeObserved)
             )
         )
         do {
             _ = try await ExternalMemoryBISTAdapter(
-                runner: StubExternalRunner(response: try DFTArtifactJSONEncoder().encode(unqualifiedResponse))
+                runner: StubExternalRunner(response: try DFTArtifactJSONEncoder().encode(externalResponse)),
+                trustDecision: ToolTrustDecision(toolID: "stub-atpg", status: .rejected)
             ).execute(makeRequest(operation: .bist, bistConfiguration: configured))
-            Issue.record("An unqualified external memory-BIST result must be rejected.")
+            Issue.record("A ToolQualification-rejected memory-BIST implementation must be rejected.")
         } catch let error as DFTMemoryBISTAdapterError {
-            #expect(error == .qualificationInsufficient(.smokeChecked))
+            #expect(error == .toolTrustRejected("stub-atpg"))
         }
 
-        unqualifiedResponse.payload.qualification = DFTQualificationProvenance(
-            status: .processQualified,
-            corpusRevision: "memory-fixture",
-            processID: "test-process"
-        )
         let adapterResult = try await ExternalMemoryBISTAdapter(
-            runner: StubExternalRunner(response: try DFTArtifactJSONEncoder().encode(unqualifiedResponse))
+            runner: StubExternalRunner(response: try DFTArtifactJSONEncoder().encode(externalResponse)),
+            trustDecision: ToolTrustDecision(toolID: "stub-atpg", status: .eligible)
         ).execute(makeRequest(operation: .bist, bistConfiguration: configured))
         #expect(adapterResult.status == .completed)
     }
@@ -930,6 +928,7 @@ struct DFTEngineImplementationTests {
             #expect(decoded.seed == patternSet.seed)
             #expect(decoded.faultUniverseDigest == patternSet.faultUniverseDigest)
             #expect(decoded.patterns.map(\.bits) == patternSet.patterns.map(\.bits))
+            #expect(decoded.patterns.map(\.faultIDs) == patternSet.patterns.map(\.faultIDs))
         }
     }
 
@@ -1274,10 +1273,10 @@ struct DFTEngineImplementationTests {
                     testModePinName: "TM"
                 )
             ],
-            qualification: DFTQualificationProvenance(
-                status: .corpusChecked,
+            evidenceProvenance: DFTEvidenceProvenance(
+                status: .corpusObserved,
                 corpusRevision: "fixture-m2",
-                notes: ["fixture binding only; no foundry qualification"]
+                notes: ["fixture binding only; no foundry trust decision"]
             )
         )
     }

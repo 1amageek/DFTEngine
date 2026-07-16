@@ -11,7 +11,7 @@ public struct DFTCoverageEvidence: Sendable, Hashable, Codable {
     public var abortedFaultCount: Int
     public var coverage: Double?
     public var assumptions: [String]
-    public var qualification: DFTQualificationProvenance
+    public var evidenceProvenance: DFTEvidenceProvenance
     public var outcomes: [DFTFaultOutcome]
 
     public init(
@@ -25,7 +25,7 @@ public struct DFTCoverageEvidence: Sendable, Hashable, Codable {
         abortedFaultCount: Int,
         coverage: Double?,
         assumptions: [String],
-        qualification: DFTQualificationProvenance,
+        evidenceProvenance: DFTEvidenceProvenance,
         outcomes: [DFTFaultOutcome]
     ) {
         self.faultUniverseName = faultUniverseName
@@ -38,7 +38,7 @@ public struct DFTCoverageEvidence: Sendable, Hashable, Codable {
         self.abortedFaultCount = abortedFaultCount
         self.coverage = coverage
         self.assumptions = assumptions
-        self.qualification = qualification
+        self.evidenceProvenance = evidenceProvenance
         self.outcomes = outcomes
     }
 }

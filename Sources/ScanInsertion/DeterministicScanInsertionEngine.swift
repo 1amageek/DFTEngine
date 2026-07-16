@@ -39,7 +39,7 @@ public struct DeterministicScanInsertionEngine: ScanInserting {
                     payload: DFTPayload(
                         transformedDesign: nil,
                         faultCoverage: nil,
-                        qualification: qualification,
+                        evidenceProvenance: evidenceProvenance,
                         assumptions: ["scan insertion was not attempted because request prerequisites are incomplete"]
                     ),
                     startedAt: startedAt
@@ -281,7 +281,7 @@ public struct DeterministicScanInsertionEngine: ScanInserting {
                     faultCoverage: nil,
                     scanPlan: plan,
                     designDiff: designDiff,
-                    qualification: qualification(for: cellLibrary),
+                    evidenceProvenance: evidenceProvenance(for: cellLibrary),
                     assumptions: transformedArtifact.assumptions + transform.assumptions
                 ),
                 startedAt: startedAt
@@ -302,7 +302,7 @@ public struct DeterministicScanInsertionEngine: ScanInserting {
                 payload: DFTPayload(
                     transformedDesign: nil,
                     faultCoverage: nil,
-                    qualification: qualification
+                    evidenceProvenance: evidenceProvenance
                 ),
                 startedAt: startedAt
             )
@@ -327,21 +327,21 @@ public struct DeterministicScanInsertionEngine: ScanInserting {
             limitations: [
                 "The binding manifest is verified, but process-qualified timing arcs and legal library mapping require M6 evidence.",
                 "DFT_SCAN_OUT helper cells require process-qualified library mapping before physical signoff.",
-                "A self-declared qualification status is not promoted to process qualification by this backend."
+                "A self-declared evidenceProvenance status is not promoted to process evidenceProvenance by this backend."
             ],
-            qualification: qualification
+            evidenceProvenance: evidenceProvenance
         )
     }
 
-    private var qualification: DFTQualificationProvenance {
-        DFTQualificationProvenance(
-            status: .smokeChecked,
+    private var evidenceProvenance: DFTEvidenceProvenance {
+        DFTEvidenceProvenance(
+            status: .smokeObserved,
             notes: ["canonical gate transformation; no process oracle correlation"]
         )
     }
 
-    private func qualification(for manifest: DFTCellLibraryManifest) -> DFTQualificationProvenance {
-        var result = manifest.qualification
+    private func evidenceProvenance(for manifest: DFTCellLibraryManifest) -> DFTEvidenceProvenance {
+        var result = manifest.evidenceProvenance
         result.processID = result.processID ?? manifest.processID
         result.notes.append("cell-library manifest binding was digest and PDK reference checked")
         return result
@@ -409,7 +409,7 @@ public struct DeterministicScanInsertionEngine: ScanInserting {
             payload: DFTPayload(
                 transformedDesign: nil,
                 faultCoverage: nil,
-                qualification: qualification
+                evidenceProvenance: evidenceProvenance
             ),
             startedAt: startedAt
         )

@@ -3,8 +3,8 @@ import CircuiteFoundation
 /// Foundation-backed artifact identity used by DFT requests and results.
 ///
 /// Requests should use an `ArtifactLocator` until a file has been materialized;
-/// this alias is retained for the current DFT request surface while callers
-/// migrate to fully verified `ArtifactReference` values.
+/// this alias gives the DFT domain a concise name while preserving the exact
+/// canonical `ArtifactReference` representation.
 public typealias DFTArtifactReference = ArtifactReference
 
 public extension ArtifactReference {
@@ -13,7 +13,7 @@ public extension ArtifactReference {
         id.rawValue
     }
 
-    /// Returns the normalized digest for compatibility with DFT validators.
+    /// Returns the normalized SHA-256 digest consumed by DFT validators.
     var sha256: String? {
         digest.algorithm == .sha256 ? digest.hexadecimalValue : nil
     }

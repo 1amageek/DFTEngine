@@ -9,7 +9,7 @@ public struct DFTPayload: Sendable, Hashable, Codable {
     public var patterns: DFTTestPatternSet?
     public var coverageEvidence: DFTCoverageEvidence?
     public var bistStructure: DFTBISTStructure?
-    public var qualification: DFTQualificationProvenance
+    public var evidenceProvenance: DFTEvidenceProvenance
     public var assumptions: [String]
 
     public init(
@@ -20,7 +20,7 @@ public struct DFTPayload: Sendable, Hashable, Codable {
         patterns: DFTTestPatternSet? = nil,
         coverageEvidence: DFTCoverageEvidence? = nil,
         bistStructure: DFTBISTStructure? = nil,
-        qualification: DFTQualificationProvenance = DFTQualificationProvenance(status: .unqualified),
+        evidenceProvenance: DFTEvidenceProvenance = DFTEvidenceProvenance(status: .unassessed),
         assumptions: [String] = []
     ) {
         self.transformedDesign = transformedDesign
@@ -30,7 +30,7 @@ public struct DFTPayload: Sendable, Hashable, Codable {
         self.patterns = patterns
         self.coverageEvidence = coverageEvidence
         self.bistStructure = bistStructure
-        self.qualification = qualification
+        self.evidenceProvenance = evidenceProvenance
         self.assumptions = assumptions
     }
 
@@ -42,7 +42,7 @@ public struct DFTPayload: Sendable, Hashable, Codable {
         case patterns
         case coverageEvidence
         case bistStructure
-        case qualification
+        case evidenceProvenance
         case assumptions
     }
 
@@ -55,10 +55,10 @@ public struct DFTPayload: Sendable, Hashable, Codable {
         patterns = try container.decodeIfPresent(DFTTestPatternSet.self, forKey: .patterns)
         coverageEvidence = try container.decodeIfPresent(DFTCoverageEvidence.self, forKey: .coverageEvidence)
         bistStructure = try container.decodeIfPresent(DFTBISTStructure.self, forKey: .bistStructure)
-        qualification = try container.decodeIfPresent(
-            DFTQualificationProvenance.self,
-            forKey: .qualification
-        ) ?? DFTQualificationProvenance(status: .unqualified)
+        evidenceProvenance = try container.decodeIfPresent(
+            DFTEvidenceProvenance.self,
+            forKey: .evidenceProvenance
+        ) ?? DFTEvidenceProvenance(status: .unassessed)
         assumptions = try container.decodeIfPresent([String].self, forKey: .assumptions) ?? []
     }
 }

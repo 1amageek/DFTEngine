@@ -11,7 +11,7 @@ struct DFTCellLibraryTimingValidatorTests {
             version: "1",
             pdkDigest: String(repeating: "a", count: 64),
             bindings: [binding()],
-            qualification: DFTQualificationProvenance(status: .corpusChecked)
+            evidenceProvenance: DFTEvidenceProvenance(status: .corpusObserved)
         )
         let library = TimingLibrary(
             name: "fixture-liberty",
@@ -36,7 +36,7 @@ struct DFTCellLibraryTimingValidatorTests {
             version: "1",
             pdkDigest: String(repeating: "a", count: 64),
             bindings: [binding()],
-            qualification: DFTQualificationProvenance(status: .corpusChecked)
+            evidenceProvenance: DFTEvidenceProvenance(status: .corpusObserved)
         )
         var cell = timingCell()
         cell.sequentialModel?.clockToQ = nil

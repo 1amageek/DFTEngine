@@ -91,7 +91,7 @@ public struct DefaultDFTEngine: DFTEngineExecuting {
                 payload: DFTPayload(
                     transformedDesign: nil,
                     faultCoverage: nil,
-                    qualification: qualification,
+                    evidenceProvenance: evidenceProvenance,
                     assumptions: ["no domain executor was selected"]
                 ),
                 startedAt: Date()
@@ -119,15 +119,15 @@ public struct DefaultDFTEngine: DFTEngineExecuting {
                 "operation_routing": .available
             ],
             limitations: [
-                "Domain-specific qualification is reported by the selected backend and is not upgraded by routing."
+                "Domain evidence maturity is reported by the selected backend and is not upgraded by routing."
             ],
-            qualification: qualification
+            evidenceProvenance: evidenceProvenance
         )
     }
 
-    private var qualification: DFTQualificationProvenance {
-        DFTQualificationProvenance(
-            status: .smokeChecked,
+    private var evidenceProvenance: DFTEvidenceProvenance {
+        DFTEvidenceProvenance(
+            status: .smokeObserved,
             notes: ["umbrella router delegates without changing domain evidence"]
         )
     }

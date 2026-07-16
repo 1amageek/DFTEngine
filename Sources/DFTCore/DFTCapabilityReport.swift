@@ -6,7 +6,7 @@ public struct DFTCapabilityReport: Sendable, Hashable, Codable {
     public var implementationVersion: String
     public var capabilities: [String: DFTCapabilityStatus]
     public var limitations: [String]
-    public var qualification: DFTQualificationProvenance
+    public var evidenceProvenance: DFTEvidenceProvenance
 
     public init(
         engineID: String,
@@ -14,13 +14,13 @@ public struct DFTCapabilityReport: Sendable, Hashable, Codable {
         implementationVersion: String,
         capabilities: [String: DFTCapabilityStatus],
         limitations: [String],
-        qualification: DFTQualificationProvenance
+        evidenceProvenance: DFTEvidenceProvenance
     ) {
         self.engineID = engineID
         self.implementationID = implementationID
         self.implementationVersion = implementationVersion
         self.capabilities = capabilities
         self.limitations = limitations
-        self.qualification = qualification
+        self.evidenceProvenance = evidenceProvenance
     }
 }

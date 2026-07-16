@@ -6,7 +6,7 @@ import CircuiteFoundation
 
 @Suite("DFT oracle correlation")
 struct DFTOracleCorrelationTests {
-    @Test("correlates retained oracle expectations and creates qualification evidence")
+    @Test("correlates retained oracle expectations into raw observations")
     func correlatesRetainedOracle() async throws {
         let requestDigest = String(repeating: "d", count: 64)
         let pdkDigest = String(repeating: "c", count: 64)
@@ -35,24 +35,12 @@ struct DFTOracleCorrelationTests {
         #expect(correlation.passedCaseCount == 1)
         #expect(correlation.oracleEvidenceDigest.count == 64)
 
-        let evidence = try correlation.makeQualificationEvidence(
-            evidenceID: "qualification-1",
-            engineID: "dft.atpg",
-            implementationID: "native-deterministic-atpg",
-            approvedBy: "reviewer",
-            artifacts: [corpus.cases[0].oracleArtifact]
-        )
-        let provenance = try DFTQualificationGate().evaluate(
-            evidence,
-            expectedProcessID: corpus.processID,
-            expectedPDKDigest: corpus.pdkDigest
-        )
-        #expect(provenance.status == .processQualified)
-        #expect(provenance.oracleEvidence == correlation.oracleEvidenceDigest)
+        #expect(correlation.processID == corpus.processID)
+        #expect(correlation.pdkDigest == corpus.pdkDigest)
     }
 
-    @Test("mismatched oracle outcome cannot be promoted")
-    func mismatchedOracleCannotBePromoted() async throws {
+    @Test("mismatched oracle outcome remains a raw mismatch")
+    func mismatchedOracleRemainsMismatched() async throws {
         let requestDigest = String(repeating: "d", count: 64)
         let pdkDigest = String(repeating: "c", count: 64)
         let corpus = makeCorpus(
@@ -79,18 +67,6 @@ struct DFTOracleCorrelationTests {
         #expect(correlation.passedCaseCount == 0)
         #expect(correlation.diagnostics.contains { $0.contains("detected fault IDs") })
 
-        var didThrow = false
-        do {
-            _ = try correlation.makeQualificationEvidence(
-                evidenceID: "qualification-mismatch",
-                engineID: "dft.atpg",
-                implementationID: "native-deterministic-atpg",
-                approvedBy: "reviewer"
-            )
-        } catch {
-            didThrow = true
-        }
-        #expect(didThrow)
     }
 
     @Test("missing oracle observation remains incomplete")
@@ -107,6 +83,128 @@ struct DFTOracleCorrelationTests {
         #expect(correlation.status == .incomplete)
         #expect(correlation.passedCaseCount == 0)
         #expect(correlation.diagnostics.contains { $0.contains("native observation is missing") })
+    }
+
+    @Test("duplicate native observations are rejected")
+    func duplicateObservationsAreRejected() async throws {
+        let digest = String(repeating: "d", count: 64)
+        let corpus = makeCorpus(
+            requestDigest: digest,
+            pdkDigest: String(repeating: "c", count: 64),
+            faultUniverseDigest: String(repeating: "f", count: 64)
+        )
+        let observation = DFTOracleCaseObservation(
+            caseID: "case-1",
+            operation: .atpg,
+            requestDigest: digest,
+            result: makeResult(faultUniverseDigest: String(repeating: "f", count: 64))
+        )
+
+        await #expect(throws: DFTOracleCorrelationError.duplicateObservation("case-1")) {
+            try await DFTOracleCorrelationEngine().correlate(
+                corpus: corpus,
+                observations: [observation, observation]
+            )
+        }
+    }
+
+    @Test("observations outside the retained corpus are rejected")
+    func unknownObservationIsRejected() async throws {
+        let corpus = makeCorpus(
+            requestDigest: String(repeating: "d", count: 64),
+            pdkDigest: String(repeating: "c", count: 64),
+            faultUniverseDigest: String(repeating: "f", count: 64)
+        )
+        let observation = DFTOracleCaseObservation(
+            caseID: "unknown-case",
+            operation: .atpg,
+            requestDigest: String(repeating: "d", count: 64),
+            result: makeResult(faultUniverseDigest: String(repeating: "f", count: 64))
+        )
+
+        await #expect(throws: DFTOracleCorrelationError.unknownObservation("unknown-case")) {
+            try await DFTOracleCorrelationEngine().correlate(corpus: corpus, observations: [observation])
+        }
+    }
+
+    @Test("a corpus requires a canonical PDK digest")
+    func invalidPDKDigestIsRejected() async throws {
+        let corpus = makeCorpus(
+            requestDigest: String(repeating: "d", count: 64),
+            pdkDigest: "not-a-digest",
+            faultUniverseDigest: String(repeating: "f", count: 64)
+        )
+
+        await #expect(throws: DFTOracleCorrelationError.self) {
+            try await DFTOracleCorrelationEngine().correlate(corpus: corpus, observations: [])
+        }
+    }
+
+    @Test("corpus case identities must be unique")
+    func duplicateCorpusCaseIsRejected() async throws {
+        let base = makeCorpus(
+            requestDigest: String(repeating: "d", count: 64),
+            pdkDigest: String(repeating: "c", count: 64),
+            faultUniverseDigest: String(repeating: "f", count: 64)
+        )
+        let corpus = DFTOracleCorpus(
+            corpusID: base.corpusID,
+            revision: base.revision,
+            processID: base.processID,
+            pdkDigest: base.pdkDigest,
+            cases: [base.cases[0], base.cases[0]]
+        )
+
+        await #expect(throws: DFTOracleCorrelationError.self) {
+            try await DFTOracleCorrelationEngine().correlate(corpus: corpus, observations: [])
+        }
+    }
+
+    @Test("request binding mismatches remain explicit raw evidence")
+    func requestDigestMismatchIsReported() async throws {
+        let corpus = makeCorpus(
+            requestDigest: String(repeating: "d", count: 64),
+            pdkDigest: String(repeating: "c", count: 64),
+            faultUniverseDigest: String(repeating: "f", count: 64)
+        )
+        let observation = DFTOracleCaseObservation(
+            caseID: "case-1",
+            operation: .atpg,
+            requestDigest: String(repeating: "a", count: 64),
+            result: makeResult(faultUniverseDigest: String(repeating: "f", count: 64))
+        )
+
+        let correlation = try await DFTOracleCorrelationEngine().correlate(
+            corpus: corpus,
+            observations: [observation]
+        )
+
+        #expect(correlation.status == .mismatched)
+        #expect(correlation.diagnostics.contains { $0.contains("request digest") })
+    }
+
+    @Test("correlation evidence digest is deterministic")
+    func correlationDigestIsDeterministic() async throws {
+        let digest = String(repeating: "d", count: 64)
+        let faultDigest = String(repeating: "f", count: 64)
+        let corpus = makeCorpus(
+            requestDigest: digest,
+            pdkDigest: String(repeating: "c", count: 64),
+            faultUniverseDigest: faultDigest
+        )
+        let observation = DFTOracleCaseObservation(
+            caseID: "case-1",
+            operation: .atpg,
+            requestDigest: digest,
+            result: makeResult(faultUniverseDigest: faultDigest)
+        )
+        let engine = DFTOracleCorrelationEngine()
+
+        let first = try await engine.correlate(corpus: corpus, observations: [observation])
+        let second = try await engine.correlate(corpus: corpus, observations: [observation])
+
+        #expect(first.corpusDigest == second.corpusDigest)
+        #expect(first.oracleEvidenceDigest == second.oracleEvidenceDigest)
     }
 
     private func makeCorpus(
@@ -131,7 +229,7 @@ struct DFTOracleCorrelationTests {
                 ),
                 oracleArtifact: testArtifact(
                     artifactID: "oracle-case-1",
-                    path: "qualification/oracle-case-1.json",
+                    path: "evidence/oracle-case-1.json",
                     kind: .report,
                     format: .json,
                     sha256: String(repeating: "e", count: 64),
@@ -156,7 +254,7 @@ struct DFTOracleCorrelationTests {
         let oracleData = try DFTArtifactJSONEncoder().encode(expectation)
         let oracleArtifact = testArtifact(
             artifactID: "oracle-case-1",
-            path: "qualification/oracle-case-1.json",
+            path: "evidence/oracle-case-1.json",
             kind: .report,
             format: .json,
             sha256: try SHA256ContentDigester().digest(data: oracleData, using: .sha256).hexadecimalValue,
@@ -194,7 +292,7 @@ struct DFTOracleCorrelationTests {
             abortedFaultCount: 0,
             coverage: 1.0,
             assumptions: ["fixture oracle"],
-            qualification: DFTQualificationProvenance(status: .smokeChecked),
+            evidenceProvenance: DFTEvidenceProvenance(status: .smokeObserved),
             outcomes: [DFTFaultOutcome(
                 faultID: faultID,
                 status: .detected,
@@ -218,7 +316,7 @@ struct DFTOracleCorrelationTests {
                 transformedDesign: nil,
                 faultCoverage: 1.0,
                 coverageEvidence: coverage,
-                qualification: DFTQualificationProvenance(status: .smokeChecked)
+                evidenceProvenance: DFTEvidenceProvenance(status: .smokeObserved)
             )
         )
     }

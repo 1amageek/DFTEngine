@@ -35,7 +35,7 @@ public struct DeterministicBISTEngine: BISTExecuting {
                     payload: DFTPayload(
                         transformedDesign: nil,
                         faultCoverage: nil,
-                        qualification: qualification,
+                        evidenceProvenance: evidenceProvenance,
                         assumptions: ["BIST insertion was not attempted because request prerequisites are incomplete"]
                     ),
                     startedAt: startedAt
@@ -191,7 +191,7 @@ public struct DeterministicBISTEngine: BISTExecuting {
                     "the canonical LogicDesignSnapshot was loaded and digest-verified",
                     "target input pins are isolated through explicit test-mode mux structures",
                     "target output pins are captured and compacted into a signature path",
-                    "controller, mux and compactor helper cells require process qualification before physical signoff"
+                    "controller, mux and compactor helper cells require process evidenceProvenance before physical signoff"
                 ]
             )
             let transformedData = try LogicDesignSnapshotCodec.encode(transform.snapshot)
@@ -299,7 +299,7 @@ public struct DeterministicBISTEngine: BISTExecuting {
                     faultCoverage: nil,
                     designDiff: diff,
                     bistStructure: structure,
-                    qualification: qualification,
+                    evidenceProvenance: evidenceProvenance,
                     assumptions: transformedArtifact.assumptions
                 ),
                 startedAt: startedAt,
@@ -321,7 +321,7 @@ public struct DeterministicBISTEngine: BISTExecuting {
                 payload: DFTPayload(
                     transformedDesign: nil,
                     faultCoverage: nil,
-                    qualification: qualification
+                    evidenceProvenance: evidenceProvenance
                 ),
                 startedAt: startedAt
             )
@@ -342,17 +342,17 @@ public struct DeterministicBISTEngine: BISTExecuting {
                 "memory_macro_legality": .blocked
             ],
             limitations: [
-                "The native logic path transforms a bounded canonical gate contract; helper cells require process qualification.",
+                "The native logic path transforms a bounded canonical gate contract; helper cells require process evidenceProvenance.",
                 "Memory BIST remains blocked without a qualified macro adapter.",
                 "The generated structure does not claim functional equivalence until a downstream gate approves it."
             ],
-            qualification: qualification
+            evidenceProvenance: evidenceProvenance
         )
     }
 
-    private var qualification: DFTQualificationProvenance {
-        DFTQualificationProvenance(
-            status: .smokeChecked,
+    private var evidenceProvenance: DFTEvidenceProvenance {
+        DFTEvidenceProvenance(
+            status: .smokeObserved,
             notes: ["deterministic structure generation; no macro oracle correlation"]
         )
     }
@@ -383,7 +383,7 @@ public struct DeterministicBISTEngine: BISTExecuting {
             payload: DFTPayload(
                 transformedDesign: nil,
                 faultCoverage: nil,
-                qualification: qualification
+                evidenceProvenance: evidenceProvenance
             ),
             startedAt: startedAt
         )

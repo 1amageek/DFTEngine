@@ -54,7 +54,7 @@ public struct DeterministicATPGEngine: ATPGExecuting {
                     payload: DFTPayload(
                         transformedDesign: nil,
                         faultCoverage: nil,
-                        qualification: qualification,
+                        evidenceProvenance: evidenceProvenance,
                         assumptions: ["coverage was not reported because the fault universe or ATPG prerequisites are invalid"]
                     ),
                     startedAt: startedAt
@@ -558,12 +558,12 @@ public struct DeterministicATPGEngine: ATPGExecuting {
                 assumptions: [
                     "one deterministic pattern is generated per modeled fault",
                     "coverage denominator is active declared faults after exclusions",
-                    "process-specific results require an injected model, validated model result and independent qualification",
+                    "process-specific results require an injected model, validated model result and independent trust evidence",
                     faultSource == .gateLevel
                         ? "fault universe was extracted from driven nets in the canonical gate design"
                         : "fault universe was supplied by the request"
                 ],
-                qualification: qualification,
+                evidenceProvenance: evidenceProvenance,
                 outcomes: outcomes
             )
             let patternSet = DFTTestPatternSet(
@@ -640,7 +640,7 @@ public struct DeterministicATPGEngine: ATPGExecuting {
                     faultCoverage: coverage,
                     patterns: patternSet,
                     coverageEvidence: evidence,
-                    qualification: qualification,
+                    evidenceProvenance: evidenceProvenance,
                     assumptions: evidence.assumptions
                 ),
                 startedAt: startedAt,
@@ -662,7 +662,7 @@ public struct DeterministicATPGEngine: ATPGExecuting {
                 payload: DFTPayload(
                     transformedDesign: nil,
                     faultCoverage: nil,
-                    qualification: qualification
+                    evidenceProvenance: evidenceProvenance
                 ),
                 startedAt: startedAt
             )
@@ -690,9 +690,9 @@ public struct DeterministicATPGEngine: ATPGExecuting {
             limitations: [
                 "Gate-level ATPG currently supports exhaustive binary simulation for a qualified combinational primitive subset.",
                 "Bounded sequential ATPG supports explicit DFF/SDFF SI/SE, reset/set polarity/timing/edge semantics, level-sensitive latches and bounded transition faults; unknown primitives and process-qualified timing remain blocked.",
-                "Process-specific fault families require an injected model with validated results; family declarations alone do not provide semantics, and independent qualification remains required."
+                "Process-specific fault families require an injected model with validated results; family declarations alone do not provide semantics, and independent ToolQualification evidence remains required."
             ],
-            qualification: qualification
+            evidenceProvenance: evidenceProvenance
         )
     }
 
@@ -1132,9 +1132,9 @@ public struct DeterministicATPGEngine: ATPGExecuting {
         return bits.joined()
     }
 
-    private var qualification: DFTQualificationProvenance {
-        DFTQualificationProvenance(
-            status: .smokeChecked,
+    private var evidenceProvenance: DFTEvidenceProvenance {
+        DFTEvidenceProvenance(
+            status: .smokeObserved,
             notes: ["deterministic declared-fault model; no external ATPG oracle correlation"]
         )
     }
@@ -1165,7 +1165,7 @@ public struct DeterministicATPGEngine: ATPGExecuting {
             payload: DFTPayload(
                 transformedDesign: nil,
                 faultCoverage: nil,
-                qualification: qualification
+                evidenceProvenance: evidenceProvenance
             ),
             startedAt: startedAt
         )

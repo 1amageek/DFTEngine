@@ -4,9 +4,9 @@ Scan, ATPG and built-in self-test transformation contracts.
 
 ## Status
 
-This repository contains the typed DFT contracts, a canonical gate-level scan transformation, process-scoped scan-cell binding, Liberty timing/legal-cell validation, gate-level combinational and bounded sequential ATPG, explicit reset/set and transition semantics, an explicit process-specific fault-model boundary, canonical logic-BIST transformation, a typed memory-macro execution boundary with process-qualified result gating, strict STIL/WGL codecs, external-tool execution, retained oracle correlation, immutable Foundation artifact stores, a DFT release eligibility gate, and a headless JSON CLI.
+This repository contains the typed DFT contracts, a canonical gate-level scan transformation, process-scoped scan-cell binding, Liberty timing/legal-cell validation, gate-level combinational and bounded sequential ATPG, explicit reset/set and transition semantics, an explicit process-specific fault-model boundary, canonical logic-BIST transformation, a typed memory-macro execution boundary, strict STIL/WGL codecs, external-tool execution, retained oracle correlation, immutable Foundation artifact stores, and a headless JSON CLI.
 
-The native execution and evidence contracts through M7 are implemented and tested. Production qualification remains intentionally gated by independently generated PDK, macro, oracle, equivalence, DRC, LVS, PEX and human-review evidence. No backend self-promotes fixture or smoke evidence to foundry qualification.
+The native execution and evidence contracts through M7 are implemented and tested. STIL and WGL keep standards-compatible pattern syntax while a deterministic comment metadata record preserves the complete per-pattern fault-ID mapping across codec round trips. Production qualification remains intentionally gated by independently generated PDK, macro, oracle, equivalence, DRC, LVS, PEX and human-review evidence. No backend self-promotes fixture or smoke evidence to foundry qualification.
 
 ```mermaid
 flowchart LR
@@ -38,7 +38,7 @@ The native implementations are:
 |---|---|---|
 | `DeterministicScanInsertionEngine` | digest-verified gate snapshot transformation, scan plan, transformed design reference, design diff | Does not infer qualified clock/reset semantics, prove cell legality or prove functional equivalence |
 | `DeterministicATPGEngine` | declared-fault ATPG, extracted combinational stuck-at ATPG, bounded DFF/SDFF state ATPG, explicit reset/set contracts, level-sensitive latch semantics, directed combinational/sequential transition ATPG and injected process-specific fault-model evaluation | Unknown primitives and process-qualified timing block coverage; `supportedProcessFamilies` is declarative only and does not replace a separately qualified injected model |
-| `DeterministicBISTEngine` | canonical logic-BIST gate transformation, structure, design diff | Native memory macros and helper-cell legality remain blocked pending qualification; external memory results require process-qualified evidence |
+| `DeterministicBISTEngine` | canonical logic-BIST gate transformation, structure, design diff | Native memory macros and helper-cell legality remain blocked pending qualification; external memory execution requires an injected ToolQualification trust decision |
 | `DFTFoundationEvidence` | Stable CircuiteFoundation artifact, evidence and diagnostic projection | Rejects missing identity, digest, byte count and invalid locations rather than inventing metadata |
 | `DFTFoundationEngine` | Foundation `Engine` implementation for the DFT execution contract | Returns the domain-owned `DFTResult` directly |
 
@@ -57,7 +57,7 @@ Domain engines return `DFTResult` directly. `DFTFoundationEvidence` can publish
 verified artifacts, diagnostics and execution provenance without inventing
 missing IDs, digests or timestamps.
 
-## Xcircuite integration
+## Flow integration
 
 Xcircuite records every DFT mutation as a new LogicDesignReference and requires formal equivalence or approved test-mode exceptions before physical design.
 
@@ -65,9 +65,9 @@ The library does not depend on the Xcircuite runtime. The owning flow package
 connects `DFTResult` to `DesignFlowKernel`, artifact persistence,
 qualification gates, repair loops and human approval.
 
-## Oracle qualification
+## Oracle evidence
 
-`DFTOracleCorpus` describes process-scoped cases with request digests, normalized oracle expectation artifacts and PDK identity. `DFTOracleCorrelationEngine` verifies retained artifact byte counts and SHA-256 digests, decodes the normalized expectations, compares native results and emits a deterministic correlation digest. A mismatched or incomplete corpus cannot create `DFTQualificationEvidence`; the qualification gate still requires explicit approval and process/PDK identity.
+`DFTOracleCorpus` describes process-scoped cases with request digests, normalized oracle expectation artifacts and PDK identity. `DFTOracleCorrelationEngine` verifies retained artifact byte counts and SHA-256 digests, decodes the normalized expectations, compares native results and emits raw correlation observations with a deterministic digest. It does not promote those observations to trusted-tool or release status; ToolQualification and the composing flow policy own that decision.
 
 Process-specific ATPG is intentionally an integration boundary. `DFTProcessFaultModeling` is injected by the integrating project and returns a typed result that the engine validates before creating a pattern or coverage outcome. Model injection is not process qualification; the result still requires independent oracle and ToolQualification evidence before release.
 
@@ -83,13 +83,13 @@ DFTEngine is a workspace-first Swift package. The sibling packages listed in
 ## Test
 
 ```bash
-timeout 240 swift test --no-parallel
+timeout 240 xcodebuild test -scheme DFTEngine-Package -destination 'platform=macOS' -parallel-testing-enabled NO
 ```
 
-The current contract suite contains 49 tests in 7 suites. The test suite
+The current contract suite contains 43 tests in 6 suites. The test suite
 covers positive transformations, blocked prerequisites, standard-pattern
 round trips, external-tool identity checks, immutable artifact stores,
-Foundation evidence projection, oracle correlation and release eligibility.
+Foundation evidence projection, oracle correlation and injected tool-trust enforcement.
 
 See `DESIGN.md`, `INTERFACES.md` and `IMPLEMENTATION_PLAN.md` before implementing a backend.
 

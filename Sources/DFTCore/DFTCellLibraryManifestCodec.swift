@@ -51,10 +51,10 @@ public enum DFTCellLibraryManifestCodec {
                 )
             }
         }
-        guard manifest.qualification.processID == nil
-                || manifest.qualification.processID == manifest.processID else {
+        guard manifest.evidenceProvenance.processID == nil
+                || manifest.evidenceProvenance.processID == manifest.processID else {
             throw DFTCellLibraryError.invalidManifest(
-                "qualification process ID does not match the manifest process ID"
+                "evidence provenance process ID does not match the manifest process ID"
             )
         }
     }

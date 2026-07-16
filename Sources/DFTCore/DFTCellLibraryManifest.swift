@@ -8,14 +8,14 @@ public struct DFTCellLibraryManifest: Sendable, Hashable, Codable {
     public var version: String
     public var pdkDigest: String
     public var bindings: [DFTCellLibraryBinding]
-    public var qualification: DFTQualificationProvenance
+    public var evidenceProvenance: DFTEvidenceProvenance
 
     public init(
         processID: String,
         version: String,
         pdkDigest: String,
         bindings: [DFTCellLibraryBinding],
-        qualification: DFTQualificationProvenance,
+        evidenceProvenance: DFTEvidenceProvenance,
         schemaVersion: Int = DFTCellLibraryManifest.currentSchemaVersion
     ) {
         self.schemaVersion = schemaVersion
@@ -23,6 +23,6 @@ public struct DFTCellLibraryManifest: Sendable, Hashable, Codable {
         self.version = version
         self.pdkDigest = pdkDigest
         self.bindings = bindings
-        self.qualification = qualification
+        self.evidenceProvenance = evidenceProvenance
     }
 }

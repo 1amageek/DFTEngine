@@ -18,6 +18,7 @@ let package = Package(
         .package(path: "../TimingEngine"),
         .package(path: "../PDKKit"),
         .package(path: "../SignoffToolSupport"),
+        .package(path: "../ToolQualification"),
     ],
     targets: [
         .target(
@@ -47,7 +48,10 @@ let package = Package(
         ),
         .target(
             name: "BISTEngine",
-            dependencies: ["DFTCore"]
+            dependencies: [
+                "DFTCore",
+                .product(name: "ToolQualification", package: "ToolQualification"),
+            ]
         ),
         .target(
             name: "DFTEngine",
@@ -71,6 +75,7 @@ let package = Package(
                 "ScanInsertion",
                 "ATPGEngine",
                 "BISTEngine",
+                .product(name: "ToolQualification", package: "ToolQualification"),
                 "DFTEngine",
             ],
             resources: [.copy("Fixtures")]

@@ -42,4 +42,4 @@ Create testable silicon structures and qualified manufacturing-test artifacts wi
 - Contract and parser round-trip tests
 - Reference corpus
 - Capability and limitation report
-- Xcircuite stage adapter tests
+- Xcircuite stage composition tests using direct protocol conformance
