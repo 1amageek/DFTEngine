@@ -17,7 +17,7 @@ The full platform goal is intentionally decomposed into the gates documented in 
 ## Delivered implementation slice
 
 - Implemented versioned request/result contracts, immutable artifact stores, deterministic CLI and structured blocked/cancelled states.
-- Completed the CircuiteFoundation execution boundary with `DFTFoundationEvidence` and `DFTFoundationEngine`; verified inputs, configuration digest, design revision, seed and producer identity are retained in shared provenance.
+- Completed direct CircuiteFoundation conformance through `DFTEngineExecuting`, `DefaultDFTEngine`, and `DFTResult`; verified inputs, configuration digest, design revision, seed, and producer identity are retained in shared provenance.
 - Enforced immutable artifact-store writes, stable artifact IDs, safe request/reference paths and strict external-tool implementation identity/version matching.
 - Added canonical `LogicDesignSnapshot` loading with project-root bounds, byte-count and SHA-256 checks, design-digest verification, top-design checks and gate validation.
 - Added a real gate-level scan transformation that updates sequential cells, control ports, scan nets, chain observability helpers and stable design diffs.

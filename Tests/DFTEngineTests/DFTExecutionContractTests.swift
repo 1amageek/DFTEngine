@@ -6,10 +6,10 @@ import LogicIR
 import PDKCore
 import Testing
 
-@Suite("DFT Foundation execution")
-struct DFTFoundationEngineTests {
-    @Test("Foundation engine executes the DFT domain protocol directly")
-    func foundationEngineExecutesDomainProtocol() async throws {
+@Suite("DFT execution contract")
+struct DFTExecutionContractTests {
+    @Test("DFT implementation executes the Foundation Engine contract directly")
+    func implementationExecutesFoundationEngineContract() async throws {
         let input = testArtifact(
             artifactID: "design-input",
             path: "design.json",
@@ -23,7 +23,7 @@ struct DFTFoundationEngineTests {
             runID: "foundation-run",
             inputs: [input],
             design: LogicDesignReference(
-                artifact: input.locator,
+                artifact: input,
                 topDesignName: "top",
                 designDigest: String(repeating: "b", count: 64)
             ),
@@ -71,9 +71,7 @@ struct DFTFoundationEngineTests {
             payload: DFTPayload(transformedDesign: nil, faultCoverage: nil)
         )
 
-        let executed = try await DFTFoundationEngine(
-            engine: StubDFTEngine(result: result)
-        ).execute(request)
+        let executed = try await StubDFTEngine(result: result).execute(request)
 
         #expect(executed == result)
         #expect(executed.provenance.producer.identifier == "dft.atpg")

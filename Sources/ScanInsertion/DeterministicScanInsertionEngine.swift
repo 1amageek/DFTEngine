@@ -189,7 +189,7 @@ public struct DeterministicScanInsertionEngine: ScanInserting {
                 runID: request.runID
             )
             let transformedDesign = LogicDesignReference(
-                artifact: transformedReference.locator,
+                artifact: transformedReference,
                 topDesignName: request.design.topDesignName,
                 designDigest: transform.snapshot.designDigest ?? "",
                 provenance: LogicDesignProvenance(
@@ -226,7 +226,7 @@ public struct DeterministicScanInsertionEngine: ScanInserting {
                     )
                 }
                 guard let baseReference = request.inputs.first(where: {
-                    $0.locator == request.design.artifact
+                    $0 == request.design.artifact
                 }) else {
                     return try blocked(
                         request: request,

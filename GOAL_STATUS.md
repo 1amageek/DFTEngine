@@ -34,7 +34,7 @@
 
 ## Foundation migration boundary
 
-`DFTFoundationEvidence` and `DFTFoundationEngine` are the explicit CircuiteFoundation boundary. The conforming implementation preserves verified request inputs, configuration digest, design revision, producer identity, seed, output artifacts and diagnostics while returning the typed DFT result directly. In-memory and actor-isolated file-system artifact stores are immutable and idempotent for byte-identical writes; conflicting replacements and symlink escapes are rejected.
+`DFTEngineExecuting`, `DefaultDFTEngine`, and `DFTResult` form the direct CircuiteFoundation boundary. The implementation preserves verified request inputs, configuration digest, design revision, producer identity, seed, output artifacts, and diagnostics. In-memory and actor-isolated file-system artifact stores are immutable and idempotent for byte-identical writes; conflicting replacements and symlink escapes are rejected.
 
 ## Goal progression
 

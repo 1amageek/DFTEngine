@@ -72,12 +72,10 @@ public struct DFTExternalToolExecutor: Sendable {
             )
         }
         for artifact in result.artifacts {
-            do {
-                _ = try DFTFoundationEvidence.artifactReference(from: artifact)
-            } catch {
+            guard artifact.byteCount > 0 else {
                 throw DFTExternalToolError.invalidArtifactReference(
                     path: artifact.path,
-                    message: error.localizedDescription
+                    message: "Artifact byte count must be greater than zero."
                 )
             }
         }
@@ -118,7 +116,7 @@ public struct DFTExternalToolExecutor: Sendable {
             schemaVersion: result.schemaVersion,
             runID: result.runID,
             status: result.status,
-            diagnostics: result.diagnostics,
+            diagnostics: result.dftDiagnostics,
             artifacts: result.artifacts + [responseReference, stdoutReference, stderrReference],
             provenance: result.provenance,
             payload: result.payload

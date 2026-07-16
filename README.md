@@ -39,8 +39,8 @@ The native implementations are:
 | `DeterministicScanInsertionEngine` | digest-verified gate snapshot transformation, scan plan, transformed design reference, design diff | Does not infer qualified clock/reset semantics, prove cell legality or prove functional equivalence |
 | `DeterministicATPGEngine` | declared-fault ATPG, extracted combinational stuck-at ATPG, bounded DFF/SDFF state ATPG, explicit reset/set contracts, level-sensitive latch semantics, directed combinational/sequential transition ATPG and injected process-specific fault-model evaluation | Unknown primitives and process-qualified timing block coverage; `supportedProcessFamilies` is declarative only and does not replace a separately qualified injected model |
 | `DeterministicBISTEngine` | canonical logic-BIST gate transformation, structure, design diff | Native memory macros and helper-cell legality remain blocked pending qualification; external memory execution requires an injected ToolQualification trust decision |
-| `DFTFoundationEvidence` | Stable CircuiteFoundation artifact, evidence and diagnostic projection | Rejects missing identity, digest, byte count and invalid locations rather than inventing metadata |
-| `DFTFoundationEngine` | Foundation `Engine` implementation for the DFT execution contract | Returns the domain-owned `DFTResult` directly |
+| `DFTResult` | Domain result with direct `ArtifactProducing`, `EvidenceProviding`, and `DiagnosticReporting` conformance | Retains immutable artifacts, provenance, and typed diagnostics without projection |
+| `DefaultDFTEngine` | Direct `DFTEngineExecuting` implementation | Returns the domain-owned `DFTResult` |
 
 ## Contract
 
@@ -53,9 +53,8 @@ Every executing product uses:
 - immutable Foundation `ArtifactReference` inputs and outputs;
 - explicit blocked, failed and cancelled states.
 
-Domain engines return `DFTResult` directly. `DFTFoundationEvidence` can publish
-verified artifacts, diagnostics and execution provenance without inventing
-missing IDs, digests or timestamps.
+Domain engines return `DFTResult` directly. The result itself publishes verified
+artifacts, diagnostics, and execution provenance without a wrapper.
 
 ## Flow integration
 

@@ -40,7 +40,7 @@ Kernel availability, corpus validation, oracle correlation, process-scoped quali
 
 All outputs are immutable run artifacts with format, digest, producer metadata and the input design/PDK revision needed to reproduce the result.
 
-DFT engines return the domain-owned `DFTResult` directly through the
-Foundation `Engine` protocol. `DFTFoundationEvidence` is an optional evidence
-view for flow publication, not an execution adapter. Artifact stores are
-idempotent for byte-identical writes and reject conflicting replacements.
+DFT engines return the domain-owned `DFTResult` directly through the Foundation
+`Engine` protocol. `DFTResult` directly provides artifacts, evidence, and
+diagnostics. Artifact stores are idempotent for byte-identical writes and reject
+conflicting replacements.

@@ -16,9 +16,9 @@ Requests carry a schema version, run ID and Foundation artifact references. Payl
 
 Shared DFT request and result contract.
 
-`DFTEngineExecuting` refines `CircuiteFoundation.Engine` for the domain
-result. `DFTFoundationEvidence` is the explicit CircuiteFoundation evidence
-view. `DFTFoundationEngine` executes the same domain protocol directly.
+`DFTEngineExecuting` refines `CircuiteFoundation.Engine` for the domain result.
+`DefaultDFTEngine` conforms directly, and `DFTResult` directly provides the
+CircuiteFoundation artifact, evidence, and diagnostic contracts.
 
 ### ScanInsertion
 

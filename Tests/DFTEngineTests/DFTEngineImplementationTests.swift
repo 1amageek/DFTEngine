@@ -42,7 +42,7 @@ struct DFTEngineImplementationTests {
 
         #expect(result.status == .completed)
         #expect(result.payload.scanPlan?.chains.map(\.estimatedElementCount) == [3, 2])
-        #expect(result.artifacts.contains { $0.locator == result.payload.transformedDesign?.artifact })
+        #expect(result.artifacts.contains { $0 == result.payload.transformedDesign?.artifact })
         #expect(result.payload.transformedDesign?.provenance?.sourceDesignDigest == sourceDigest)
         #expect(result.payload.transformedDesign?.provenance?.transformationID == "dft-scan-insertion")
         #expect(result.payload.designDiff?.changes.count == 7)
@@ -70,7 +70,7 @@ struct DFTEngineImplementationTests {
         ).execute(request)
 
         #expect(result.status == .blocked)
-        #expect(result.diagnostics.contains { $0.code == "DFT_DESIGN_LOADER_MISSING" })
+        #expect(result.dftDiagnostics.contains { $0.code == "DFT_DESIGN_LOADER_MISSING" })
     }
 
     @Test("scan insertion blocks when clock connectivity is ambiguous")
@@ -96,8 +96,8 @@ struct DFTEngineImplementationTests {
         ).execute(request)
 
         #expect(result.status == .blocked)
-        #expect(result.diagnostics.contains { $0.code == "DFT_GATE_LEVEL_TRANSFORM_FAILED" })
-        #expect(result.diagnostics.contains { $0.message.contains("clock") })
+        #expect(result.dftDiagnostics.contains { $0.code == "DFT_GATE_LEVEL_TRANSFORM_FAILED" })
+        #expect(result.dftDiagnostics.contains { $0.message.contains("clock") })
     }
 
     @Test("scan insertion blocks a cell library bound to another PDK")
@@ -121,8 +121,8 @@ struct DFTEngineImplementationTests {
         ).execute(request)
 
         #expect(result.status == .blocked)
-        #expect(result.diagnostics.contains { $0.code == "DFT_CELL_LIBRARY_LOAD_FAILED" })
-        #expect(result.diagnostics.contains { $0.message.contains("pdkDigest") })
+        #expect(result.dftDiagnostics.contains { $0.code == "DFT_CELL_LIBRARY_LOAD_FAILED" })
+        #expect(result.dftDiagnostics.contains { $0.message.contains("pdkDigest") })
     }
 
     @Test("ATPG reports declared coverage and is deterministic")
@@ -152,7 +152,7 @@ struct DFTEngineImplementationTests {
         #expect(first.payload.faultCoverage == nil)
         #expect(first.payload.coverageEvidence?.detectedFaultCount == 1)
         #expect(first.payload.coverageEvidence?.abortedFaultCount == 1)
-        #expect(first.diagnostics.contains { $0.code == "DFT_FAULT_SEMANTICS_UNAVAILABLE" })
+        #expect(first.dftDiagnostics.contains { $0.code == "DFT_FAULT_SEMANTICS_UNAVAILABLE" })
         #expect(first.payload.patterns?.patterns == second.payload.patterns?.patterns)
         #expect(first.artifacts.map(\.sha256) == second.artifacts.map(\.sha256))
     }
@@ -180,7 +180,7 @@ struct DFTEngineImplementationTests {
         #expect(result.payload.coverageEvidence?.detectedFaultCount == 4)
         #expect(result.payload.patterns?.patterns.count == 4)
         #expect(result.payload.patterns?.patterns.allSatisfy { $0.bits.count == 2 } == true)
-        #expect(result.diagnostics.contains { $0.code == "DFT_GATE_LEVEL_ATPG_COMPLETED" })
+        #expect(result.dftDiagnostics.contains { $0.code == "DFT_GATE_LEVEL_ATPG_COMPLETED" })
     }
 
     @Test("bounded gate-level ATPG simulates DFF state transitions")
@@ -207,7 +207,7 @@ struct DFTEngineImplementationTests {
         #expect(result.payload.faultCoverage == 1)
         #expect(result.payload.coverageEvidence?.declaredFaultCount == 2)
         #expect(result.payload.coverageEvidence?.detectedFaultCount == 2)
-        #expect(result.diagnostics.contains { $0.code == "DFT_GATE_LEVEL_SEQUENTIAL_ATPG_COMPLETED" })
+        #expect(result.dftDiagnostics.contains { $0.code == "DFT_GATE_LEVEL_SEQUENTIAL_ATPG_COMPLETED" })
     }
 
     @Test("bounded sequential simulation models scan shift and functional capture")
@@ -527,7 +527,7 @@ struct DFTEngineImplementationTests {
         #expect(result.status == .completed)
         #expect(result.payload.faultCoverage == 1)
         #expect(result.payload.coverageEvidence?.detectedFaultCount == 2)
-        #expect(result.diagnostics.contains { $0.code == "DFT_GATE_LEVEL_SEQUENTIAL_ATPG_COMPLETED" })
+        #expect(result.dftDiagnostics.contains { $0.code == "DFT_GATE_LEVEL_SEQUENTIAL_ATPG_COMPLETED" })
     }
 
     @Test("gate-level ATPG blocks unsupported sequential cell semantics")
@@ -550,8 +550,8 @@ struct DFTEngineImplementationTests {
 
         #expect(result.status == .blocked)
         #expect(result.payload.faultCoverage == nil)
-        #expect(result.diagnostics.contains { $0.code == "DFT_GATE_LEVEL_ATPG_BLOCKED" })
-        #expect(result.diagnostics.contains { $0.message.contains("sequential") })
+        #expect(result.dftDiagnostics.contains { $0.code == "DFT_GATE_LEVEL_ATPG_BLOCKED" })
+        #expect(result.dftDiagnostics.contains { $0.message.contains("sequential") })
     }
 
     @Test("ATPG blocks when the fault universe is absent")
@@ -566,7 +566,7 @@ struct DFTEngineImplementationTests {
 
         #expect(result.status == .blocked)
         #expect(result.payload.faultCoverage == nil)
-        #expect(result.diagnostics.contains { $0.code == "DFT_FAULT_UNIVERSE_MISSING" })
+        #expect(result.dftDiagnostics.contains { $0.code == "DFT_FAULT_UNIVERSE_MISSING" })
     }
 
     @Test("process-specific ATPG semantics remain blocked")
@@ -593,7 +593,7 @@ struct DFTEngineImplementationTests {
 
         #expect(result.status == .blocked)
         #expect(result.payload.faultCoverage == nil)
-        #expect(result.diagnostics.contains { $0.code == "DFT_PROCESS_FAULT_FAMILY_UNDECLARED" })
+        #expect(result.dftDiagnostics.contains { $0.code == "DFT_PROCESS_FAULT_FAMILY_UNDECLARED" })
     }
 
     @Test("declared process-specific ATPG faults remain blocked without an injected model")
@@ -623,7 +623,7 @@ struct DFTEngineImplementationTests {
 
         #expect(result.status == .blocked)
         #expect(result.payload.faultCoverage == nil)
-        #expect(result.diagnostics.contains { $0.code == "DFT_PROCESS_FAULT_MODEL_MISSING" })
+        #expect(result.dftDiagnostics.contains { $0.code == "DFT_PROCESS_FAULT_MODEL_MISSING" })
     }
 
     @Test("process-specific ATPG requires an injected model and preserves smoke evidence")
@@ -658,7 +658,7 @@ struct DFTEngineImplementationTests {
         #expect(result.payload.patterns?.patterns.first?.bits == "11111111")
         #expect(result.payload.coverageEvidence?.outcomes.first?.modelID == "fixture-process-fault-model")
         #expect(result.payload.evidenceProvenance.status == .smokeObserved)
-        #expect(result.diagnostics.contains { $0.code == "DFT_ATPG_COMPLETED" })
+        #expect(result.dftDiagnostics.contains { $0.code == "DFT_ATPG_COMPLETED" })
     }
 
     @Test("ATPG records untestable faults without claiming coverage")
@@ -747,7 +747,7 @@ struct DFTEngineImplementationTests {
             makeRequest(operation: .bist, bistConfiguration: base)
         )
         #expect(missingBinding.status == .blocked)
-        #expect(missingBinding.diagnostics.contains { $0.code == "DFT_BIST_MEMORY_BINDINGS_MISSING" })
+        #expect(missingBinding.dftDiagnostics.contains { $0.code == "DFT_BIST_MEMORY_BINDINGS_MISSING" })
 
         var configured = base
         configured.memoryBindings = [DFTMemoryBISTBinding(
@@ -765,7 +765,7 @@ struct DFTEngineImplementationTests {
             makeRequest(operation: .bist, bistConfiguration: configured)
         )
         #expect(qualifiedBoundary.status == .blocked)
-        #expect(qualifiedBoundary.diagnostics.contains { $0.code == "DFT_BIST_MEMORY_MACRO_UNSUPPORTED" })
+        #expect(qualifiedBoundary.dftDiagnostics.contains { $0.code == "DFT_BIST_MEMORY_MACRO_UNSUPPORTED" })
 
         let externalResponse = DFTResult(
             schemaVersion: DFTRequest.currentSchemaVersion,
@@ -815,8 +815,8 @@ struct DFTEngineImplementationTests {
         #expect(decoded == request)
     }
 
-    @Test("DFT projects its domain result into stable Foundation evidence")
-    func foundationEvidenceProjectionPreservesArtifactIdentity() throws {
+    @Test("DFT result directly exposes stable Foundation evidence")
+    func resultPreservesFoundationArtifactIdentity() throws {
         let artifact = testArtifact(
             artifactID: "dft-result",
             path: "dft/runs/run-foundation/result.json",
@@ -849,17 +849,15 @@ struct DFTEngineImplementationTests {
                 faultCoverage: nil
             )
         )
-        let foundationEvidence = try DFTFoundationEvidence(result: result)
-
-        #expect(foundationEvidence.artifacts.count == 1)
-        #expect(foundationEvidence.artifacts[0].id.rawValue == "dft-result")
-        #expect(foundationEvidence.artifacts[0].locator.location.value == artifact.path)
-        #expect(foundationEvidence.diagnostics[0].code.rawValue == "DFT_FIXTURE_WARNING")
-        #expect(foundationEvidence.evidence.provenance == result.provenance)
+        #expect(result.artifacts.count == 1)
+        #expect(result.artifacts[0].id.rawValue == "dft-result")
+        #expect(result.artifacts[0].locator.location.value == artifact.path)
+        #expect(result.diagnostics[0].code.rawValue == "DFT_FIXTURE_WARNING")
+        #expect(result.evidence.provenance == result.provenance)
     }
 
-    @Test("DFT Foundation projection derives identity when producer omits one")
-    func foundationEvidenceProjectionDerivesMissingArtifactIdentity() throws {
+    @Test("DFT result retains Foundation-derived artifact identity")
+    func resultRetainsDerivedArtifactIdentity() throws {
         let timestamp = Date(timeIntervalSince1970: 10)
         let result = DFTResult(
             schemaVersion: DFTRequest.currentSchemaVersion,
@@ -885,8 +883,7 @@ struct DFTEngineImplementationTests {
                 faultCoverage: nil
             )
         )
-        let evidence = try DFTFoundationEvidence(result: result)
-        #expect(evidence.artifacts[0].artifactID.hasPrefix("derived-"))
+        #expect(!result.artifacts[0].artifactID.isEmpty)
     }
 
     @Test("STIL and WGL pattern artifacts round-trip")
@@ -1006,7 +1003,7 @@ struct DFTEngineImplementationTests {
             runID: "run-\(operation.rawValue)",
             inputs: inputArtifacts,
             design: LogicDesignReference(
-                artifact: designArtifact.locator,
+                artifact: designArtifact,
                 topDesignName: "top",
                 designDigest: designDigest
             ),

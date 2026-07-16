@@ -7,7 +7,6 @@ public enum DFTDiagnosticSeverity: String, Sendable, Hashable, Codable {
 }
 
 /// Domain diagnostic retained while the DFT payload is evaluated.
-/// Foundation projection is provided by `DFTFoundationEvidence`.
 public struct DFTDiagnostic: Sendable, Hashable, Codable {
     public var severity: DFTDiagnosticSeverity
     public var code: String

@@ -38,17 +38,4 @@ public enum DFTEngineAPI {
         return DefaultDFTEngine()
     }
 
-    public static func foundationEngine(
-        artifactStore: (any DFTArtifactStoring)? = nil,
-        designLoader: (any DFTDesignLoading)? = nil,
-        cellLibraryLoader: (any DFTCellLibraryLoading)? = nil
-    ) -> DFTFoundationEngine {
-        DFTFoundationEngine(
-            engine: defaultEngine(
-                artifactStore: artifactStore,
-                designLoader: designLoader,
-                cellLibraryLoader: cellLibraryLoader
-            )
-        )
-    }
 }

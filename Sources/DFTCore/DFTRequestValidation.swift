@@ -59,7 +59,7 @@ public extension DFTRequest {
             ))
         }
         issues.append(contentsOf: validateLocator(
-            design.artifact,
+            design.artifact.locator,
             entity: "design.artifact"
         ))
         if pdk.processID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
