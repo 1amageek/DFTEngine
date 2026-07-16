@@ -72,12 +72,22 @@ Process-specific ATPG is intentionally an integration boundary. `DFTProcessFault
 
 ## Build
 
+`Package.swift` resolves every dependency independently. A sibling checkout is
+used when its `Package.swift` exists; otherwise SwiftPM uses the pinned GitHub
+revision. No umbrella repository is required.
+
+| Dependency | Local sibling | Remote fallback revision |
+|---|---|---|
+| CircuiteFoundation | `../CircuiteFoundation` | `2ec6ee13a89ac6885be3c26b41a9ee0ef89948ac` |
+| LogicDesign | `../LogicDesign` | `8e0c8c2c63152aa45bf12d943fa034bb1aba0f1e` |
+| TimingEngine | `../TimingEngine` | `5b2f711d355af8a204819c6ed33f98ef722e379c` |
+| PDKKit | `../PDKKit` | `aa145dfaa67454c44ac7767c37a28ab7f4b1d2e2` |
+| SignoffToolSupport | `../SignoffToolSupport` | `597c44065b6b717e903623adb8aabcf2ac367697` |
+| ToolQualification | `../ToolQualification` | `32b031b5322f1ccb0ef78466faab0f895d47c4fd` |
+
 ```bash
 swift build
 ```
-
-DFTEngine is a workspace-first Swift package. The sibling packages listed in
-`Package.swift` must be checked out beside this repository before building.
 
 ## Test
 
