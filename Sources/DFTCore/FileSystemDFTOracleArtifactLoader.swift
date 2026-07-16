@@ -11,7 +11,7 @@ public actor FileSystemDFTOracleArtifactLoader: DFTOracleArtifactLoading {
     public func load(_ reference: ArtifactReference) async throws -> Data {
         try Self.validate(reference)
         let expectedByteCount = reference.byteCount
-        let expectedDigest = reference.sha256
+        let expectedDigest = reference.digest.hexadecimalValue
         let resolvedRoot = rootURL.resolvingSymlinksInPath()
         let url = rootURL.appending(path: reference.path).standardizedFileURL
         let resolvedURL = url.resolvingSymlinksInPath()
@@ -55,7 +55,8 @@ public actor FileSystemDFTOracleArtifactLoader: DFTOracleArtifactLoading {
         guard isSafePath(reference.path) else {
             throw DFTOracleArtifactError.invalidReference(reference.path)
         }
-        guard isSHA256(reference.sha256) else {
+        guard reference.digest.algorithm == .sha256,
+              isSHA256(reference.digest.hexadecimalValue) else {
             throw DFTOracleArtifactError.invalidDigest(reference.path)
         }
     }

@@ -28,7 +28,7 @@ public struct FileSystemDFTCellLibraryLoader: DFTCellLibraryLoading {
                 actual: Int64(data.count)
             )
         }
-        let expected = reference.artifact.sha256
+        let expected = reference.artifact.digest.hexadecimalValue
         let actual = DFTHasher().sha256(data: data)
         guard actual == expected else {
             throw DFTCellLibraryError.artifactDigestMismatch(

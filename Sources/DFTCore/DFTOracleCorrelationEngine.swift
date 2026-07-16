@@ -118,8 +118,9 @@ public struct DFTOracleCorrelationEngine: DFTOracleCorrelating {
               !artifact.path.isEmpty,
               !artifact.path.hasPrefix("/"),
               !artifact.path.split(separator: "/").contains(".."),
-              isSHA256(artifact.sha256),
-              artifact.byteCount >= 0 else {
+              artifact.digest.algorithm == .sha256,
+              isSHA256(artifact.digest.hexadecimalValue),
+              artifact.byteCount > 0 else {
             throw DFTOracleCorrelationError.invalidCorpus(
                 "oracle artifact for case " + caseID + " must be project-relative and integrity-addressed"
             )

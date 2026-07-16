@@ -275,8 +275,8 @@ public extension DFTRequest {
                 suggestedActions: ["provide_a_safe_project_relative_path"]
             ))
         }
-        let digest = artifact.sha256
-        if !isSHA256(digest) {
+        let digest = artifact.digest.hexadecimalValue
+        if artifact.digest.algorithm != .sha256 || !isSHA256(digest) {
             issues.append(DFTRequestValidationIssue(
                 code: "DFT_ARTIFACT_DIGEST_INVALID",
                 message: "Artifact digests must be 64 hexadecimal SHA-256 characters.",
