@@ -1,3 +1,4 @@
+import CircuiteFoundation
 import Foundation
 
 public struct DFTOracleCorrelationEngine: DFTOracleCorrelating {
@@ -112,12 +113,12 @@ public struct DFTOracleCorrelationEngine: DFTOracleCorrelating {
         }
     }
 
-    private func validate(artifact: DFTArtifactReference, caseID: String) throws {
-        guard artifact.artifactID?.isEmpty == false,
+    private func validate(artifact: ArtifactReference, caseID: String) throws {
+        guard !artifact.artifactID.isEmpty,
               !artifact.path.isEmpty,
               !artifact.path.hasPrefix("/"),
               !artifact.path.split(separator: "/").contains(".."),
-              artifact.sha256.map(isSHA256) == true,
+              isSHA256(artifact.sha256),
               artifact.byteCount >= 0 else {
             throw DFTOracleCorrelationError.invalidCorpus(
                 "oracle artifact for case " + caseID + " must be project-relative and integrity-addressed"

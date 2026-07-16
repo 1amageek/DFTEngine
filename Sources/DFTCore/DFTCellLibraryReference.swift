@@ -1,13 +1,14 @@
+import CircuiteFoundation
 import Foundation
 
 public struct DFTCellLibraryReference: Sendable, Hashable, Codable {
-    public var artifact: DFTArtifactReference
+    public var artifact: ArtifactReference
     public var processID: String
     public var version: String
     public var manifestDigest: String
 
     public init(
-        artifact: DFTArtifactReference,
+        artifact: ArtifactReference,
         processID: String,
         version: String,
         manifestDigest: String

@@ -11,7 +11,7 @@ struct DFTOracleCorrelationTests {
         let requestDigest = String(repeating: "d", count: 64)
         let pdkDigest = String(repeating: "c", count: 64)
         let faultUniverseDigest = String(repeating: "f", count: 64)
-        let result = makeResult(faultUniverseDigest: faultUniverseDigest)
+        let result = try makeResult(faultUniverseDigest: faultUniverseDigest)
         let (corpus, oracleData) = try makeVerifiedCorpus(
             requestDigest: requestDigest,
             pdkDigest: pdkDigest,
@@ -48,7 +48,7 @@ struct DFTOracleCorrelationTests {
             pdkDigest: pdkDigest,
             faultUniverseDigest: String(repeating: "f", count: 64)
         )
-        let mismatchedResult = makeResult(
+        let mismatchedResult = try makeResult(
             faultUniverseDigest: String(repeating: "f", count: 64),
             faultID: "different-fault"
         )
@@ -97,7 +97,7 @@ struct DFTOracleCorrelationTests {
             caseID: "case-1",
             operation: .atpg,
             requestDigest: digest,
-            result: makeResult(faultUniverseDigest: String(repeating: "f", count: 64))
+            result: try makeResult(faultUniverseDigest: String(repeating: "f", count: 64))
         )
 
         await #expect(throws: DFTOracleCorrelationError.duplicateObservation("case-1")) {
@@ -119,7 +119,7 @@ struct DFTOracleCorrelationTests {
             caseID: "unknown-case",
             operation: .atpg,
             requestDigest: String(repeating: "d", count: 64),
-            result: makeResult(faultUniverseDigest: String(repeating: "f", count: 64))
+            result: try makeResult(faultUniverseDigest: String(repeating: "f", count: 64))
         )
 
         await #expect(throws: DFTOracleCorrelationError.unknownObservation("unknown-case")) {
@@ -171,7 +171,7 @@ struct DFTOracleCorrelationTests {
             caseID: "case-1",
             operation: .atpg,
             requestDigest: String(repeating: "a", count: 64),
-            result: makeResult(faultUniverseDigest: String(repeating: "f", count: 64))
+            result: try makeResult(faultUniverseDigest: String(repeating: "f", count: 64))
         )
 
         let correlation = try await DFTOracleCorrelationEngine().correlate(
@@ -196,7 +196,7 @@ struct DFTOracleCorrelationTests {
             caseID: "case-1",
             operation: .atpg,
             requestDigest: digest,
-            result: makeResult(faultUniverseDigest: faultDigest)
+            result: try makeResult(faultUniverseDigest: faultDigest)
         )
         let engine = DFTOracleCorrelationEngine()
 
@@ -280,7 +280,7 @@ struct DFTOracleCorrelationTests {
     private func makeResult(
         faultUniverseDigest: String,
         faultID: String = "fault-1"
-    ) -> DFTResult {
+    ) throws -> DFTResult {
         let coverage = DFTCoverageEvidence(
             faultUniverseName: "fixture-faults",
             faultUniverseRevision: "r1",
@@ -304,7 +304,7 @@ struct DFTOracleCorrelationTests {
             schemaVersion: 1,
             runID: "native-run",
             status: .completed,
-            metadata: DFTExecutionMetadata(
+            provenance: try DFTExecutionSupport.provenance(
                 engineID: "dft.atpg",
                 implementationID: "native-deterministic-atpg",
                 implementationVersion: "1",

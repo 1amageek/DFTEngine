@@ -44,8 +44,8 @@ public struct DFTEvidenceProvenance: Sendable, Hashable, Codable {
         oracleEvidence = try container.decodeIfPresent(String.self, forKey: .oracleEvidence)
         processID = try container.decodeIfPresent(String.self, forKey: .processID)
         pdkDigest = try container.decodeIfPresent(String.self, forKey: .pdkDigest)
-        requestDigests = (try container.decodeIfPresent([String].self, forKey: .requestDigests) ?? []).sorted()
-        notes = try container.decodeIfPresent([String].self, forKey: .notes) ?? []
+        requestDigests = try container.decode([String].self, forKey: .requestDigests).sorted()
+        notes = try container.decode([String].self, forKey: .notes)
     }
 
     public func encode(to encoder: Encoder) throws {

@@ -53,32 +53,23 @@ public struct DFTExternalToolExecutor: Sendable {
                 actual: result.runID
             )
         }
-        guard result.metadata.engineID == runner.descriptor.engineID else {
+        guard result.provenance.producer.identifier == runner.descriptor.engineID else {
             throw DFTExternalToolError.descriptorMismatch(
                 expected: runner.descriptor.engineID,
-                actual: result.metadata.engineID
+                actual: result.provenance.producer.identifier
             )
         }
-        guard result.metadata.implementationID == runner.descriptor.implementationID else {
+        guard result.provenance.producer.build == runner.descriptor.implementationID else {
             throw DFTExternalToolError.implementationMismatch(
                 expected: runner.descriptor.implementationID,
-                actual: result.metadata.implementationID
+                actual: result.provenance.producer.build ?? ""
             )
         }
-        guard result.metadata.implementationVersion == runner.descriptor.implementationVersion else {
+        guard result.provenance.producer.version == runner.descriptor.implementationVersion else {
             throw DFTExternalToolError.implementationVersionMismatch(
                 expected: runner.descriptor.implementationVersion,
-                actual: result.metadata.implementationVersion
+                actual: result.provenance.producer.version
             )
-        }
-        guard result.metadata.startedAt.timeIntervalSinceReferenceDate.isFinite,
-              result.metadata.completedAt.timeIntervalSinceReferenceDate.isFinite else {
-            throw DFTExternalToolError.invalidExecutionMetadata(
-                "execution timestamps must be finite"
-            )
-        }
-        guard result.metadata.completedAt >= result.metadata.startedAt else {
-            throw DFTExternalToolError.invalidExecutionMetadata("completedAt precedes startedAt")
         }
         for artifact in result.artifacts {
             do {
@@ -129,7 +120,7 @@ public struct DFTExternalToolExecutor: Sendable {
             status: result.status,
             diagnostics: result.diagnostics,
             artifacts: result.artifacts + [responseReference, stdoutReference, stderrReference],
-            metadata: result.metadata,
+            provenance: result.provenance,
             payload: result.payload
         )
     }

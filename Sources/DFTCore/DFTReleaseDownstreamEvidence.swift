@@ -1,3 +1,4 @@
+import CircuiteFoundation
 import Foundation
 
 public struct DFTReleaseDownstreamEvidence: Sendable, Hashable, Codable {
@@ -11,12 +12,12 @@ public struct DFTReleaseDownstreamEvidence: Sendable, Hashable, Codable {
 
     public var domain: Domain
     public var role: String
-    public var artifact: DFTArtifactReference
+    public var artifact: ArtifactReference
 
     public init(
         domain: Domain,
         role: String,
-        artifact: DFTArtifactReference
+        artifact: ArtifactReference
     ) {
         self.domain = domain
         self.role = role

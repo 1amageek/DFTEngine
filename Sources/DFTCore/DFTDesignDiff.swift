@@ -1,3 +1,4 @@
+import CircuiteFoundation
 import Foundation
 
 public struct DFTDesignDiff: Sendable, Hashable, Codable {
@@ -6,8 +7,8 @@ public struct DFTDesignDiff: Sendable, Hashable, Codable {
     public var title: String
     public var actor: String
     public var reviewState: DFTDesignDiffReviewState
-    public var baseSnapshot: DFTArtifactReference?
-    public var proposedSnapshot: DFTArtifactReference?
+    public var baseSnapshot: ArtifactReference?
+    public var proposedSnapshot: ArtifactReference?
     public var changes: [DFTDesignDiffChange]
     public var createdAt: Date
 
@@ -17,8 +18,8 @@ public struct DFTDesignDiff: Sendable, Hashable, Codable {
         title: String,
         actor: String,
         reviewState: DFTDesignDiffReviewState = .proposed,
-        baseSnapshot: DFTArtifactReference? = nil,
-        proposedSnapshot: DFTArtifactReference? = nil,
+        baseSnapshot: ArtifactReference? = nil,
+        proposedSnapshot: ArtifactReference? = nil,
         changes: [DFTDesignDiffChange],
         createdAt: Date = Date()
     ) {

@@ -1,3 +1,4 @@
+import CircuiteFoundation
 import Foundation
 import DFTCore
 import LogicIR
@@ -45,7 +46,7 @@ public struct DeterministicATPGEngine: ATPGExecuting {
             try Task.checkCancellation()
             let issues = request.validationIssues(for: .atpg)
             guard issues.isEmpty else {
-                return DFTExecutionSupport.result(
+                return try DFTExecutionSupport.result(
                     request: request,
                     engineID: engineID,
                     implementationID: implementationID,
@@ -61,7 +62,7 @@ public struct DeterministicATPGEngine: ATPGExecuting {
                 )
             }
             guard var configuration = request.atpgConfiguration else {
-                return blocked(
+                return try blocked(
                     request: request,
                     engineID: engineID,
                     startedAt: startedAt,
@@ -70,7 +71,7 @@ public struct DeterministicATPGEngine: ATPGExecuting {
                 )
             }
             if configuration.maximumPatternCount <= 0 || configuration.patternLength <= 0 || configuration.abortLimit < 0 {
-                return blocked(
+                return try blocked(
                     request: request,
                     engineID: engineID,
                     startedAt: startedAt,
@@ -83,7 +84,7 @@ public struct DeterministicATPGEngine: ATPGExecuting {
 
             if let cellLibraryReference = request.cellLibrary {
                 guard let cellLibraryLoader else {
-                    return blocked(
+                    return try blocked(
                         request: request,
                         engineID: engineID,
                         startedAt: startedAt,
@@ -98,7 +99,7 @@ public struct DeterministicATPGEngine: ATPGExecuting {
                     manifest = try cellLibraryLoader.load(cellLibraryReference)
                     try validate(cellLibrary: manifest, reference: cellLibraryReference, pdk: request.pdk)
                 } catch {
-                    return blocked(
+                    return try blocked(
                         request: request,
                         engineID: engineID,
                         startedAt: startedAt,
@@ -119,7 +120,7 @@ public struct DeterministicATPGEngine: ATPGExecuting {
             switch faultSource {
             case .declaredUniverse:
                 guard let declaredUniverse = request.faultUniverse else {
-                    return blocked(
+                    return try blocked(
                         request: request,
                         engineID: engineID,
                         startedAt: startedAt,
@@ -133,7 +134,7 @@ public struct DeterministicATPGEngine: ATPGExecuting {
                 gateSnapshot = nil
             case .gateLevel:
                 guard let designLoader else {
-                    return blocked(
+                    return try blocked(
                         request: request,
                         engineID: engineID,
                         startedAt: startedAt,
@@ -147,7 +148,7 @@ public struct DeterministicATPGEngine: ATPGExecuting {
                 do {
                     loadedSnapshot = try designLoader.load(request.design)
                 } catch {
-                    return blocked(
+                    return try blocked(
                         request: request,
                         engineID: engineID,
                         startedAt: startedAt,
@@ -163,7 +164,7 @@ public struct DeterministicATPGEngine: ATPGExecuting {
                         reference: request.design
                     )
                 } catch {
-                    return blocked(
+                    return try blocked(
                         request: request,
                         engineID: engineID,
                         startedAt: startedAt,
@@ -206,7 +207,7 @@ public struct DeterministicATPGEngine: ATPGExecuting {
             }
             if faultSource == .gateLevel {
                 guard let gateSnapshot else {
-                    return blocked(
+                    return try blocked(
                         request: request,
                         engineID: engineID,
                         startedAt: startedAt,
@@ -228,7 +229,7 @@ public struct DeterministicATPGEngine: ATPGExecuting {
                     abortedCount = search.abortedCount
                     untestableCount = search.untestableCount
                 } catch let error as GateLevelATPGError {
-                    return blocked(
+                    return try blocked(
                         request: request,
                         engineID: engineID,
                         startedAt: startedAt,
@@ -238,7 +239,7 @@ public struct DeterministicATPGEngine: ATPGExecuting {
                         actions: ["reduce_primary_input_width", "increase_pattern_length", "qualify_supported_gate_cells"]
                     )
                 } catch let error as GateLevelSimulationError {
-                    return blocked(
+                    return try blocked(
                         request: request,
                         engineID: engineID,
                         startedAt: startedAt,
@@ -248,7 +249,7 @@ public struct DeterministicATPGEngine: ATPGExecuting {
                         actions: ["qualify_gate_cell_semantics", "repair_gate_connectivity", "use_declared_fault_universe"]
                     )
                 } catch {
-                    return blocked(
+                    return try blocked(
                         request: request,
                         engineID: engineID,
                         startedAt: startedAt,
@@ -628,7 +629,7 @@ public struct DeterministicATPGEngine: ATPGExecuting {
                 at: 0
             )
 
-            return DFTExecutionSupport.result(
+            return try DFTExecutionSupport.result(
                 request: request,
                 engineID: engineID,
                 implementationID: implementationID,
@@ -647,7 +648,7 @@ public struct DeterministicATPGEngine: ATPGExecuting {
                 seed: seed
             )
         } catch is CancellationError {
-            return DFTExecutionSupport.result(
+            return try DFTExecutionSupport.result(
                 request: request,
                 engineID: engineID,
                 implementationID: implementationID,
@@ -1147,8 +1148,8 @@ public struct DeterministicATPGEngine: ATPGExecuting {
         message: String,
         entity: String? = nil,
         actions: [String] = []
-    ) -> DFTResult {
-        DFTExecutionSupport.result(
+    ) throws -> DFTResult {
+        try DFTExecutionSupport.result(
             request: request,
             engineID: engineID,
             implementationID: implementationID,

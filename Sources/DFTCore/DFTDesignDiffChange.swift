@@ -1,3 +1,4 @@
+import CircuiteFoundation
 import Foundation
 
 public struct DFTDesignDiffChange: Sendable, Hashable, Codable {
@@ -8,7 +9,7 @@ public struct DFTDesignDiffChange: Sendable, Hashable, Codable {
     public var fromPath: String?
     public var before: DFTJSONValue?
     public var after: DFTJSONValue?
-    public var artifacts: [DFTArtifactReference]
+    public var artifacts: [ArtifactReference]
     public var summary: String
 
     public init(
@@ -19,7 +20,7 @@ public struct DFTDesignDiffChange: Sendable, Hashable, Codable {
         fromPath: String? = nil,
         before: DFTJSONValue? = nil,
         after: DFTJSONValue? = nil,
-        artifacts: [DFTArtifactReference] = [],
+        artifacts: [ArtifactReference] = [],
         summary: String
     ) {
         self.changeID = changeID

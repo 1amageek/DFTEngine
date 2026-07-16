@@ -26,7 +26,7 @@ public struct DeterministicBISTEngine: BISTExecuting {
             try Task.checkCancellation()
             let issues = request.validationIssues(for: .bist)
             guard issues.isEmpty else {
-                return DFTExecutionSupport.result(
+                return try DFTExecutionSupport.result(
                     request: request,
                     engineID: engineID,
                     implementationID: implementationID,
@@ -42,7 +42,7 @@ public struct DeterministicBISTEngine: BISTExecuting {
                 )
             }
             guard let configuration = request.bistConfiguration else {
-                return blocked(
+                return try blocked(
                     request: request,
                     engineID: engineID,
                     startedAt: startedAt,
@@ -54,7 +54,7 @@ public struct DeterministicBISTEngine: BISTExecuting {
                 ?? request.testIntent?.testModeSignal
                 ?? request.scanArchitecture?.testModeSignal
             guard let testModeSignal, !testModeSignal.isEmpty else {
-                return blocked(
+                return try blocked(
                     request: request,
                     engineID: engineID,
                     startedAt: startedAt,
@@ -69,7 +69,7 @@ public struct DeterministicBISTEngine: BISTExecuting {
                   !configuration.signatureRegisterName.isEmpty,
                   !configuration.targetInstances.isEmpty,
                   configuration.patternCount > 0 else {
-                return blocked(
+                return try blocked(
                     request: request,
                     engineID: engineID,
                     startedAt: startedAt,
@@ -82,7 +82,7 @@ public struct DeterministicBISTEngine: BISTExecuting {
             guard configuration.kind == .logic else {
                 guard configuration.memoryBindings?.isEmpty == false,
                       configuration.memoryBindings?.allSatisfy(\.isStructurallyComplete) == true else {
-                    return blocked(
+                    return try blocked(
                         request: request,
                         engineID: engineID,
                         startedAt: startedAt,
@@ -92,7 +92,7 @@ public struct DeterministicBISTEngine: BISTExecuting {
                         actions: ["declare_memory_macro_bindings", "inject_a_qualified_memory_bist_adapter"]
                     )
                 }
-                return blocked(
+                return try blocked(
                     request: request,
                     engineID: engineID,
                     startedAt: startedAt,
@@ -103,7 +103,7 @@ public struct DeterministicBISTEngine: BISTExecuting {
                 )
             }
             guard configuration.targetBindings?.isEmpty == false else {
-                return blocked(
+                return try blocked(
                     request: request,
                     engineID: engineID,
                     startedAt: startedAt,
@@ -114,7 +114,7 @@ public struct DeterministicBISTEngine: BISTExecuting {
                 )
             }
             guard let designLoader else {
-                return blocked(
+                return try blocked(
                     request: request,
                     engineID: engineID,
                     startedAt: startedAt,
@@ -127,7 +127,7 @@ public struct DeterministicBISTEngine: BISTExecuting {
             let clockSignal = configuration.clockSignal
                 ?? request.scanArchitecture?.clocks.first?.signalName
             guard let clockSignal, !clockSignal.isEmpty else {
-                return blocked(
+                return try blocked(
                     request: request,
                     engineID: engineID,
                     startedAt: startedAt,
@@ -141,7 +141,7 @@ public struct DeterministicBISTEngine: BISTExecuting {
             do {
                 sourceSnapshot = try designLoader.load(request.design)
             } catch {
-                return blocked(
+                return try blocked(
                     request: request,
                     engineID: engineID,
                     startedAt: startedAt,
@@ -160,7 +160,7 @@ public struct DeterministicBISTEngine: BISTExecuting {
                     clockSignal: clockSignal
                 )
             } catch {
-                return blocked(
+                return try blocked(
                     request: request,
                     engineID: engineID,
                     startedAt: startedAt,
@@ -232,7 +232,7 @@ public struct DeterministicBISTEngine: BISTExecuting {
             guard let baseReference = request.inputs.first(where: {
                 $0.locator == request.design.artifact
             }) else {
-                return blocked(
+                return try blocked(
                     request: request,
                     engineID: engineID,
                     startedAt: startedAt,
@@ -280,7 +280,7 @@ public struct DeterministicBISTEngine: BISTExecuting {
                 runID: request.runID
             )
 
-            return DFTExecutionSupport.result(
+            return try DFTExecutionSupport.result(
                 request: request,
                 engineID: engineID,
                 implementationID: implementationID,
@@ -306,7 +306,7 @@ public struct DeterministicBISTEngine: BISTExecuting {
                 seed: seed
             )
         } catch is CancellationError {
-            return DFTExecutionSupport.result(
+            return try DFTExecutionSupport.result(
                 request: request,
                 engineID: engineID,
                 implementationID: implementationID,
@@ -365,8 +365,8 @@ public struct DeterministicBISTEngine: BISTExecuting {
         message: String,
         entity: String? = nil,
         actions: [String] = []
-    ) -> DFTResult {
-        DFTExecutionSupport.result(
+    ) throws -> DFTResult {
+        try DFTExecutionSupport.result(
             request: request,
             engineID: engineID,
             implementationID: implementationID,

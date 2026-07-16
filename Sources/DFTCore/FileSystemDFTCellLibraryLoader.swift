@@ -28,15 +28,14 @@ public struct FileSystemDFTCellLibraryLoader: DFTCellLibraryLoading {
                 actual: Int64(data.count)
             )
         }
-        if let expected = reference.artifact.sha256 {
-            let actual = DFTHasher().sha256(data: data)
-            guard actual == expected else {
-                throw DFTCellLibraryError.artifactDigestMismatch(
-                    path: reference.artifact.path,
-                    expected: expected,
-                    actual: actual
-                )
-            }
+        let expected = reference.artifact.sha256
+        let actual = DFTHasher().sha256(data: data)
+        guard actual == expected else {
+            throw DFTCellLibraryError.artifactDigestMismatch(
+                path: reference.artifact.path,
+                expected: expected,
+                actual: actual
+            )
         }
         let manifest: DFTCellLibraryManifest
         do {

@@ -98,35 +98,35 @@ public struct DFTCellLibraryBinding: Sendable, Hashable, Codable {
             dataPinName: try container.decode(String.self, forKey: .dataPinName),
             outputPinName: try container.decode(String.self, forKey: .outputPinName),
             clockPinNames: try container.decode([String].self, forKey: .clockPinNames),
-            resetPinNames: try container.decodeIfPresent([String].self, forKey: .resetPinNames) ?? [],
-            resetPolarity: try container.decodeIfPresent(
+            resetPinNames: try container.decode([String].self, forKey: .resetPinNames),
+            resetPolarity: try container.decode(
                 DFTControlPolarity.self,
                 forKey: .resetPolarity
-            ) ?? .activeHigh,
-            setPinNames: try container.decodeIfPresent([String].self, forKey: .setPinNames) ?? [],
-            setPolarity: try container.decodeIfPresent(
+            ),
+            setPinNames: try container.decode([String].self, forKey: .setPinNames),
+            setPolarity: try container.decode(
                 DFTControlPolarity.self,
                 forKey: .setPolarity
-            ) ?? .activeHigh,
-            controlTiming: try container.decodeIfPresent(
+            ),
+            controlTiming: try container.decode(
                 DFTSequentialControlTiming.self,
                 forKey: .controlTiming
-            ) ?? .asynchronous,
-            clockEdge: try container.decodeIfPresent(DFTClockEdge.self, forKey: .clockEdge) ?? .rising,
-            elementKind: try container.decodeIfPresent(
+            ),
+            clockEdge: try container.decode(DFTClockEdge.self, forKey: .clockEdge),
+            elementKind: try container.decode(
                 DFTSequentialElementKind.self,
                 forKey: .elementKind
-            ) ?? .edgeTriggered,
-            latchEnablePolarity: try container.decodeIfPresent(
+            ),
+            latchEnablePolarity: try container.decode(
                 DFTControlPolarity.self,
                 forKey: .latchEnablePolarity
-            ) ?? .activeHigh,
-            scanInPinName: try container.decodeIfPresent(String.self, forKey: .scanInPinName) ?? "SI",
-            scanEnablePinName: try container.decodeIfPresent(String.self, forKey: .scanEnablePinName) ?? "SE",
-            testModePinName: try container.decodeIfPresent(String.self, forKey: .testModePinName) ?? "TM",
+            ),
+            scanInPinName: try container.decode(String.self, forKey: .scanInPinName),
+            scanEnablePinName: try container.decode(String.self, forKey: .scanEnablePinName),
+            testModePinName: try container.decodeIfPresent(String.self, forKey: .testModePinName),
             timingCellName: try container.decodeIfPresent(String.self, forKey: .timingCellName),
             legalReplacementGroup: try container.decodeIfPresent(String.self, forKey: .legalReplacementGroup),
-            requiredTimingPinNames: try container.decodeIfPresent([String].self, forKey: .requiredTimingPinNames) ?? []
+            requiredTimingPinNames: try container.decode([String].self, forKey: .requiredTimingPinNames)
         )
     }
 
@@ -139,34 +139,18 @@ public struct DFTCellLibraryBinding: Sendable, Hashable, Codable {
         try container.encode(outputPinName, forKey: .outputPinName)
         try container.encode(clockPinNames, forKey: .clockPinNames)
         try container.encode(resetPinNames, forKey: .resetPinNames)
-        if resetPolarity != .activeHigh {
-            try container.encode(resetPolarity, forKey: .resetPolarity)
-        }
-        if !setPinNames.isEmpty {
-            try container.encode(setPinNames, forKey: .setPinNames)
-        }
-        if setPolarity != .activeHigh {
-            try container.encode(setPolarity, forKey: .setPolarity)
-        }
-        if controlTiming != .asynchronous {
-            try container.encode(controlTiming, forKey: .controlTiming)
-        }
-        if clockEdge != .rising {
-            try container.encode(clockEdge, forKey: .clockEdge)
-        }
-        if elementKind != .edgeTriggered {
-            try container.encode(elementKind, forKey: .elementKind)
-        }
-        if latchEnablePolarity != .activeHigh {
-            try container.encode(latchEnablePolarity, forKey: .latchEnablePolarity)
-        }
+        try container.encode(resetPolarity, forKey: .resetPolarity)
+        try container.encode(setPinNames, forKey: .setPinNames)
+        try container.encode(setPolarity, forKey: .setPolarity)
+        try container.encode(controlTiming, forKey: .controlTiming)
+        try container.encode(clockEdge, forKey: .clockEdge)
+        try container.encode(elementKind, forKey: .elementKind)
+        try container.encode(latchEnablePolarity, forKey: .latchEnablePolarity)
         try container.encode(scanInPinName, forKey: .scanInPinName)
         try container.encode(scanEnablePinName, forKey: .scanEnablePinName)
         try container.encodeIfPresent(testModePinName, forKey: .testModePinName)
         try container.encodeIfPresent(timingCellName, forKey: .timingCellName)
         try container.encodeIfPresent(legalReplacementGroup, forKey: .legalReplacementGroup)
-        if !requiredTimingPinNames.isEmpty {
-            try container.encode(requiredTimingPinNames, forKey: .requiredTimingPinNames)
-        }
+        try container.encode(requiredTimingPinNames, forKey: .requiredTimingPinNames)
     }
 }

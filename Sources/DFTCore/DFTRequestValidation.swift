@@ -253,25 +253,16 @@ public extension DFTRequest {
     }
 
     private func validateArtifact(
-        _ artifact: DFTArtifactReference,
+        _ artifact: ArtifactReference,
         entity: String
     ) -> [DFTRequestValidationIssue] {
         var issues: [DFTRequestValidationIssue] = []
-        if let artifactID = artifact.artifactID {
-            do {
-                _ = try ArtifactID(rawValue: artifactID)
-            } catch {
-                issues.append(DFTRequestValidationIssue(
-                    code: "DFT_ARTIFACT_ID_INVALID",
-                    message: "Artifact IDs must be valid CircuiteFoundation tokens.",
-                    entity: "\(entity).artifactID",
-                    suggestedActions: ["assign_a_stable_artifact_id"]
-                ))
-            }
-        } else {
+        do {
+            _ = try ArtifactID(rawValue: artifact.artifactID)
+        } catch {
             issues.append(DFTRequestValidationIssue(
-                code: "DFT_ARTIFACT_ID_MISSING",
-                message: "Artifact references require a stable artifact ID.",
+                code: "DFT_ARTIFACT_ID_INVALID",
+                message: "Artifact IDs must be valid CircuiteFoundation tokens.",
                 entity: "\(entity).artifactID",
                 suggestedActions: ["assign_a_stable_artifact_id"]
             ))
@@ -284,15 +275,7 @@ public extension DFTRequest {
                 suggestedActions: ["provide_a_safe_project_relative_path"]
             ))
         }
-        guard let digest = artifact.sha256 else {
-            issues.append(DFTRequestValidationIssue(
-                code: "DFT_ARTIFACT_DIGEST_MISSING",
-                message: "Artifact references require a SHA-256 digest.",
-                entity: "\(entity).sha256",
-                suggestedActions: ["verify_artifact_integrity"]
-            ))
-            return issues
-        }
+        let digest = artifact.sha256
         if !isSHA256(digest) {
             issues.append(DFTRequestValidationIssue(
                 code: "DFT_ARTIFACT_DIGEST_INVALID",

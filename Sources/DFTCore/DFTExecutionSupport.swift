@@ -1,24 +1,34 @@
 import Foundation
+import CircuiteFoundation
 
 public struct DFTExecutionSupport: Sendable {
     public static let implementationVersion = "1.0.0"
 
     public init() {}
 
-    public static func metadata(
+    public static func provenance(
         engineID: String,
         implementationID: String,
+        implementationVersion: String = Self.implementationVersion,
+        inputs: [ArtifactReference] = [],
         startedAt: Date,
         completedAt: Date,
         seed: UInt64? = nil
-    ) -> DFTExecutionMetadata {
-        DFTExecutionMetadata(
-            engineID: engineID,
-            implementationID: implementationID,
-            implementationVersion: implementationVersion,
+    ) throws -> ExecutionProvenance {
+        try ExecutionProvenance(
+            producer: ProducerIdentity(
+                kind: .engine,
+                identifier: engineID,
+                version: implementationVersion,
+                build: implementationID
+            ),
+            inputs: inputs,
+            invocation: ExecutionInvocation.inProcess(
+                entryPoint: "DFTExecutionSupport.result"
+            ),
+            randomSeed: seed,
             startedAt: startedAt,
-            completedAt: completedAt,
-            seed: seed
+            completedAt: completedAt
         )
     }
 
@@ -42,20 +52,21 @@ public struct DFTExecutionSupport: Sendable {
         implementationID: String,
         status: DFTExecutionStatus,
         diagnostics: [DFTDiagnostic],
-        artifacts: [DFTArtifactReference] = [],
+        artifacts: [ArtifactReference] = [],
         payload: DFTPayload,
         startedAt: Date,
         seed: UInt64? = nil
-    ) -> DFTResult {
+    ) throws -> DFTResult {
         DFTResult(
             schemaVersion: DFTRequest.currentSchemaVersion,
             runID: request.runID,
             status: status,
             diagnostics: diagnostics,
             artifacts: artifacts,
-            metadata: metadata(
+            provenance: try provenance(
                 engineID: engineID,
                 implementationID: implementationID,
+                inputs: request.inputs,
                 startedAt: startedAt,
                 completedAt: Date(),
                 seed: seed

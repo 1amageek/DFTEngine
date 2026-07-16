@@ -11,7 +11,7 @@ public actor FileSystemDFTArtifactStore: DFTArtifactStoring {
     public func store(
         _ content: DFTArtifactContent,
         runID: String
-    ) async throws -> DFTArtifactReference {
+    ) async throws -> ArtifactReference {
         try Self.validate(runID: runID, content: content)
         let directory = rootURL
             .appending(path: "dft")

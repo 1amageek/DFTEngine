@@ -69,34 +69,34 @@ public struct DFTSequentialCellContract: Sendable, Hashable, Codable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         self.init(
             cellTypes: try container.decode([String].self, forKey: .cellTypes),
-            dataPinName: try container.decodeIfPresent(String.self, forKey: .dataPinName) ?? "D",
-            outputPinName: try container.decodeIfPresent(String.self, forKey: .outputPinName) ?? "Q",
-            clockPinNames: try container.decodeIfPresent([String].self, forKey: .clockPinNames) ?? ["CLK"],
+            dataPinName: try container.decode(String.self, forKey: .dataPinName),
+            outputPinName: try container.decode(String.self, forKey: .outputPinName),
+            clockPinNames: try container.decode([String].self, forKey: .clockPinNames),
             scanInPinName: try container.decodeIfPresent(String.self, forKey: .scanInPinName),
             scanEnablePinName: try container.decodeIfPresent(String.self, forKey: .scanEnablePinName),
-            resetPinNames: try container.decodeIfPresent([String].self, forKey: .resetPinNames) ?? [],
-            resetPolarity: try container.decodeIfPresent(
+            resetPinNames: try container.decode([String].self, forKey: .resetPinNames),
+            resetPolarity: try container.decode(
                 DFTControlPolarity.self,
                 forKey: .resetPolarity
-            ) ?? .activeHigh,
-            setPinNames: try container.decodeIfPresent([String].self, forKey: .setPinNames) ?? [],
-            setPolarity: try container.decodeIfPresent(
+            ),
+            setPinNames: try container.decode([String].self, forKey: .setPinNames),
+            setPolarity: try container.decode(
                 DFTControlPolarity.self,
                 forKey: .setPolarity
-            ) ?? .activeHigh,
-            controlTiming: try container.decodeIfPresent(
+            ),
+            controlTiming: try container.decode(
                 DFTSequentialControlTiming.self,
                 forKey: .controlTiming
-            ) ?? .asynchronous,
-            clockEdge: try container.decodeIfPresent(DFTClockEdge.self, forKey: .clockEdge) ?? .rising,
-            elementKind: try container.decodeIfPresent(
+            ),
+            clockEdge: try container.decode(DFTClockEdge.self, forKey: .clockEdge),
+            elementKind: try container.decode(
                 DFTSequentialElementKind.self,
                 forKey: .elementKind
-            ) ?? .edgeTriggered,
-            latchEnablePolarity: try container.decodeIfPresent(
+            ),
+            latchEnablePolarity: try container.decode(
                 DFTControlPolarity.self,
                 forKey: .latchEnablePolarity
-            ) ?? .activeHigh
+            )
         )
     }
 
@@ -109,27 +109,13 @@ public struct DFTSequentialCellContract: Sendable, Hashable, Codable {
         try container.encodeIfPresent(scanInPinName, forKey: .scanInPinName)
         try container.encodeIfPresent(scanEnablePinName, forKey: .scanEnablePinName)
         try container.encode(resetPinNames, forKey: .resetPinNames)
-        if resetPolarity != .activeHigh {
-            try container.encode(resetPolarity, forKey: .resetPolarity)
-        }
-        if !setPinNames.isEmpty {
-            try container.encode(setPinNames, forKey: .setPinNames)
-        }
-        if setPolarity != .activeHigh {
-            try container.encode(setPolarity, forKey: .setPolarity)
-        }
-        if controlTiming != .asynchronous {
-            try container.encode(controlTiming, forKey: .controlTiming)
-        }
-        if clockEdge != .rising {
-            try container.encode(clockEdge, forKey: .clockEdge)
-        }
-        if elementKind != .edgeTriggered {
-            try container.encode(elementKind, forKey: .elementKind)
-        }
-        if latchEnablePolarity != .activeHigh {
-            try container.encode(latchEnablePolarity, forKey: .latchEnablePolarity)
-        }
+        try container.encode(resetPolarity, forKey: .resetPolarity)
+        try container.encode(setPinNames, forKey: .setPinNames)
+        try container.encode(setPolarity, forKey: .setPolarity)
+        try container.encode(controlTiming, forKey: .controlTiming)
+        try container.encode(clockEdge, forKey: .clockEdge)
+        try container.encode(elementKind, forKey: .elementKind)
+        try container.encode(latchEnablePolarity, forKey: .latchEnablePolarity)
     }
 
     public func matches(cellType: String) -> Bool {

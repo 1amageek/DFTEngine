@@ -8,7 +8,7 @@ public actor InMemoryDFTOracleArtifactLoader: DFTOracleArtifactLoading {
         self.artifacts = artifacts
     }
 
-    public func load(_ reference: DFTArtifactReference) async throws -> Data {
+    public func load(_ reference: ArtifactReference) async throws -> Data {
         try Self.validate(reference)
         guard let data = artifacts[reference.path] else {
             throw DFTOracleArtifactError.readFailed(
@@ -36,10 +36,8 @@ public actor InMemoryDFTOracleArtifactLoader: DFTOracleArtifactLoading {
         return data
     }
 
-    private static func validate(_ reference: DFTArtifactReference) throws {
-        guard let artifactID = reference.artifactID else {
-            throw DFTOracleArtifactError.missingArtifactID(reference.path)
-        }
+    private static func validate(_ reference: ArtifactReference) throws {
+        let artifactID = reference.artifactID
         do {
             _ = try ArtifactID(rawValue: artifactID)
         } catch {

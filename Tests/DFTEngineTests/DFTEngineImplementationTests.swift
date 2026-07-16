@@ -771,7 +771,7 @@ struct DFTEngineImplementationTests {
             schemaVersion: DFTRequest.currentSchemaVersion,
             runID: "run-bist",
             status: DFTExecutionStatus.completed,
-            metadata: DFTExecutionMetadata(
+            provenance: try DFTExecutionSupport.provenance(
                 engineID: "external.atpg",
             implementationID: "stub-atpg",
             implementationVersion: "1.0.0",
@@ -837,7 +837,7 @@ struct DFTEngineImplementationTests {
                 message: "Fixture warning."
             )],
             artifacts: [artifact],
-            metadata: DFTExecutionMetadata(
+            provenance: try DFTExecutionSupport.provenance(
                 engineID: "dft.atpg",
                 implementationID: "fixture-atpg",
                 implementationVersion: "1",
@@ -849,26 +849,13 @@ struct DFTEngineImplementationTests {
                 faultCoverage: nil
             )
         )
-        let provenance = try ExecutionProvenance(
-            producer: try ProducerIdentity(
-                kind: .engine,
-                identifier: "DFTEngine",
-                version: "1"
-            ),
-            startedAt: timestamp,
-            completedAt: timestamp.addingTimeInterval(1)
-        )
-
-        let foundationEvidence = try DFTFoundationEvidence(
-            result: result,
-            provenance: provenance
-        )
+        let foundationEvidence = try DFTFoundationEvidence(result: result)
 
         #expect(foundationEvidence.artifacts.count == 1)
         #expect(foundationEvidence.artifacts[0].id.rawValue == "dft-result")
         #expect(foundationEvidence.artifacts[0].locator.location.value == artifact.path)
         #expect(foundationEvidence.diagnostics[0].code.rawValue == "DFT_FIXTURE_WARNING")
-        #expect(foundationEvidence.evidence.provenance == provenance)
+        #expect(foundationEvidence.evidence.provenance == result.provenance)
     }
 
     @Test("DFT Foundation projection derives identity when producer omits one")
@@ -886,7 +873,7 @@ struct DFTEngineImplementationTests {
                 byteCount: 1,
                 role: .output
             )],
-            metadata: DFTExecutionMetadata(
+            provenance: try DFTExecutionSupport.provenance(
                 engineID: "dft.atpg",
                 implementationID: "fixture-atpg",
                 implementationVersion: "1",
@@ -898,17 +885,7 @@ struct DFTEngineImplementationTests {
                 faultCoverage: nil
             )
         )
-        let provenance = try ExecutionProvenance(
-            producer: try ProducerIdentity(
-                kind: .engine,
-                identifier: "DFTEngine",
-                version: "1"
-            ),
-            startedAt: timestamp,
-            completedAt: timestamp.addingTimeInterval(1)
-        )
-
-        let evidence = try DFTFoundationEvidence(result: result, provenance: provenance)
+        let evidence = try DFTFoundationEvidence(result: result)
         #expect(evidence.artifacts[0].artifactID.hasPrefix("derived-"))
     }
 
@@ -974,7 +951,7 @@ struct DFTEngineImplementationTests {
             ),
             atpgConfiguration: DFTATPGConfiguration()
         )
-        let expected = DFTExecutionSupport.result(
+        let expected = try DFTExecutionSupport.result(
             request: request,
             engineID: "external.atpg",
             implementationID: "stub-atpg",

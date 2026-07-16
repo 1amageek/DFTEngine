@@ -1,4 +1,5 @@
 import Foundation
+import CircuiteFoundation
 
 /// DFT-owned execution result.
 public struct DFTResult: Sendable, Hashable, Codable {
@@ -6,8 +7,8 @@ public struct DFTResult: Sendable, Hashable, Codable {
     public var runID: String
     public var status: DFTExecutionStatus
     public var diagnostics: [DFTDiagnostic]
-    public var artifacts: [DFTArtifactReference]
-    public var metadata: DFTExecutionMetadata
+    public var artifacts: [ArtifactReference]
+    public var provenance: ExecutionProvenance
     public var payload: DFTPayload
 
     public init(
@@ -15,8 +16,8 @@ public struct DFTResult: Sendable, Hashable, Codable {
         runID: String,
         status: DFTExecutionStatus,
         diagnostics: [DFTDiagnostic] = [],
-        artifacts: [DFTArtifactReference] = [],
-        metadata: DFTExecutionMetadata,
+        artifacts: [ArtifactReference] = [],
+        provenance: ExecutionProvenance,
         payload: DFTPayload
     ) {
         self.schemaVersion = schemaVersion
@@ -24,7 +25,7 @@ public struct DFTResult: Sendable, Hashable, Codable {
         self.status = status
         self.diagnostics = diagnostics
         self.artifacts = artifacts
-        self.metadata = metadata
+        self.provenance = provenance
         self.payload = payload
     }
 }

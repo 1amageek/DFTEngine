@@ -8,12 +8,10 @@ public actor FileSystemDFTOracleArtifactLoader: DFTOracleArtifactLoading {
         self.rootURL = rootURL.standardizedFileURL
     }
 
-    public func load(_ reference: DFTArtifactReference) async throws -> Data {
+    public func load(_ reference: ArtifactReference) async throws -> Data {
         try Self.validate(reference)
         let expectedByteCount = reference.byteCount
-        guard let expectedDigest = reference.sha256 else {
-            throw DFTOracleArtifactError.missingDigest(reference.path)
-        }
+        let expectedDigest = reference.sha256
         let resolvedRoot = rootURL.resolvingSymlinksInPath()
         let url = rootURL.appending(path: reference.path).standardizedFileURL
         let resolvedURL = url.resolvingSymlinksInPath()
@@ -47,10 +45,8 @@ public actor FileSystemDFTOracleArtifactLoader: DFTOracleArtifactLoading {
         return data
     }
 
-    private static func validate(_ reference: DFTArtifactReference) throws {
-        guard let artifactID = reference.artifactID else {
-            throw DFTOracleArtifactError.missingArtifactID(reference.path)
-        }
+    private static func validate(_ reference: ArtifactReference) throws {
+        let artifactID = reference.artifactID
         do {
             _ = try ArtifactID(rawValue: artifactID)
         } catch {
@@ -59,10 +55,7 @@ public actor FileSystemDFTOracleArtifactLoader: DFTOracleArtifactLoading {
         guard isSafePath(reference.path) else {
             throw DFTOracleArtifactError.invalidReference(reference.path)
         }
-        guard reference.sha256 != nil else {
-            throw DFTOracleArtifactError.missingDigest(reference.path)
-        }
-        guard isSHA256(reference.sha256 ?? "") else {
+        guard isSHA256(reference.sha256) else {
             throw DFTOracleArtifactError.invalidDigest(reference.path)
         }
     }

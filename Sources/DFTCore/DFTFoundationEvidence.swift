@@ -1,4 +1,4 @@
-@_exported import CircuiteFoundation
+import CircuiteFoundation
 import Foundation
 
 /// Foundation projection of a DFT execution.
@@ -12,17 +12,14 @@ public struct DFTFoundationEvidence: Sendable, Hashable, Codable, ArtifactProduc
 
     public var artifacts: [ArtifactReference] { evidence.artifacts }
 
-    public init(
-        result: DFTResult,
-        provenance: ExecutionProvenance
-    ) throws {
-        self.evidence = EvidenceManifest(provenance: provenance, artifacts: result.artifacts)
+    public init(result: DFTResult) throws {
+        self.evidence = EvidenceManifest(provenance: result.provenance, artifacts: result.artifacts)
         self.diagnostics = try result.diagnostics.map(Self.makeDiagnostic)
     }
 
     /// Returns a verified Foundation reference for execution provenance.
     public static func artifactReference(
-        from reference: DFTArtifactReference
+        from reference: ArtifactReference
     ) throws -> ArtifactReference {
         reference
     }

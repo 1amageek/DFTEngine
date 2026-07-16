@@ -30,7 +30,7 @@ public struct DeterministicScanInsertionEngine: ScanInserting {
             try Task.checkCancellation()
             let issues = request.validationIssues(for: .scanInsertion)
             guard issues.isEmpty else {
-                return DFTExecutionSupport.result(
+                return try DFTExecutionSupport.result(
                     request: request,
                     engineID: engineID,
                     implementationID: implementationID,
@@ -47,7 +47,7 @@ public struct DeterministicScanInsertionEngine: ScanInserting {
             }
             guard let architecture = request.scanArchitecture,
                   let policy = request.insertionPolicy else {
-                return blocked(
+                return try blocked(
                     request: request,
                     engineID: engineID,
                     implementationID: implementationID,
@@ -60,7 +60,7 @@ public struct DeterministicScanInsertionEngine: ScanInserting {
             do {
                 plan = try DeterministicScanPlanner().plan(architecture)
             } catch let error as DFTScanPlanningError {
-                return blocked(
+                return try blocked(
                     request: request,
                     engineID: engineID,
                     implementationID: implementationID,
@@ -74,7 +74,7 @@ public struct DeterministicScanInsertionEngine: ScanInserting {
             try Task.checkCancellation()
 
             guard let cellLibraryReference = request.cellLibrary else {
-                return blocked(
+                return try blocked(
                     request: request,
                     engineID: engineID,
                     implementationID: implementationID,
@@ -86,7 +86,7 @@ public struct DeterministicScanInsertionEngine: ScanInserting {
                 )
             }
             guard let cellLibraryLoader else {
-                return blocked(
+                return try blocked(
                     request: request,
                     engineID: engineID,
                     implementationID: implementationID,
@@ -103,7 +103,7 @@ public struct DeterministicScanInsertionEngine: ScanInserting {
                 cellLibrary = try cellLibraryLoader.load(cellLibraryReference)
                 try validate(cellLibrary: cellLibrary, reference: cellLibraryReference, pdk: request.pdk)
             } catch {
-                return blocked(
+                return try blocked(
                     request: request,
                     engineID: engineID,
                     implementationID: implementationID,
@@ -116,7 +116,7 @@ public struct DeterministicScanInsertionEngine: ScanInserting {
             }
 
             guard let designLoader else {
-                return blocked(
+                return try blocked(
                     request: request,
                     engineID: engineID,
                     implementationID: implementationID,
@@ -132,7 +132,7 @@ public struct DeterministicScanInsertionEngine: ScanInserting {
             do {
                 sourceSnapshot = try designLoader.load(request.design)
             } catch {
-                return blocked(
+                return try blocked(
                     request: request,
                     engineID: engineID,
                     implementationID: implementationID,
@@ -154,7 +154,7 @@ public struct DeterministicScanInsertionEngine: ScanInserting {
                     cellLibrary: cellLibrary
                 )
             } catch {
-                return blocked(
+                return try blocked(
                     request: request,
                     engineID: engineID,
                     implementationID: implementationID,
@@ -228,7 +228,7 @@ public struct DeterministicScanInsertionEngine: ScanInserting {
                 guard let baseReference = request.inputs.first(where: {
                     $0.locator == request.design.artifact
                 }) else {
-                    return blocked(
+                    return try blocked(
                         request: request,
                         engineID: engineID,
                         implementationID: implementationID,
@@ -262,7 +262,7 @@ public struct DeterministicScanInsertionEngine: ScanInserting {
                 designDiff = diff
             }
 
-            return DFTExecutionSupport.result(
+            return try DFTExecutionSupport.result(
                 request: request,
                 engineID: engineID,
                 implementationID: implementationID,
@@ -287,7 +287,7 @@ public struct DeterministicScanInsertionEngine: ScanInserting {
                 startedAt: startedAt
             )
         } catch is CancellationError {
-            return DFTExecutionSupport.result(
+            return try DFTExecutionSupport.result(
                 request: request,
                 engineID: engineID,
                 implementationID: implementationID,
@@ -391,8 +391,8 @@ public struct DeterministicScanInsertionEngine: ScanInserting {
         message: String,
         entity: String? = nil,
         actions: [String] = []
-    ) -> DFTResult {
-        DFTExecutionSupport.result(
+    ) throws -> DFTResult {
+        try DFTExecutionSupport.result(
             request: request,
             engineID: engineID,
             implementationID: implementationID,

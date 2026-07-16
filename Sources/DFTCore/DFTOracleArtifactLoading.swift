@@ -1,5 +1,6 @@
+import CircuiteFoundation
 import Foundation
 
 public protocol DFTOracleArtifactLoading: Sendable {
-    func load(_ reference: DFTArtifactReference) async throws -> Data
+    func load(_ reference: ArtifactReference) async throws -> Data
 }

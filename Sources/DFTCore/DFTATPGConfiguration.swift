@@ -58,10 +58,10 @@ public struct DFTATPGConfiguration: Sendable, Hashable, Codable {
             patternLength: try container.decode(Int.self, forKey: .patternLength),
             abortLimit: try container.decode(Int.self, forKey: .abortLimit),
             randomSeed: try container.decodeIfPresent(UInt64.self, forKey: .randomSeed),
-            supportedProcessFamilies: try container.decodeIfPresent(
+            supportedProcessFamilies: try container.decode(
                 [String].self,
                 forKey: .supportedProcessFamilies
-            ) ?? [],
+            ),
             patternFormat: try container.decode(DFTTestPatternFormat.self, forKey: .patternFormat),
             faultSource: try container.decodeIfPresent(DFTATPGFaultSource.self, forKey: .faultSource),
             maximumExhaustiveInputCount: try container.decodeIfPresent(
@@ -72,10 +72,10 @@ public struct DFTATPGConfiguration: Sendable, Hashable, Codable {
                 Int.self,
                 forKey: .maximumSequentialCycleCount
             ),
-            sequentialCellContracts: try container.decodeIfPresent(
+            sequentialCellContracts: try container.decode(
                 [DFTSequentialCellContract].self,
                 forKey: .sequentialCellContracts
-            ) ?? []
+            )
         )
     }
 
@@ -96,9 +96,7 @@ public struct DFTATPGConfiguration: Sendable, Hashable, Codable {
             maximumSequentialCycleCount,
             forKey: .maximumSequentialCycleCount
         )
-        if !sequentialCellContracts.isEmpty {
-            try container.encode(sequentialCellContracts, forKey: .sequentialCellContracts)
-        }
+        try container.encode(sequentialCellContracts, forKey: .sequentialCellContracts)
     }
 
     public func replacingSequentialCellContracts(

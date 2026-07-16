@@ -1,3 +1,4 @@
+import CircuiteFoundation
 import Foundation
 import LogicIR
 import TimingCore
@@ -8,7 +9,7 @@ public struct DFTRequest: DFTExecutionRequest {
 
     public var schemaVersion: Int
     public var runID: String
-    public var inputs: [DFTArtifactReference]
+    public var inputs: [ArtifactReference]
 
     public var design: LogicDesignReference
     public var constraints: DFTConstraintReference
@@ -25,7 +26,7 @@ public struct DFTRequest: DFTExecutionRequest {
 
     public init(
         runID: String,
-        inputs: [DFTArtifactReference],
+        inputs: [ArtifactReference],
         design: LogicDesignReference,
         constraints: DFTConstraintReference,
         pdk: PDKReference,

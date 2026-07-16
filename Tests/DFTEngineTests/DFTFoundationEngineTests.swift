@@ -60,7 +60,7 @@ struct DFTFoundationEngineTests {
             schemaVersion: DFTRequest.currentSchemaVersion,
             runID: request.runID,
             status: .blocked,
-            metadata: DFTExecutionMetadata(
+            provenance: try DFTExecutionSupport.provenance(
                 engineID: "dft.atpg",
                 implementationID: "fixture",
                 implementationVersion: "1",
@@ -76,8 +76,8 @@ struct DFTFoundationEngineTests {
         ).execute(request)
 
         #expect(executed == result)
-        #expect(executed.metadata.engineID == "dft.atpg")
-        #expect(executed.metadata.seed == 7)
+        #expect(executed.provenance.producer.identifier == "dft.atpg")
+        #expect(executed.provenance.randomSeed == 7)
     }
 }
 

@@ -55,10 +55,10 @@ public struct DFTPayload: Sendable, Hashable, Codable {
         patterns = try container.decodeIfPresent(DFTTestPatternSet.self, forKey: .patterns)
         coverageEvidence = try container.decodeIfPresent(DFTCoverageEvidence.self, forKey: .coverageEvidence)
         bistStructure = try container.decodeIfPresent(DFTBISTStructure.self, forKey: .bistStructure)
-        evidenceProvenance = try container.decodeIfPresent(
+        evidenceProvenance = try container.decode(
             DFTEvidenceProvenance.self,
             forKey: .evidenceProvenance
-        ) ?? DFTEvidenceProvenance(status: .unassessed)
-        assumptions = try container.decodeIfPresent([String].self, forKey: .assumptions) ?? []
+        )
+        assumptions = try container.decode([String].self, forKey: .assumptions)
     }
 }

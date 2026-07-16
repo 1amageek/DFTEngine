@@ -74,7 +74,7 @@ public struct DefaultDFTEngine: DFTEngineExecuting {
         _ request: DFTRequest
     ) async throws -> DFTResult {
         guard let operation = request.operation else {
-            return DFTExecutionSupport.result(
+            return try DFTExecutionSupport.result(
                 request: request,
                 engineID: "dft",
                 implementationID: "default-router",

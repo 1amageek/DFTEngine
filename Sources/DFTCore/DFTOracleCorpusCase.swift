@@ -1,3 +1,4 @@
+import CircuiteFoundation
 import Foundation
 
 public struct DFTOracleCorpusCase: Sendable, Hashable, Codable {
@@ -5,14 +6,14 @@ public struct DFTOracleCorpusCase: Sendable, Hashable, Codable {
     public var operation: DFTOperation
     public var requestDigest: String
     public var expectation: DFTOracleCaseExpectation
-    public var oracleArtifact: DFTArtifactReference
+    public var oracleArtifact: ArtifactReference
 
     public init(
         caseID: String,
         operation: DFTOperation,
         requestDigest: String,
         expectation: DFTOracleCaseExpectation,
-        oracleArtifact: DFTArtifactReference
+        oracleArtifact: ArtifactReference
     ) {
         self.caseID = caseID
         self.operation = operation
