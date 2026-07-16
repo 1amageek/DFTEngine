@@ -2,7 +2,7 @@
 
 ## Current state
 
-**M0 and M1 are complete. M2 has process-scoped binding plus a Liberty timing/legal-cell validator. M3 now has combinational stuck-at, bounded DFF/SDFF state-transition, explicit reset/set polarity/timing/edge contracts, qualified level-sensitive latch semantics, bounded sequential transition-fault simulation and an explicit injected model boundary for process-specific faults. M4 has canonical logic-BIST plus a typed memory backend protocol whose external path requires process-qualified evidence. M5-M7 have reusable artifact, oracle-correlation, request-digest-bound qualification provenance, mandatory ToolQualification process evidence, downstream evidence bundling and DFT release-review contracts. M8 production signoff and tapeout handoff is explicitly defined but not complete. The composed Xcircuite qualification/release loop is implemented and tested, but the North Star platform goal is not complete.**
+**M0 and M1 are complete. M2 has process-scoped binding plus a Liberty timing/legal-cell validator. M3 has combinational stuck-at, bounded DFF/SDFF state-transition, explicit reset/set polarity/timing/edge contracts, level-sensitive latch semantics, bounded sequential transition-fault simulation, and an injected model boundary for process-specific faults. M4 has canonical logic-BIST plus a typed memory backend protocol. M5-M6 provide reusable artifacts, oracle correlation, and request-digest-bound evidence provenance. DFTEngine emits observations only; ToolQualification owns implementation trust and the composing flow owns downstream policy, approval, resume, and release.**
 
 | Maturity gate | Status | Evidence |
 |---|---|---|
@@ -16,9 +16,9 @@
 | Fixture corpus | Retained | Positive scan and negative ATPG fixtures |
 | Oracle correlation | Correlation infrastructure available; process qualification not claimed | Retained expectation artifact integrity, native-result correlation and deterministic evidence digest are implemented; no independent process oracle is bundled |
 | Process qualification | Not claimed | PDK/macro-specific evidence is external policy |
-| Xcircuite stage composition | M2 scan + M6 qualification + M7 release-review slices | Direct protocol invocation through the headless scan, retained-oracle qualification and DFT release executors; request-digest-bound provenance, ToolQualification evidence validation, downstream evidence, approval/resume and release integrity remain Xcircuite flow responsibilities |
-| End-to-end flow evidence | Composed fixture flow passed; production evidence remains open | Qualification → independent process evidence build/validation → downstream equivalence/DRC/LVS/PEX evidence bundle → approval block → generic approval record → resumed DFT release is covered by 20 focused Xcircuite DFT tests and 55 combined DFT/runtime validation tests; the release packet re-verifies every retained reference |
-| Release readiness | Blocked by production evidence | Requires independently generated process-scoped oracle/evidence record, production-qualified cell/macro evidence, real equivalence/DRC/LVS/PEX artifacts, review approval and external result correlation |
+| Xcircuite stage composition | Direct protocol boundary | Xcircuite invokes DFT protocols and persists returned artifacts; it combines ToolQualification decisions and downstream evidence under flow-owned policy |
+| End-to-end flow evidence | External composition responsibility | DFTEngine supplies typed results, request-bound provenance, and correlation observations; the composing flow owns cross-engine validation |
+| Release readiness | External policy | Requires accepted process/tool evidence, real equivalence/DRC/LVS/PEX artifacts, review approval, and immutable flow records |
 
 ## Function status
 
@@ -49,7 +49,7 @@ process-scoped scan-cell binding (M2 slice)
       ↓
 combinational gate-level ATPG semantics (M3 slice)
       ↓
-qualified sequential control and transition semantics (M3 slice)
+declared sequential control and transition semantics (M3 slice)
       ↓
 explicit process-specific fault-model boundary (M3 trust gate)
       ↓
@@ -57,33 +57,31 @@ canonical logic-BIST transformation (M4 slice)
       ↓
 strict standard-pattern and timed external execution (M5 slice)
       ↓
-qualification promotion gate (M6 slice)
+reference-oracle correlation and evidence provenance (M6 slice)
       ↓
-DFT-specific release eligibility and review/resume contract (M7 slice)
+ToolQualification trust evaluation (external)
       ↓
-reference-oracle correlation and process-scoped qualification
-      ↓
-Xcircuite downstream equivalence/DRC/LVS/PEX evidence bundle
-      ↓
-generic approval record and resume re-entry into DFT release gate
+DesignFlowKernel/Xcircuite review, approval, resume, and release policy
       ↓
 ```
 
 ## Completion definition
 
-The package is not complete merely because every contract path has a deterministic implementation. The platform goal requires M0-M8. The current implementation has validated slices through the M7 release-stage composition, including mandatory independent process evidence validation, but production release eligibility remains blocked until retained corpus/oracle artifacts, process-qualified cell/macro evidence, downstream equivalence/DRC/LVS/PEX evidence and final approval exist.
+The package is complete only for its declared execution and evidence-emission
+scope. Platform production readiness remains external and requires retained
+corpus/oracle artifacts, accepted cell/macro tool evidence, downstream
+equivalence/DRC/LVS/PEX evidence, and final approval.
 
 ## Current blockers
 
 - The native gate-level ATPG covers exhaustive binary combinational simulation, bounded DFF/SDFF clock-edge/state semantics including SI/SE scan shift and functional capture, explicit reset/set polarity/timing/edge contracts, qualified level-sensitive latch semantics and bounded combinational/sequential transition semantics. Process-specific faults require an injected `DFTProcessFaultModeling` implementation and validated result; unknown primitives and process-qualified timing remain blocked.
 - Native logic BIST requires explicit target pin bindings and transforms a canonical gate snapshot; controller, mux, capture and compactor helper cells still require process qualification.
-- Strict STIL/WGL decoding with lossless fault-ID metadata, a timeout/tree-cleaning external runner, external stdout/stderr artifacts, retained-oracle correlation, ToolQualification process-evidence validation and an artifact-backed process-evidence builder/CLI are available; concrete flow persistence, actual independent process evidence and tool promotion remain integrating-flow responsibilities.
-- `DFTQualificationGate` refuses promotion without complete corpus pass, oracle digest, process/PDK match, retained artifacts and approval.
+- Strict STIL/WGL decoding with lossless fault-ID metadata, a timeout/tree-cleaning external runner, external stdout/stderr artifacts, and retained-oracle correlation are available; concrete flow persistence, independent process evidence, and tool promotion remain integrating-flow responsibilities.
 - `DFTOracleCorrelationEngine` can verify normalized retained oracle expectation artifacts, compare native envelopes and emit a deterministic correlation digest; no real process corpus is bundled in this package.
 - The current LogicIR does not encode process-qualified scan-capture/reset semantics; M2 timing/legal bindings and explicit architecture contracts must block ambiguous designs.
 - M2 uses an explicit process-scoped manifest, exact net/pin binding and a Liberty timing/legal replacement validator; process-qualified timing evidence and legal replacement approval remain external.
 - `DFT_SCAN_OUT` is an intermediate structural helper and requires a process-qualified cell mapping before physical signoff.
-- Full Xcircuite release readiness remains open even though the composed qualification/independent-evidence/evidence-bundle/review-resume/release flow is implemented and tested; the immutable release packet now re-verifies all named references, while real process-qualified downstream evidence is still required.
+- Full Xcircuite release readiness remains external to this package; real accepted downstream evidence is still required.
 - An external tool runner is injected through `DFTExternalToolRunning`; a concrete vendor command must be selected and qualified by the integrating project.
 - Process-specific fault semantics and memory macro legality require PDK-scoped evidence outside this package.
 

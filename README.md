@@ -18,8 +18,8 @@ flowchart LR
     ATPG --> Artifacts
     BIST --> Artifacts
     Artifacts --> Foundation["CircuiteFoundation evidence"]
-    Foundation --> Review["Agent / human review"]
-    Review --> Qualification["Qualification and release gates"]
+    Foundation --> Trust["ToolQualification policy"]
+    Trust --> Review["Flow-owned review / release policy"]
 ```
 
 ## Products
@@ -63,7 +63,7 @@ Xcircuite records every DFT mutation as a new LogicDesignReference and requires 
 
 The library does not depend on the Xcircuite runtime. The owning flow package
 connects `DFTResult` to `DesignFlowKernel`, artifact persistence,
-qualification gates, repair loops and human approval.
+ToolQualification decisions, repair loops and human approval.
 
 ## Oracle evidence
 
@@ -125,14 +125,19 @@ review.
 
 Artifact stores are immutable: repeating the same artifact write is idempotent, while replacing bytes at an existing run path is rejected.
 
-## Qualification boundary
+## Evidence and trust boundary
 
 `DFTOracleCorrelationEngine` verifies retained oracle artifacts by path,
 artifact ID, byte count and SHA-256 before comparing the native result with
-the expected result. `DFTQualificationGate` requires a complete correlated
-corpus, process and PDK identity, oracle digest, at least one retained
-qualification artifact and explicit approval. These checks establish a
-reproducible qualification contract; they do not fabricate foundry evidence.
+the expected result. `DFTPayload.evidenceProvenance` records raw evidence
+maturity through `smokeObserved`, `corpusObserved`, or `oracleCorrelated` plus
+the supporting corpus, oracle, process, PDK, and request identities. These are
+observations, not a ToolQualification decision or a release verdict.
+
+ToolQualification evaluates implementation trust from retained evidence. The
+composing DesignFlowKernel/Xcircuite flow owns downstream evidence policy,
+human approval, resume, and release eligibility. DFTEngine has no DFT-specific
+qualification or release-gate API.
 
 Process-specific ATPG semantics are provided through the injected
 `DFTProcessFaultModeling` protocol. A declared process family without an

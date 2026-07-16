@@ -60,4 +60,5 @@ artifact that arrived without one.
 The owning flow package resolves locators, verifies Foundation artifact
 integrity, evaluates ToolQualification requirements, invokes `DFTEngineExecuting`
 and persists the returned `DFTResult`. Approval and resume remain flow
-responsibilities.
+responsibilities. `DFTEvidenceProvenance` is raw observation metadata and never
+constitutes a qualification or release decision.
