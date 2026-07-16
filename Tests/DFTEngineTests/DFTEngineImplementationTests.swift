@@ -154,7 +154,10 @@ struct DFTEngineImplementationTests {
         #expect(first.payload.coverageEvidence?.abortedFaultCount == 1)
         #expect(first.dftDiagnostics.contains { $0.code == "DFT_FAULT_SEMANTICS_UNAVAILABLE" })
         #expect(first.payload.patterns?.patterns == second.payload.patterns?.patterns)
-        #expect(first.artifacts.map(\.sha256) == second.artifacts.map(\.sha256))
+        #expect(
+            first.artifacts.map(\.digest.hexadecimalValue)
+                == second.artifacts.map(\.digest.hexadecimalValue)
+        )
     }
 
     @Test("gate-level ATPG extracts and detects combinational stuck-at faults")
