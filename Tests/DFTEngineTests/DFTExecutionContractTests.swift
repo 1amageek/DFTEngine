@@ -23,6 +23,14 @@ struct DFTExecutionContractTests {
         )
 
         #expect(object["reviewState"] == nil)
+        #expect(object["schemaVersion"] as? Int == DFTDesignDiff.currentSchemaVersion)
+
+        var unsupportedObject = object
+        unsupportedObject["schemaVersion"] = 1
+        let unsupportedData = try JSONSerialization.data(withJSONObject: unsupportedObject)
+        #expect(throws: DecodingError.self) {
+            _ = try JSONDecoder().decode(DFTDesignDiff.self, from: unsupportedData)
+        }
     }
 
     @Test("DFT implementation executes the Foundation Engine contract directly")
