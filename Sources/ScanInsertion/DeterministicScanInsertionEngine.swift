@@ -245,7 +245,8 @@ public struct DeterministicScanInsertionEngine: ScanInserting {
                     actor: "DFTEngine/\(implementationID)",
                     baseSnapshot: baseReference,
                     proposedSnapshot: transformedReference,
-                    changes: generatedChanges
+                    changes: generatedChanges,
+                    createdAt: startedAt
                 )
                 let diffData = try DFTArtifactJSONEncoder().encode(diff)
                 let diffReference = try await artifactStore.store(

@@ -39,7 +39,7 @@ Process-specific faults use the protocol-first `DFTProcessFaultModeling` boundar
 
 ## M4 current slice
 
-Logic BIST requires explicit target instance pin bindings. The transformer adds test-mode input muxes around bound target inputs, response capture cells, a response compactor, a controller cell, a signature register and observable done/signature ports. The resulting canonical snapshot is digest-finalized and accompanied by a structural design diff. Memory BIST now has a typed macro port/algorithm binding and external backend protocol; the external path rejects non-completed or non-process-qualified typed results, while native transformation remains blocked until a macro-qualified backend is injected.
+Logic BIST requires explicit target instance pin bindings. The transformer adds test-mode input muxes around bound target inputs, response capture cells, a response compactor, a controller cell, a signature register and observable done/signature ports. The resulting canonical snapshot is digest-finalized and accompanied by a structural design diff. Memory BIST now has a typed macro port/algorithm binding and external backend protocol; the external path validates the shared result identity and rejects non-completed results, while ToolQualification policy remains outside DFTEngine and native transformation remains blocked until a macro-qualified backend is injected.
 
 ## M5-M6 current slices
 

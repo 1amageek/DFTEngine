@@ -8,6 +8,23 @@ import Testing
 
 @Suite("DFT execution contract")
 struct DFTExecutionContractTests {
+    @Test("DFT design diff contains raw changes but no flow review state")
+    func designDiffExcludesFlowReviewState() throws {
+        let diff = DFTDesignDiff(
+            runID: "foundation-run",
+            title: "Insert scan",
+            actor: "DFTEngine/native",
+            changes: [],
+            createdAt: Date(timeIntervalSince1970: 100)
+        )
+        let encoded = try DFTArtifactJSONEncoder().encode(diff)
+        let object = try #require(
+            JSONSerialization.jsonObject(with: encoded) as? [String: Any]
+        )
+
+        #expect(object["reviewState"] == nil)
+    }
+
     @Test("DFT implementation executes the Foundation Engine contract directly")
     func implementationExecutesFoundationEngineContract() async throws {
         let input = testArtifact(

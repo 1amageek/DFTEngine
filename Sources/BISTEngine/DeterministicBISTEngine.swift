@@ -266,7 +266,8 @@ public struct DeterministicBISTEngine: BISTExecuting {
                         after: .string("test-mode isolated BIST target binding"),
                         summary: "Add test-mode BIST isolation around target \(instanceName)."
                     )
-                }
+                },
+                createdAt: startedAt
             )
             let diffData = try DFTArtifactJSONEncoder().encode(diff)
             let diffReference = try await artifactStore.store(

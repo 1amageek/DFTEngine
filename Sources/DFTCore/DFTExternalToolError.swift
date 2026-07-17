@@ -3,7 +3,9 @@ import Foundation
 public enum DFTExternalToolError: Error, LocalizedError, Sendable, Hashable {
     case requestEncodingFailed(String)
     case responseDecodingFailed(String)
+    case nonZeroExit(implementationID: String, exitCode: Int32, standardError: String)
     case runIDMismatch(expected: String, actual: String)
+    case provenanceInputMismatch
     case schemaVersionMismatch(Int)
     case descriptorMismatch(expected: String, actual: String)
     case implementationMismatch(expected: String, actual: String)
@@ -19,8 +21,12 @@ public enum DFTExternalToolError: Error, LocalizedError, Sendable, Hashable {
             return "External DFT request could not be encoded: \(message)."
         case .responseDecodingFailed(let message):
             return "External DFT response could not be decoded: \(message)."
+        case .nonZeroExit(let implementationID, let exitCode, let standardError):
+            return "External DFT implementation \(implementationID) exited with code \(exitCode): \(standardError)"
         case .runIDMismatch(let expected, let actual):
             return "External DFT response run ID \(actual) does not match request \(expected)."
+        case .provenanceInputMismatch:
+            return "External DFT response provenance inputs do not match the request inputs."
         case .schemaVersionMismatch(let version):
             return "External DFT response schema version \(version) is unsupported."
         case .descriptorMismatch(let expected, let actual):

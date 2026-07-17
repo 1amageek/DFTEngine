@@ -3,29 +3,56 @@
   "runID" : "fixture-scan",
   "inputs" : [
     {
-      "artifactID" : "design",
-      "path" : "design.json",
-      "kind" : "netlist",
-      "format" : "JSON",
-      "sha256" : "ceb2a27440cfad92ad81272660aacdebf3509cdf609ee1aba26f9be1aa0d0820",
+      "id" : "design",
+      "locator" : {
+        "location" : {
+          "storage" : "workspaceRelative",
+          "value" : "design.json"
+        },
+        "role" : "input",
+        "kind" : "netlist",
+        "format" : "json"
+      },
+      "digest" : {
+        "algorithm" : "sha256",
+        "hexadecimalValue" : "ceb2a27440cfad92ad81272660aacdebf3509cdf609ee1aba26f9be1aa0d0820"
+      },
       "byteCount" : 2333
     },
     {
-      "artifactID" : "cell-library",
-      "path" : "cell-library.json",
-      "kind" : "technology",
-      "format" : "JSON",
-      "sha256" : "e45e491f6cd635fce5ee5f6aa8078e944323083eb812d9ee1a1315ba09d9bac0",
-      "byteCount" : 515
+      "id" : "cell-library",
+      "locator" : {
+        "location" : {
+          "storage" : "workspaceRelative",
+          "value" : "cell-library.json"
+        },
+        "role" : "input",
+        "kind" : "technology",
+        "format" : "json"
+      },
+      "digest" : {
+        "algorithm" : "sha256",
+        "hexadecimalValue" : "e144c3cb28031d16731f15d47d68c7958c681b41223b9066e750503136f1cdc2"
+      },
+      "byteCount" : 760
     }
   ],
   "design" : {
     "artifact" : {
-      "artifactID" : "design",
-      "path" : "design.json",
-      "kind" : "netlist",
-      "format" : "JSON",
-      "sha256" : "ceb2a27440cfad92ad81272660aacdebf3509cdf609ee1aba26f9be1aa0d0820",
+      "id" : "design",
+      "locator" : {
+        "location" : {
+          "storage" : "workspaceRelative",
+          "value" : "design.json"
+        },
+        "role" : "input",
+        "kind" : "netlist",
+        "format" : "json"
+      },
+      "digest" : {
+        "algorithm" : "sha256",
+        "hexadecimalValue" : "ceb2a27440cfad92ad81272660aacdebf3509cdf609ee1aba26f9be1aa0d0820"
+      },
       "byteCount" : 2333
     },
     "topDesignName" : "top",
@@ -33,35 +60,62 @@
   },
   "cellLibrary" : {
     "artifact" : {
-      "artifactID" : "cell-library",
-      "path" : "cell-library.json",
-      "kind" : "technology",
-      "format" : "JSON",
-      "sha256" : "e45e491f6cd635fce5ee5f6aa8078e944323083eb812d9ee1a1315ba09d9bac0",
-      "byteCount" : 515
+      "id" : "cell-library",
+      "locator" : {
+        "location" : {
+          "storage" : "workspaceRelative",
+          "value" : "cell-library.json"
+        },
+        "role" : "input",
+        "kind" : "technology",
+        "format" : "json"
+      },
+      "digest" : {
+        "algorithm" : "sha256",
+        "hexadecimalValue" : "e144c3cb28031d16731f15d47d68c7958c681b41223b9066e750503136f1cdc2"
+      },
+      "byteCount" : 760
     },
     "processID" : "fixture-process",
     "version" : "1",
-    "manifestDigest" : "e25e0777725954a5d91eda79d6947931ef1b7b982f510ef0373c34bb5968b6bc"
+    "manifestDigest" : "18d60d96ea632fe1f6240cb0b3cc062dd68769f4a6ded99637631618d4624186"
   },
   "constraints" : {
     "artifact" : {
-      "artifactID" : "constraints",
-      "path" : "constraints.sdc",
-      "kind" : "constraint",
-      "format" : "SDC",
-      "sha256" : "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "id" : "constraints",
+      "locator" : {
+        "location" : {
+          "storage" : "workspaceRelative",
+          "value" : "constraints.sdc"
+        },
+        "role" : "input",
+        "kind" : "constraint",
+        "format" : "sdc"
+      },
+      "digest" : {
+        "algorithm" : "sha256",
+        "hexadecimalValue" : "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+      },
       "byteCount" : 10
     },
     "modeIDs" : [ "test" ]
   },
   "pdk" : {
     "manifest" : {
-      "artifactID" : "pdk",
-      "path" : "pdk.json",
-      "kind" : "technology",
-      "format" : "JSON",
-      "sha256" : "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "id" : "pdk",
+      "locator" : {
+        "location" : {
+          "storage" : "workspaceRelative",
+          "value" : "pdk.json"
+        },
+        "role" : "input",
+        "kind" : "technology",
+        "format" : "json"
+      },
+      "digest" : {
+        "algorithm" : "sha256",
+        "hexadecimalValue" : "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+      },
       "byteCount" : 10
     },
     "processID" : "fixture-process",

@@ -9,7 +9,6 @@ import PDKCore
 import ScanInsertion
 import Testing
 import TimingCore
-import ToolQualification
 
 @Suite("DFTEngine implementation")
 struct DFTEngineImplementationTests {
@@ -770,14 +769,16 @@ struct DFTEngineImplementationTests {
         #expect(qualifiedBoundary.status == .blocked)
         #expect(qualifiedBoundary.dftDiagnostics.contains { $0.code == "DFT_BIST_MEMORY_MACRO_UNSUPPORTED" })
 
+        let memoryRequest = makeRequest(operation: .bist, bistConfiguration: configured)
         let externalResponse = DFTResult(
             schemaVersion: DFTRequest.currentSchemaVersion,
             runID: "run-bist",
             status: DFTExecutionStatus.completed,
             provenance: try DFTExecutionSupport.provenance(
                 engineID: "external.atpg",
-            implementationID: "stub-atpg",
-            implementationVersion: "1.0.0",
+                implementationID: "stub-atpg",
+                implementationVersion: "1.0.0",
+                inputs: memoryRequest.inputs,
                 startedAt: Date(timeIntervalSince1970: 0),
                 completedAt: Date(timeIntervalSince1970: 1),
                 seed: 1
@@ -788,20 +789,9 @@ struct DFTEngineImplementationTests {
                 evidenceProvenance: DFTEvidenceProvenance(status: .smokeObserved)
             )
         )
-        do {
-            _ = try await ExternalMemoryBISTAdapter(
-                runner: StubExternalRunner(response: try DFTArtifactJSONEncoder().encode(externalResponse)),
-                trustDecision: ToolTrustDecision(toolID: "stub-atpg", status: .rejected)
-            ).execute(makeRequest(operation: .bist, bistConfiguration: configured))
-            Issue.record("A ToolQualification-rejected memory-BIST implementation must be rejected.")
-        } catch let error as DFTMemoryBISTAdapterError {
-            #expect(error == .toolTrustRejected("stub-atpg"))
-        }
-
         let adapterResult = try await ExternalMemoryBISTAdapter(
-            runner: StubExternalRunner(response: try DFTArtifactJSONEncoder().encode(externalResponse)),
-            trustDecision: ToolTrustDecision(toolID: "stub-atpg", status: .eligible)
-        ).execute(makeRequest(operation: .bist, bistConfiguration: configured))
+            runner: StubExternalRunner(response: try DFTArtifactJSONEncoder().encode(externalResponse))
+        ).execute(memoryRequest)
         #expect(adapterResult.status == .completed)
     }
 
@@ -816,6 +806,31 @@ struct DFTEngineImplementationTests {
         let decoded = try JSONDecoder().decode(DFTRequest.self, from: data)
 
         #expect(decoded == request)
+    }
+
+    @Test("documented scan fixture executes through the headless API")
+    func documentedScanFixtureExecutes() async throws {
+        let requestURL = try #require(
+            Bundle.module.url(
+                forResource: "scan-request",
+                withExtension: "json",
+                subdirectory: "Fixtures"
+            )
+        )
+        let fixtureRoot = requestURL.deletingLastPathComponent()
+        let request = try JSONDecoder().decode(
+            DFTRequest.self,
+            from: Data(contentsOf: requestURL)
+        )
+        let result = try await DefaultDFTEngine(
+            artifactStore: InMemoryDFTArtifactStore(),
+            designLoader: FileSystemDFTDesignLoader(rootURL: fixtureRoot),
+            cellLibraryLoader: FileSystemDFTCellLibraryLoader(rootURL: fixtureRoot)
+        ).execute(request)
+
+        #expect(result.status == .completed)
+        #expect(result.artifacts.count == 2)
+        #expect(result.payload.designDiff != nil)
     }
 
     @Test("DFT result directly exposes stable Foundation evidence")
@@ -887,6 +902,32 @@ struct DFTEngineImplementationTests {
             )
         )
         #expect(!result.artifacts[0].artifactID.isEmpty)
+    }
+
+    @Test("invalid domain diagnostic codes map to a safe Foundation code")
+    func invalidDiagnosticCodeFallsBackWithoutTerminating() throws {
+        let timestamp = Date(timeIntervalSince1970: 10)
+        let result = DFTResult(
+            schemaVersion: DFTRequest.currentSchemaVersion,
+            runID: "run-foundation",
+            status: .blocked,
+            diagnostics: [DFTDiagnostic(
+                severity: .error,
+                code: " invalid diagnostic code",
+                message: "Invalid producer code."
+            )],
+            provenance: try DFTExecutionSupport.provenance(
+                engineID: "dft.atpg",
+                implementationID: "fixture-atpg",
+                implementationVersion: "1",
+                startedAt: timestamp,
+                completedAt: timestamp.addingTimeInterval(1)
+            ),
+            payload: DFTPayload(transformedDesign: nil, faultCoverage: nil)
+        )
+
+        #expect(result.diagnostics[0].code.rawValue == "dft.invalid-diagnostic-code")
+        #expect(result.diagnostics[0].detail == "originalCode:  invalid diagnostic code")
     }
 
     @Test("STIL and WGL pattern artifacts round-trip")
@@ -973,12 +1014,55 @@ struct DFTEngineImplementationTests {
             runner: runner,
             artifactStore: store
         ).execute(request)
+        #expect(persisted.evidence.id == expected.evidence.id)
         #expect(persisted.artifacts.map(\.artifactID) == [
             "dft-external-result",
             "dft-external-stdout",
             "dft-external-stderr",
         ])
         #expect(await store.data(for: "dft/runs/run-atpg/external-stderr.raw") == Data())
+
+        do {
+            _ = try await DFTExternalToolExecutor(
+                runner: StubExternalRunner(
+                    response: try DFTArtifactJSONEncoder().encode(expected),
+                    standardError: Data("tool failed".utf8),
+                    exitCode: 9
+                )
+            ).execute(request)
+            Issue.record("A non-zero external exit must not be decoded as a successful response.")
+        } catch let error as DFTExternalToolError {
+            #expect(error == .nonZeroExit(
+                implementationID: "stub-atpg",
+                exitCode: 9,
+                standardError: "tool failed"
+            ))
+        }
+
+        let mismatchedResult = DFTResult(
+            schemaVersion: expected.schemaVersion,
+            runID: expected.runID,
+            status: expected.status,
+            provenance: try DFTExecutionSupport.provenance(
+                engineID: "external.atpg",
+                implementationID: "stub-atpg",
+                implementationVersion: "1.0.0",
+                inputs: [],
+                startedAt: expected.provenance.startedAt,
+                completedAt: expected.provenance.completedAt
+            ),
+            payload: expected.payload
+        )
+        do {
+            _ = try await DFTExternalToolExecutor(
+                runner: StubExternalRunner(
+                    response: try DFTArtifactJSONEncoder().encode(mismatchedResult)
+                )
+            ).execute(request)
+            Issue.record("External provenance must remain bound to request inputs.")
+        } catch let error as DFTExternalToolError {
+            #expect(error == .provenanceInputMismatch)
+        }
     }
 
     private func makeRequest(
@@ -1280,6 +1364,8 @@ struct DFTEngineImplementationTests {
 
 private struct StubExternalRunner: DFTExternalToolOutputProviding {
     let response: Data
+    var standardError = Data()
+    var exitCode: Int32 = 0
 
     var descriptor: DFTExternalToolDescriptor {
         DFTExternalToolDescriptor(
@@ -1296,8 +1382,8 @@ private struct StubExternalRunner: DFTExternalToolOutputProviding {
     func runWithOutput(requestData: Data) async throws -> DFTExternalToolOutput {
         DFTExternalToolOutput(
             standardOutput: response,
-            standardError: Data(),
-            exitCode: 0
+            standardError: standardError,
+            exitCode: exitCode
         )
     }
 }

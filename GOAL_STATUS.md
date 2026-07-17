@@ -28,13 +28,19 @@
 | Scan architecture | Implemented | Deterministic chain planner | Positive fixture | Smoke checked |
 | Scan insertion | Implemented | Digest-verified canonical snapshot transformation, explicit clock/reset binding, validator pass and design diff | DFTEngine tests + CLI fixture | Unqualified helper/library mapping |
 | ATPG | Partial implementation | Declared-fault backend plus extracted combinational stuck-at, bounded DFF/SDFF scan-shift/capture, explicit reset/set and level-sensitive latch semantics, bounded sequential/combinational transition backends, and protocol-first process-specific model injection with result validation | Positive/negative gate-level tests, including undeclared-family, missing-model and injected-model paths | Smoke checked; retained oracle correlation is available but no process corpus is bundled |
-| BIST | Partial implementation | Canonical logic gate transformation with test-mode mux/capture/compactor; memory macro path requires an external backend conforming to the published protocol and a process-qualified result | Positive transformed-snapshot and backend-gate tests | Smoke checked; helper cells and macro legality unqualified |
+| BIST | Partial implementation | Canonical logic gate transformation with test-mode mux/capture/compactor; memory macro path requires an external backend conforming to the published protocol while flow policy supplies qualification | Positive transformed-snapshot and external-contract tests | Smoke checked; helper cells and macro legality unqualified |
 | Pattern formats | M5 partial | JSON, strict STIL and strict WGL codec with lossless fault-ID metadata; timed external process runner | Vector and fault-ID round-trip plus malformed-input tests | Smoke checked |
 | Coverage evidence | Implemented | Universe digest, outcomes and assumptions | ATPG tests and oracle correlation tests | No process qualification |
 
 ## Foundation migration boundary
 
 `DFTEngineExecuting`, `DefaultDFTEngine`, and `DFTResult` form the direct CircuiteFoundation boundary. The implementation preserves verified request inputs, configuration digest, design revision, producer identity, seed, output artifacts, and diagnostics. In-memory and actor-isolated file-system artifact stores are immutable and idempotent for byte-identical writes; conflicting replacements and symlink escapes are rejected.
+
+The contract audit removed ToolQualification from DFTEngine's direct manifest and
+target dependencies, removed review lifecycle state from the raw DFT diff, and
+hardened external execution against non-zero exits and provenance-input
+substitution. Release evidence composition is owned by the composing flow and
+is not part of DFTEngine's public API.
 
 ## Goal progression
 

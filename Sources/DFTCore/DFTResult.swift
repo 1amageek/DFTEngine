@@ -48,6 +48,7 @@ public struct DFTResult: Sendable, Hashable, Codable, ArtifactProducing,
         diagnostics: [DFTDiagnostic] = [],
         artifacts: [ArtifactReference] = [],
         provenance: ExecutionProvenance,
+        evidenceID: UUID = UUID(),
         payload: DFTPayload
     ) {
         self.schemaVersion = schemaVersion
@@ -57,7 +58,11 @@ public struct DFTResult: Sendable, Hashable, Codable, ArtifactProducing,
         self.artifacts = artifacts
         self.provenance = provenance
         self.payload = payload
-        self.evidence = EvidenceManifest(provenance: provenance, artifacts: artifacts)
+        self.evidence = EvidenceManifest(
+            id: evidenceID,
+            provenance: provenance,
+            artifacts: artifacts
+        )
     }
 
     public init(from decoder: Decoder) throws {
@@ -88,11 +93,7 @@ public struct DFTResult: Sendable, Hashable, Codable, ArtifactProducing,
         do {
             code = try DiagnosticCode(rawValue: diagnostic.code)
         } catch {
-            do {
-                code = try DiagnosticCode(rawValue: "dft.invalid-diagnostic-code")
-            } catch {
-                preconditionFailure("The built-in DFT diagnostic code must be valid.")
-            }
+            code = .trusted("dft.invalid-diagnostic-code")
         }
         let severity: DiagnosticSeverity
         switch diagnostic.severity {

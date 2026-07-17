@@ -19,31 +19,25 @@ let logicDesignDependency: Package.Dependency = isLSIWorkspace && FileManager.de
     atPath: workspaceRoot.appendingPathComponent("LogicDesign/Package.swift").path
 )
     ? .package(path: "../LogicDesign")
-    : .package(url: "https://github.com/1amageek/LogicDesign.git", revision: "698e54a6861cee247969d89df946d3b0f53c28ca")
+    : .package(url: "https://github.com/1amageek/LogicDesign.git", revision: "09768ed203d97d1d0f79f786f9988fcb2cd39155")
 
 let timingEngineDependency: Package.Dependency = isLSIWorkspace && FileManager.default.fileExists(
     atPath: workspaceRoot.appendingPathComponent("TimingEngine/Package.swift").path
 )
     ? .package(path: "../TimingEngine")
-    : .package(url: "https://github.com/1amageek/TimingEngine.git", revision: "144c8f7b26820fc7aeff819dd2f8c0d9378a463c")
+    : .package(url: "https://github.com/1amageek/TimingEngine.git", revision: "81898ed51ab05c62712ebca5b1b03869b89f7682")
 
 let pdkKitDependency: Package.Dependency = isLSIWorkspace && FileManager.default.fileExists(
     atPath: workspaceRoot.appendingPathComponent("PDKKit/Package.swift").path
 )
     ? .package(path: "../PDKKit")
-    : .package(url: "https://github.com/1amageek/PDKKit.git", revision: "b0d0ab30b044266e1ce3bd008dcec844e51f2302")
+    : .package(url: "https://github.com/1amageek/PDKKit.git", revision: "28f3b83304ad2bbb0c2e0269d26616081d90d992")
 
 let signoffToolSupportDependency: Package.Dependency = isLSIWorkspace && FileManager.default.fileExists(
     atPath: workspaceRoot.appendingPathComponent("SignoffToolSupport/Package.swift").path
 )
     ? .package(path: "../SignoffToolSupport")
     : .package(url: "https://github.com/1amageek/SignoffToolSupport.git", revision: "2c8ce00a8f873934e74e3f219e0cbd122a862fe9")
-
-let toolQualificationDependency: Package.Dependency = isLSIWorkspace && FileManager.default.fileExists(
-    atPath: workspaceRoot.appendingPathComponent("ToolQualification/Package.swift").path
-)
-    ? .package(path: "../ToolQualification")
-    : .package(url: "https://github.com/1amageek/ToolQualification.git", revision: "f6cacdbf64038a35ab62d70f575a8dd8349e5604")
 
 let package = Package(
     name: "DFTEngine",
@@ -62,7 +56,6 @@ let package = Package(
         timingEngineDependency,
         pdkKitDependency,
         signoffToolSupportDependency,
-        toolQualificationDependency,
     ],
     targets: [
         .target(
@@ -94,7 +87,6 @@ let package = Package(
             name: "BISTEngine",
             dependencies: [
                 "DFTCore",
-                .product(name: "ToolQualification", package: "ToolQualification"),
             ]
         ),
         .target(
@@ -119,7 +111,6 @@ let package = Package(
                 "ScanInsertion",
                 "ATPGEngine",
                 "BISTEngine",
-                .product(name: "ToolQualification", package: "ToolQualification"),
                 "DFTEngine",
             ],
             resources: [.copy("Fixtures")]

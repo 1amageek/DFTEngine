@@ -38,7 +38,7 @@ The native implementations are:
 |---|---|---|
 | `DeterministicScanInsertionEngine` | digest-verified gate snapshot transformation, scan plan, transformed design reference, design diff | Does not infer qualified clock/reset semantics, prove cell legality or prove functional equivalence |
 | `DeterministicATPGEngine` | declared-fault ATPG, extracted combinational stuck-at ATPG, bounded DFF/SDFF state ATPG, explicit reset/set contracts, level-sensitive latch semantics, directed combinational/sequential transition ATPG and injected process-specific fault-model evaluation | Unknown primitives and process-qualified timing block coverage; `supportedProcessFamilies` is declarative only and does not replace a separately qualified injected model |
-| `DeterministicBISTEngine` | canonical logic-BIST gate transformation, structure, design diff | Native memory macros and helper-cell legality remain blocked pending qualification; external memory execution requires an injected ToolQualification trust decision |
+| `DeterministicBISTEngine` | canonical logic-BIST gate transformation, structure, design diff | Native memory macros and helper-cell legality remain blocked pending qualification; external memory execution validates the typed DFT contract while the composing flow applies tool trust policy |
 | `DFTResult` | Domain result with direct `ArtifactProducing`, `EvidenceProviding`, and `DiagnosticReporting` conformance | Retains immutable artifacts, provenance, and typed diagnostics without projection |
 | `DefaultDFTEngine` | Direct `DFTEngineExecuting` implementation | Returns the domain-owned `DFTResult` |
 
@@ -79,11 +79,10 @@ revision. No umbrella repository is required.
 | Dependency | Local sibling | Remote fallback revision |
 |---|---|---|
 | CircuiteFoundation | `../CircuiteFoundation` | `2ec6ee13a89ac6885be3c26b41a9ee0ef89948ac` |
-| LogicDesign | `../LogicDesign` | `8e0c8c2c63152aa45bf12d943fa034bb1aba0f1e` |
-| TimingEngine | `../TimingEngine` | `5b2f711d355af8a204819c6ed33f98ef722e379c` |
-| PDKKit | `../PDKKit` | `aa145dfaa67454c44ac7767c37a28ab7f4b1d2e2` |
-| SignoffToolSupport | `../SignoffToolSupport` | `597c44065b6b717e903623adb8aabcf2ac367697` |
-| ToolQualification | `../ToolQualification` | `32b031b5322f1ccb0ef78466faab0f895d47c4fd` |
+| LogicDesign | `../LogicDesign` | `09768ed203d97d1d0f79f786f9988fcb2cd39155` |
+| TimingEngine | `../TimingEngine` | `81898ed51ab05c62712ebca5b1b03869b89f7682` |
+| PDKKit | `../PDKKit` | `28f3b83304ad2bbb0c2e0269d26616081d90d992` |
+| SignoffToolSupport | `../SignoffToolSupport` | `2c8ce00a8f873934e74e3f219e0cbd122a862fe9` |
 
 ```bash
 swift build
@@ -95,10 +94,10 @@ swift build
 timeout 240 xcodebuild test -scheme DFTEngine-Package -destination 'platform=macOS' -parallel-testing-enabled NO
 ```
 
-The current contract suite contains 43 tests in 6 suites. The test suite
+The current contract suite contains 52 tests in 6 suites. The test suite
 covers positive transformations, blocked prerequisites, standard-pattern
-round trips, external-tool identity checks, immutable artifact stores,
-Foundation evidence projection, oracle correlation and injected tool-trust enforcement.
+round trips, external-tool identity and exit checks, immutable artifact stores,
+Foundation evidence identity, oracle correlation and raw memory-BIST adapter validation.
 
 See `DESIGN.md`, `INTERFACES.md` and `IMPLEMENTATION_PLAN.md` before implementing a backend.
 
@@ -147,6 +146,9 @@ ToolQualification evaluates implementation trust from retained evidence. The
 composing DesignFlowKernel/Xcircuite flow owns downstream evidence policy,
 human approval, resume, and release eligibility. DFTEngine has no DFT-specific
 qualification or release-gate API.
+
+Release downstream evidence is composed by the flow layer. DFTEngine does not
+create, evaluate, or promote release bundles.
 
 Process-specific ATPG semantics are provided through the injected
 `DFTProcessFaultModeling` protocol. A declared process family without an

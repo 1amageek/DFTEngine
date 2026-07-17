@@ -8,7 +8,7 @@ The full platform goal is intentionally decomposed into the gates documented in 
 2. M1 canonical gate-level scan transformation — complete for the current LogicIR contract
 3. M2 scan clock/reset and cell-library semantics — in progress; explicit gate connectivity and Liberty timing/legal replacement validation slices delivered
 4. M3 gate-level ATPG and pattern validation — combinational stuck-at, bounded DFF/SDFF state-transition, explicit reset/set controls, qualified level-sensitive latch semantics, bounded combinational/sequential transition slices and an injected process-specific fault-model boundary delivered; unknown primitives and process qualification remain
-5. M4 canonical BIST insertion — logic target transformation, typed memory-macro backend protocol and process-qualified external-result gate delivered; native qualified memory backend remains
+5. M4 canonical BIST insertion — logic target transformation and typed memory-macro backend protocol delivered; external result integrity is domain-validated while process qualification remains flow-owned; native qualified memory backend remains
 6. M5 strict standard-pattern and external-tool execution — strict codec, timed/tree-cleaning process runner, stdout/stderr artifacts and typed DFT result persistence delivered; process/tool qualification remains
 7. M6 retained corpus and oracle correlation — raw correlation and evidence-provenance emission are delivered; independent retained process corpus remains
 8. M7 ToolQualification and flow handoff — direct DFT protocol consumption and raw evidence handoff are delivered; trust, downstream signoff policy, approval, and resume remain responsibilities of ToolQualification and the composing flow
@@ -35,7 +35,12 @@ The full platform goal is intentionally decomposed into the gates documented in 
   oracle-correlated observations without embedding a trust or release verdict.
 - Added retained oracle corpus contracts and correlation: normalized oracle expectation artifacts are read, byte-count/digest verified, decoded and compared against native typed results before correlation evidence is emitted.
 - Added a Liberty-backed scan-cell timing/legal replacement validator requiring scan pins, sequential D/Q/clock semantics, clock-to-Q timing and a legal replacement group.
-- Added a typed memory-macro BIST binding and external backend protocol; non-completed or non-process-qualified external results are rejected, and native memory transformation remains blocked until a qualified backend is supplied.
+- Added a typed memory-macro BIST binding and external backend protocol; non-completed or identity-mismatched external results are rejected, ToolQualification remains flow-owned, and native memory transformation remains blocked until a qualified backend is supplied.
+- Removed flow-owned review state from `DFTDesignDiff`; the current contract
+  contains raw structural changes and snapshot references only.
+- Rejected non-zero external exits before response decoding, bound external
+  provenance inputs to the request, and preserved Foundation evidence identity
+  when stdout/stderr artifacts are attached.
 - Preserved request digests in evidence provenance so ToolQualification and flow
   policy can bind observations to the exact DFT execution.
 - Defined the integration boundary: the composing runtime persists typed DFT

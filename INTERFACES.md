@@ -34,6 +34,10 @@ Process-specific fault semantics are injected through `DFTProcessFaultModeling`.
 
 Memory and logic BIST.
 
+`ExternalMemoryBISTAdapter` validates the memory-BIST operation, complete macro
+bindings, the shared external-result identity contract, and completed status.
+It does not import ToolQualification or decide whether a tool is trusted.
+
 ### DFTEngine
 
 Umbrella API.
@@ -62,3 +66,8 @@ integrity, evaluates ToolQualification requirements, invokes `DFTEngineExecuting
 and persists the returned `DFTResult`. Approval and resume remain flow
 responsibilities. `DFTEvidenceProvenance` is raw observation metadata and never
 constitutes a qualification or release decision.
+
+`DFTDesignDiff` carries raw structural changes and snapshot references only.
+DesignFlowKernel owns review state and approval transitions. Release evidence
+composition is provided by the composing flow and is not evaluated by
+DFTEngine.

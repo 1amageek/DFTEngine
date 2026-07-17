@@ -32,6 +32,13 @@ public struct DFTExternalToolExecutor: Sendable {
                 exitCode: 0
             )
         }
+        guard output.exitCode == 0 else {
+            throw DFTExternalToolError.nonZeroExit(
+                implementationID: runner.descriptor.implementationID,
+                exitCode: output.exitCode,
+                standardError: String(decoding: output.standardError, as: UTF8.self)
+            )
+        }
         let responseData = output.standardOutput
         let result: DFTResult
         do {
@@ -52,6 +59,9 @@ public struct DFTExternalToolExecutor: Sendable {
                 expected: request.runID,
                 actual: result.runID
             )
+        }
+        guard result.provenance.inputs == request.inputs else {
+            throw DFTExternalToolError.provenanceInputMismatch
         }
         guard result.provenance.producer.identifier == runner.descriptor.engineID else {
             throw DFTExternalToolError.descriptorMismatch(
@@ -119,6 +129,7 @@ public struct DFTExternalToolExecutor: Sendable {
             diagnostics: result.dftDiagnostics,
             artifacts: result.artifacts + [responseReference, stdoutReference, stderrReference],
             provenance: result.provenance,
+            evidenceID: result.evidence.id,
             payload: result.payload
         )
     }
