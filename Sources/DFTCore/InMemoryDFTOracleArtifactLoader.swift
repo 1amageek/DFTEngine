@@ -25,7 +25,7 @@ public actor InMemoryDFTOracleArtifactLoader: DFTOracleArtifactLoading {
             )
         }
         let expectedDigest = reference.digest.hexadecimalValue
-        let actualDigest = DFTHasher().sha256(data: data)
+        let actualDigest = try SHA256ContentDigester().digest(data: data).hexadecimalValue
         guard expectedDigest.caseInsensitiveCompare(actualDigest) == .orderedSame else {
             throw DFTOracleArtifactError.digestMismatch(
                 path: reference.path,

@@ -34,7 +34,7 @@ public actor FileSystemDFTOracleArtifactLoader: DFTOracleArtifactLoading {
                 actual: Int64(data.count)
             )
         }
-        let actualDigest = DFTHasher().sha256(data: data)
+        let actualDigest = try SHA256ContentDigester().digest(data: data).hexadecimalValue
         guard expectedDigest.caseInsensitiveCompare(actualDigest) == .orderedSame else {
             throw DFTOracleArtifactError.digestMismatch(
                 path: reference.path,

@@ -1,3 +1,4 @@
+import CircuiteFoundation
 import Foundation
 
 public struct FileSystemDFTCellLibraryLoader: DFTCellLibraryLoading {
@@ -29,7 +30,7 @@ public struct FileSystemDFTCellLibraryLoader: DFTCellLibraryLoading {
             )
         }
         let expected = reference.artifact.digest.hexadecimalValue
-        let actual = DFTHasher().sha256(data: data)
+        let actual = try SHA256ContentDigester().digest(data: data).hexadecimalValue
         guard actual == expected else {
             throw DFTCellLibraryError.artifactDigestMismatch(
                 path: reference.artifact.path,

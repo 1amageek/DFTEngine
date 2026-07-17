@@ -1,3 +1,4 @@
+import CircuiteFoundation
 import Foundation
 
 public enum DFTCellLibraryManifestCodec {
@@ -12,7 +13,7 @@ public enum DFTCellLibraryManifestCodec {
     }
 
     public static func digest(_ manifest: DFTCellLibraryManifest) throws -> String {
-        DFTHasher().sha256(data: try encode(manifest))
+        try SHA256ContentDigester().digest(data: encode(manifest)).hexadecimalValue
     }
 
     public static func validate(_ manifest: DFTCellLibraryManifest) throws {

@@ -101,6 +101,15 @@ struct DFTExecutionContractTests {
         #expect(executed == result)
         #expect(executed.provenance.producer.identifier == "dft.atpg")
         #expect(executed.provenance.randomSeed == 7)
+        let evidenceID = executed.evidence.id
+        #expect(executed.evidence.id == evidenceID)
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let decoded = try decoder.decode(
+            DFTResult.self,
+            from: DFTArtifactJSONEncoder().encode(executed)
+        )
+        #expect(decoded.evidence.id == evidenceID)
     }
 }
 

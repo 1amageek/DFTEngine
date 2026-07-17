@@ -170,7 +170,7 @@ public struct DeterministicBISTEngine: BISTExecuting {
                     actions: ["repair_bist_target_bindings", "repair_gate_connectivity", "qualify_bist_helper_cells"]
                 )
             }
-            let seed = configuration.randomSeed
+            let seed = try configuration.randomSeed
                 ?? DFTDeterministicHasher().seed(for: "\(request.design.designDigest):\(configuration.name)")
             let structure = DFTBISTStructure(
                 name: configuration.name,

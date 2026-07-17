@@ -178,7 +178,7 @@ public struct DeterministicATPGEngine: ATPGExecuting {
             }
 
             let universeDigest = try DFTDeterministicHasher().digest(universe)
-            let seed = configuration.randomSeed ?? DFTDeterministicHasher().seed(for: universeDigest)
+            let seed = try configuration.randomSeed ?? DFTDeterministicHasher().seed(for: universeDigest)
             let excluded = Set(universe.excludedFaultIDs)
             let activeFaults = universe.faults
                 .filter { !excluded.contains($0.id) }
@@ -528,7 +528,7 @@ public struct DeterministicATPGEngine: ATPGExecuting {
                 let patternID = "pattern-\(index + 1)"
                 let pattern = DFTTestPattern(
                     id: patternID,
-                    bits: patternBits(for: fault.id, seed: seed, length: configuration.patternLength),
+                    bits: try patternBits(for: fault.id, seed: seed, length: configuration.patternLength),
                     faultIDs: [fault.id]
                 )
                 patterns.append(pattern)
@@ -1113,10 +1113,10 @@ public struct DeterministicATPGEngine: ATPGExecuting {
         }
     }
 
-    private func patternBits(for faultID: String, seed: UInt64, length: Int) -> String {
-        let digest = DFTHasher().sha256(
-            data: Data("\(seed):\(faultID)".utf8)
-        )
+    private func patternBits(for faultID: String, seed: UInt64, length: Int) throws -> String {
+        let digest = try SHA256ContentDigester()
+            .digest(data: Data("\(seed):\(faultID)".utf8))
+            .hexadecimalValue
         let bytes = Array(digest.utf8)
         return (0..<length).map { index in
             let byte = bytes[index % bytes.count]

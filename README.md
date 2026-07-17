@@ -78,11 +78,11 @@ revision. No umbrella repository is required.
 
 | Dependency | Local sibling | Remote fallback revision |
 |---|---|---|
-| CircuiteFoundation | `../CircuiteFoundation` | `2ec6ee13a89ac6885be3c26b41a9ee0ef89948ac` |
-| LogicDesign | `../LogicDesign` | `09768ed203d97d1d0f79f786f9988fcb2cd39155` |
-| TimingEngine | `../TimingEngine` | `81898ed51ab05c62712ebca5b1b03869b89f7682` |
-| PDKKit | `../PDKKit` | `28f3b83304ad2bbb0c2e0269d26616081d90d992` |
-| SignoffToolSupport | `../SignoffToolSupport` | `2c8ce00a8f873934e74e3f219e0cbd122a862fe9` |
+| CircuiteFoundation | `../CircuiteFoundation` | `7abcac83517935c9b9f7553d7016d62cffde259d` |
+| LogicDesign | `../LogicDesign` | `b9aa25b0b78e6168befa25df3bfe8309bd020a6d` |
+| TimingEngine | `../TimingEngine` | `baada25223ccc1225afefa672120ba0d7d1d5d41` |
+| PDKKit | `../PDKKit` | `b62c5ad7e5819a24977038c2133856caed52f481` |
+| SignoffToolSupport | `../SignoffToolSupport` | `9a00065522ae527342c87380f0e7faa87e7cca9f` |
 
 ```bash
 swift build

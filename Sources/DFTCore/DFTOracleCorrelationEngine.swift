@@ -68,7 +68,9 @@ public struct DFTOracleCorrelationEngine: DFTOracleCorrelating {
             processID: corpus.processID,
             pdkDigest: corpus.pdkDigest,
             corpusDigest: corpusDigest,
-            oracleEvidenceDigest: DFTHasher().sha256(data: Data(evidenceMaterial.utf8)),
+            oracleEvidenceDigest: try SHA256ContentDigester()
+                .digest(data: Data(evidenceMaterial.utf8))
+                .hexadecimalValue,
             status: status,
             totalCaseCount: corpus.cases.count,
             passedCaseCount: passedCaseCount,
