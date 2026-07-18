@@ -90,13 +90,18 @@ public struct GateLevelSequentialSimulator: GateLevelSequentialSimulating {
                 ) ?? value
             }
             for binding in sequentialState {
+                let (outputNet, stateValue) = try resolvedOutputState(
+                    for: binding,
+                    netsByID: netsByID,
+                    state: state
+                )
                 values[binding.outputNetID] = forcedValue(
-                    for: netsByID[binding.outputNetID]!,
+                    for: outputNet,
                     fault: fault,
                     transitionFault: transitionFault,
                     transitionHoldValue: transitionHoldValue,
                     transitionActive: transitionActive
-                ) ?? state[binding.outputNetID]!
+                ) ?? stateValue
             }
 
             try evaluateCombinationalCells(
@@ -140,13 +145,18 @@ public struct GateLevelSequentialSimulator: GateLevelSequentialSimulating {
                 }
                 if stateBeforeControl != nextState[binding.outputNetID] {
                     asynchronousControlChanged = true
+                    let (outputNet, stateValue) = try resolvedOutputState(
+                        for: binding,
+                        netsByID: netsByID,
+                        state: nextState
+                    )
                     values[binding.outputNetID] = forcedValue(
-                        for: netsByID[binding.outputNetID]!,
+                        for: outputNet,
                         fault: fault,
                         transitionFault: transitionFault,
                         transitionHoldValue: transitionHoldValue,
                         transitionActive: transitionActive
-                    ) ?? nextState[binding.outputNetID]!
+                    ) ?? stateValue
                 }
             }
             if asynchronousControlChanged {
@@ -225,8 +235,14 @@ public struct GateLevelSequentialSimulator: GateLevelSequentialSimulating {
                             pin: nextNetID == binding.dataNetID ? "D" : "SI"
                         )
                     }
+                    guard let outputNet = netsByID[binding.outputNetID] else {
+                        throw GateLevelSimulationError.outputValueMissing(
+                            instance: binding.instanceName,
+                            pin: "Q"
+                        )
+                    }
                     nextState[binding.outputNetID] = forcedValue(
-                        for: netsByID[binding.outputNetID]!,
+                        for: outputNet,
                         fault: fault,
                         transitionFault: transitionFault,
                         transitionHoldValue: transitionHoldValue,
@@ -251,6 +267,26 @@ public struct GateLevelSequentialSimulator: GateLevelSequentialSimulating {
             finalState: state,
             netValues: netObservations
         )
+    }
+
+    private func resolvedOutputState(
+        for binding: SequentialStateBinding,
+        netsByID: [String: GateNet],
+        state: [String: Bool]
+    ) throws -> (net: GateNet, value: Bool) {
+        guard let outputNet = netsByID[binding.outputNetID] else {
+            throw GateLevelSimulationError.outputValueMissing(
+                instance: binding.instanceName,
+                pin: "Q"
+            )
+        }
+        guard let stateValue = state[binding.outputNetID] else {
+            throw GateLevelSimulationError.inputValueMissing(
+                instance: binding.instanceName,
+                pin: "Q"
+            )
+        }
+        return (outputNet, stateValue)
     }
 
     private func makeStateBinding(

@@ -19,7 +19,7 @@ public struct GateLevelTransitionSimulator: GateLevelTransitionSimulating {
         guard fault.family == .transition else {
             throw GateLevelSimulationError.unsupportedFaultFamily(fault.family)
         }
-        guard fault.transitionDirection != nil else {
+        guard let transitionDirection = fault.transitionDirection else {
             throw GateLevelSimulationError.transitionDirectionMissing(fault.id)
         }
         guard let gate = snapshot.gate,
@@ -48,7 +48,7 @@ public struct GateLevelTransitionSimulator: GateLevelTransitionSimulating {
         let launchValue = try value(for: targetNet, in: launchGood.values, faultID: fault.id)
         let captureValue = try value(for: targetNet, in: captureGood.values, faultID: fault.id)
         let shouldHold = transitionShouldHold(
-            direction: fault.transitionDirection!,
+            direction: transitionDirection,
             launchValue: launchValue,
             captureValue: captureValue
         )
@@ -77,7 +77,7 @@ public struct GateLevelTransitionSimulator: GateLevelTransitionSimulating {
         guard fault.family == .transition else {
             throw GateLevelSimulationError.unsupportedFaultFamily(fault.family)
         }
-        guard fault.transitionDirection != nil else {
+        guard let transitionDirection = fault.transitionDirection else {
             throw GateLevelSimulationError.transitionDirectionMissing(fault.id)
         }
         guard let gate = snapshot.gate,
@@ -108,7 +108,7 @@ public struct GateLevelTransitionSimulator: GateLevelTransitionSimulating {
             throw GateLevelSimulationError.faultLocationMissing(fault.location)
         }
         let shouldHold = transitionShouldHold(
-            direction: fault.transitionDirection!,
+            direction: transitionDirection,
             launchValue: launchValue,
             captureValue: captureValue
         )
