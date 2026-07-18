@@ -27,6 +27,14 @@ public struct DefaultDFTEngine: DFTEngineExecuting {
         )
     }
 
+    public init(designLoader: any DFTDesignLoading) {
+        self.init(
+            scanInsertion: DeterministicScanInsertionEngine(designLoader: designLoader),
+            atpg: DeterministicATPGEngine(designLoader: designLoader),
+            bist: DeterministicBISTEngine(designLoader: designLoader)
+        )
+    }
+
     public init(
         artifactStore: any DFTArtifactStoring,
         designLoader: any DFTDesignLoading,
