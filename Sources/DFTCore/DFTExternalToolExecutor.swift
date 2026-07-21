@@ -60,7 +60,7 @@ public struct DFTExternalToolExecutor: Sendable {
                 actual: result.runID
             )
         }
-        guard result.provenance.inputs == request.inputs else {
+        guard result.provenance.inputs == request.executionInputArtifacts else {
             throw DFTExternalToolError.provenanceInputMismatch
         }
         guard result.provenance.producer.identifier == runner.descriptor.engineID else {

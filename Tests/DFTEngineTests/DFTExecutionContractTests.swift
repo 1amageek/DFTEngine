@@ -99,7 +99,8 @@ struct DFTExecutionContractTests {
         let executed = try await StubDFTEngine(result: result).execute(request)
 
         #expect(executed == result)
-        #expect(executed.provenance.producer.identifier == "dft.atpg")
+        #expect(executed.provenance.producer.identifier == "fixture")
+        #expect(executed.provenance.producer.build == "dft.atpg")
         #expect(executed.provenance.randomSeed == 7)
         let evidenceID = executed.evidence.id
         #expect(executed.evidence.id == evidenceID)

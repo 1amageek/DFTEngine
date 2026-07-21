@@ -18,9 +18,9 @@ public struct DFTExecutionSupport: Sendable {
         try ExecutionProvenance(
             producer: ProducerIdentity(
                 kind: .engine,
-                identifier: engineID,
+                identifier: implementationID,
                 version: implementationVersion,
-                build: implementationID
+                build: engineID
             ),
             inputs: inputs,
             invocation: ExecutionInvocation.inProcess(
@@ -66,7 +66,7 @@ public struct DFTExecutionSupport: Sendable {
             provenance: try provenance(
                 engineID: engineID,
                 implementationID: implementationID,
-                inputs: request.inputs,
+                inputs: request.executionInputArtifacts,
                 startedAt: startedAt,
                 completedAt: Date(),
                 seed: seed

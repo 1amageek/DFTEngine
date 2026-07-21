@@ -1,6 +1,6 @@
 # DFTEngine Milestones
 
-DFTEngine is a semiconductor design-platform component, not a pattern generator demo. Each milestone must leave a reproducible artifact, a structured failure path and a developer-facing regression test. A capability is not considered complete merely because a type or adapter exists.
+DFTEngine is a semiconductor design-platform component, not a pattern generator demo. Each milestone must leave a reproducible artifact, a structured failure path and a developer-facing regression test. A capability is not considered complete merely because a type or external engine exists.
 
 ## Milestone map
 

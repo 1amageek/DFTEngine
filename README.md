@@ -97,7 +97,7 @@ timeout 240 xcodebuild test -scheme DFTEngine-Package -destination 'platform=mac
 The current contract suite contains 52 tests in 6 suites. The test suite
 covers positive transformations, blocked prerequisites, standard-pattern
 round trips, external-tool identity and exit checks, immutable artifact stores,
-Foundation evidence identity, oracle correlation and raw memory-BIST adapter validation.
+Foundation evidence identity, oracle correlation and raw memory-BIST engine validation.
 
 See `DESIGN.md`, `INTERFACES.md` and `IMPLEMENTATION_PLAN.md` before implementing a backend.
 

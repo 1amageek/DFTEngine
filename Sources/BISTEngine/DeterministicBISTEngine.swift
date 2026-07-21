@@ -87,9 +87,9 @@ public struct DeterministicBISTEngine: BISTExecuting {
                         engineID: engineID,
                         startedAt: startedAt,
                         code: "DFT_BIST_MEMORY_BINDINGS_MISSING",
-                        message: "Memory BIST requires complete macro port bindings before an external qualified adapter can run.",
+                        message: "Memory BIST requires complete macro port bindings before an external qualified engine can run.",
                         entity: "bistConfiguration.memoryBindings",
-                        actions: ["declare_memory_macro_bindings", "inject_a_qualified_memory_bist_adapter"]
+                        actions: ["declare_memory_macro_bindings", "inject_a_qualified_memory_bist_engine"]
                     )
                 }
                 return try blocked(
@@ -97,9 +97,9 @@ public struct DeterministicBISTEngine: BISTExecuting {
                     engineID: engineID,
                     startedAt: startedAt,
                     code: "DFT_BIST_MEMORY_MACRO_UNSUPPORTED",
-                    message: "Native BIST does not transform memory macros; the declared macro binding must be executed by a qualified external adapter.",
+                    message: "Native BIST does not transform memory macros; the declared macro binding must be executed by a qualified external engine.",
                     entity: "bistConfiguration.kind",
-                    actions: ["inject_memory_bist_adapter", "use_a_qualified_external_backend"]
+                    actions: ["inject_memory_bist_engine", "use_a_qualified_external_backend"]
                 )
             }
             guard configuration.targetBindings?.isEmpty == false else {
@@ -344,7 +344,7 @@ public struct DeterministicBISTEngine: BISTExecuting {
             ],
             limitations: [
                 "The native logic path transforms a bounded canonical gate contract; helper cells require process evidenceProvenance.",
-                "Memory BIST remains blocked without a qualified macro adapter.",
+                "Memory BIST remains blocked without a qualified macro engine.",
                 "The generated structure does not claim functional equivalence until a downstream gate approves it."
             ],
             evidenceProvenance: evidenceProvenance

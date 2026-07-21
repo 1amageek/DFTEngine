@@ -27,10 +27,10 @@ public extension DFTRequest {
                 suggestedActions: ["provide_a_path_safe_run_id"]
             ))
         }
-        if let declaredOperation = self.operation, declaredOperation != operation {
+        if self.operation != operation {
             issues.append(DFTRequestValidationIssue(
                 code: "DFT_OPERATION_MISMATCH",
-                message: "The request declares \(declaredOperation.rawValue) but the executor is \(operation.rawValue).",
+                message: "The request declares \(self.operation.rawValue) but the executor is \(operation.rawValue).",
                 entity: "operation",
                 suggestedActions: ["use_matching_executor"]
             ))
@@ -242,9 +242,9 @@ public extension DFTRequest {
                       bistConfiguration?.memoryBindings == nil {
                 issues.append(DFTRequestValidationIssue(
                     code: "DFT_BIST_MEMORY_BINDINGS_MISSING",
-                    message: "Memory BIST requires explicit macro port bindings for an external qualified adapter.",
+                    message: "Memory BIST requires explicit macro port bindings for an external qualified engine.",
                     entity: "bistConfiguration.memoryBindings",
-                    suggestedActions: ["declare_memory_macro_bindings", "inject_a_qualified_memory_bist_adapter"]
+                    suggestedActions: ["declare_memory_macro_bindings", "inject_a_qualified_memory_bist_engine"]
                 ))
             }
         }

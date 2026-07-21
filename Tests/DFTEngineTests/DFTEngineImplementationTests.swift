@@ -734,8 +734,8 @@ struct DFTEngineImplementationTests {
         #expect(transformedSnapshot.gate?.modules.first?.ports.contains { $0.name == "bist_logic_bist_signature" } == true)
     }
 
-    @Test("memory BIST requires a complete macro adapter boundary")
-    func memoryBISTRequiresAdapterBoundary() async throws {
+    @Test("memory BIST requires a complete external engine boundary")
+    func memoryBISTRequiresExternalEngineBoundary() async throws {
         let base = DFTBISTConfiguration(
             name: "mbist",
             kind: .memory,
@@ -789,10 +789,10 @@ struct DFTEngineImplementationTests {
                 evidenceProvenance: DFTEvidenceProvenance(status: .smokeObserved)
             )
         )
-        let adapterResult = try await ExternalMemoryBISTAdapter(
+        let backendResult = try await ExternalMemoryBISTEngine(
             runner: StubExternalRunner(response: try DFTArtifactJSONEncoder().encode(externalResponse))
         ).execute(memoryRequest)
-        #expect(adapterResult.status == .completed)
+        #expect(backendResult.status == .completed)
     }
 
     @Test("request and payload contracts round-trip through JSON")
@@ -979,8 +979,8 @@ struct DFTEngineImplementationTests {
         #expect(String(decoding: response, as: UTF8.self) == "{\"request\":true}")
     }
 
-    @Test("external ATPG adapter preserves the shared envelope")
-    func externalAdapter() async throws {
+    @Test("external ATPG engine preserves the shared result")
+    func externalEngine() async throws {
         let request = makeRequest(
             operation: .atpg,
             scanArchitecture: scanArchitecture(),
@@ -1003,7 +1003,7 @@ struct DFTEngineImplementationTests {
         )
         let runner = StubExternalRunner(response: try DFTArtifactJSONEncoder().encode(expected))
 
-        let result = try await ExternalATPGAdapter(runner: runner).execute(request)
+        let result = try await ExternalATPGEngine(runner: runner).execute(request)
 
         #expect(result.status == DFTExecutionStatus.blocked)
         #expect(result.runID == request.runID)

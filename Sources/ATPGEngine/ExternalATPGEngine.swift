@@ -1,7 +1,7 @@
 import DFTCore
 import Foundation
 
-public struct ExternalATPGAdapter: ATPGExecuting {
+public struct ExternalATPGEngine: ATPGExecuting {
     public let executor: DFTExternalToolExecutor
 
     public init(
@@ -14,6 +14,12 @@ public struct ExternalATPGAdapter: ATPGExecuting {
     public func execute(
         _ request: DFTRequest
     ) async throws -> DFTResult {
-        try await executor.execute(request)
+        guard request.operation == .atpg else {
+            throw DFTExternalToolError.operationMismatch(
+                expected: DFTOperation.atpg.rawValue,
+                actual: request.operation.rawValue
+            )
+        }
+        return try await executor.execute(request)
     }
 }

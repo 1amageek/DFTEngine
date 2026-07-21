@@ -36,7 +36,7 @@ M0 native backends operate on declared, machine-readable DFT metadata. M1 scan i
 
 Kernel availability, corpus validation, oracle correlation, process-scoped qualification and release approval are distinct states. The package reports capability and evidence; Xcircuite and ToolQualification apply flow policy.
 
-External DFT adapters validate request/result identity, operation-specific
+External DFT engines validate request/result identity, operation-specific
 preconditions, process exit status and raw completion status. They do not
 import ToolQualification or apply release policy.
 

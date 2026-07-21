@@ -34,7 +34,7 @@ Process-specific fault semantics are injected through `DFTProcessFaultModeling`.
 
 Memory and logic BIST.
 
-`ExternalMemoryBISTAdapter` validates the memory-BIST operation, complete macro
+`ExternalMemoryBISTEngine` validates the memory-BIST operation, complete macro
 bindings, the shared external-result identity contract, and completed status.
 It does not import ToolQualification or decide whether a tool is trusted.
 

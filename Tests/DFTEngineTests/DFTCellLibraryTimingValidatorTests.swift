@@ -15,7 +15,7 @@ struct DFTCellLibraryTimingValidatorTests {
         )
         let library = TimingLibrary(
             name: "fixture-liberty",
-            cells: ["SDFF": timingCell()]
+            cells: ["SDFF": try timingCell()]
         )
 
         let result = try DFTCellLibraryTimingValidator().validate(
@@ -38,7 +38,7 @@ struct DFTCellLibraryTimingValidatorTests {
             bindings: [binding()],
             evidenceProvenance: DFTEvidenceProvenance(status: .corpusObserved)
         )
-        var cell = timingCell()
+        var cell = try timingCell()
         cell.sequentialModel?.clockToQ = nil
         let library = TimingLibrary(name: "fixture-liberty", cells: ["SDFF": cell])
 
@@ -68,15 +68,16 @@ struct DFTCellLibraryTimingValidatorTests {
         )
     }
 
-    private func timingCell() -> TimingCell {
+    private func timingCell() throws -> TimingCell {
+        let constantTiming = try TimingLUT.constant(0.1)
         let arc = TimingArc(
             fromPin: "CLK",
             toPin: "Q",
             sense: .positiveUnate,
-            delayRise: .constant(0.1),
-            delayFall: .constant(0.1),
-            transitionRise: .constant(0.1),
-            transitionFall: .constant(0.1)
+            delayRise: constantTiming,
+            delayFall: constantTiming,
+            transitionRise: constantTiming,
+            transitionFall: constantTiming
         )
         return TimingCell(
             name: "SDFF",

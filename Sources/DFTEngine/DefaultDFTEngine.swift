@@ -81,31 +81,7 @@ public struct DefaultDFTEngine: DFTEngineExecuting {
     public func execute(
         _ request: DFTRequest
     ) async throws -> DFTResult {
-        guard let operation = request.operation else {
-            return try DFTExecutionSupport.result(
-                request: request,
-                engineID: "dft",
-                implementationID: "default-router",
-                status: .blocked,
-                diagnostics: [
-                    DFTDiagnostic(
-                        severity: .error,
-                        code: "DFT_OPERATION_MISSING",
-                        message: "The umbrella DFT engine requires an explicit operation.",
-                        entity: "operation",
-                        suggestedActions: ["select_scan_insertion_atpg_or_bist"]
-                    )
-                ],
-                payload: DFTPayload(
-                    transformedDesign: nil,
-                    faultCoverage: nil,
-                    evidenceProvenance: evidenceProvenance,
-                    assumptions: ["no domain executor was selected"]
-                ),
-                startedAt: Date()
-            )
-        }
-        switch operation {
+        switch request.operation {
         case .scanInsertion:
             return try await scanInsertion.execute(request)
         case .atpg:

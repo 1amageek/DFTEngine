@@ -1,7 +1,7 @@
 import DFTCore
 import Foundation
 
-public struct ExternalMemoryBISTAdapter: BISTExecuting, DFTMemoryBISTExecuting {
+public struct ExternalMemoryBISTEngine: BISTExecuting, DFTMemoryBISTExecuting {
     public let executor: DFTExternalToolExecutor
 
     public init(
@@ -15,19 +15,19 @@ public struct ExternalMemoryBISTAdapter: BISTExecuting, DFTMemoryBISTExecuting {
         _ request: DFTRequest
     ) async throws -> DFTResult {
         guard request.operation == .bist else {
-            throw DFTMemoryBISTAdapterError.operationMismatch
+            throw DFTMemoryBISTExecutionError.operationMismatch
         }
         guard let configuration = request.bistConfiguration,
               configuration.kind == .memory else {
-            throw DFTMemoryBISTAdapterError.configurationMissing
+            throw DFTMemoryBISTExecutionError.configurationMissing
         }
         guard configuration.memoryBindings?.isEmpty == false,
               configuration.memoryBindings?.allSatisfy(\.isStructurallyComplete) == true else {
-            throw DFTMemoryBISTAdapterError.bindingsMissing
+            throw DFTMemoryBISTExecutionError.bindingsMissing
         }
         let result = try await executor.execute(request)
         guard result.status == .completed else {
-            throw DFTMemoryBISTAdapterError.resultNotCompleted(result.status)
+            throw DFTMemoryBISTExecutionError.resultNotCompleted(result.status)
         }
         return result
     }

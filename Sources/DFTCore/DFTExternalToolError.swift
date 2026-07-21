@@ -2,6 +2,7 @@ import Foundation
 
 public enum DFTExternalToolError: Error, LocalizedError, Sendable, Hashable {
     case requestEncodingFailed(String)
+    case operationMismatch(expected: String, actual: String)
     case responseDecodingFailed(String)
     case nonZeroExit(implementationID: String, exitCode: Int32, standardError: String)
     case runIDMismatch(expected: String, actual: String)
@@ -19,6 +20,8 @@ public enum DFTExternalToolError: Error, LocalizedError, Sendable, Hashable {
         switch self {
         case .requestEncodingFailed(let message):
             return "External DFT request could not be encoded: \(message)."
+        case .operationMismatch(let expected, let actual):
+            return "External DFT engine requires operation \(expected), but the request declares \(actual)."
         case .responseDecodingFailed(let message):
             return "External DFT response could not be decoded: \(message)."
         case .nonZeroExit(let implementationID, let exitCode, let standardError):

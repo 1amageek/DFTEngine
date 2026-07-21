@@ -16,7 +16,7 @@ public struct DFTRequest: DFTExecutionRequest {
     public var pdk: PDKReference
     public var cellLibrary: DFTCellLibraryReference?
 
-    public var operation: DFTOperation?
+    public var operation: DFTOperation
     public var testIntent: DFTTestIntent?
     public var scanArchitecture: DFTScanArchitecture?
     public var insertionPolicy: DFTScanInsertionPolicy?
@@ -31,7 +31,7 @@ public struct DFTRequest: DFTExecutionRequest {
         constraints: DFTConstraintReference,
         pdk: PDKReference,
         cellLibrary: DFTCellLibraryReference? = nil,
-        operation: DFTOperation? = nil,
+        operation: DFTOperation,
         testIntent: DFTTestIntent? = nil,
         scanArchitecture: DFTScanArchitecture? = nil,
         insertionPolicy: DFTScanInsertionPolicy? = nil,
@@ -53,5 +53,14 @@ public struct DFTRequest: DFTExecutionRequest {
         self.faultUniverse = faultUniverse
         self.atpgConfiguration = atpgConfiguration
         self.bistConfiguration = bistConfiguration
+    }
+
+    public var executionInputArtifacts: [ArtifactReference] {
+        var references = inputs + [design.artifact, constraints.artifact, pdk.manifest]
+        if let cellLibrary {
+            references.append(cellLibrary.artifact)
+        }
+        var identities = Set<ArtifactReference>()
+        return references.filter { identities.insert($0).inserted }
     }
 }
