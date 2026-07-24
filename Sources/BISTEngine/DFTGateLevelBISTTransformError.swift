@@ -8,6 +8,9 @@ public enum DFTGateLevelBISTTransformError: Error, LocalizedError, Sendable, Has
     case clockNetMissing(String)
     case controlSignalConflict(String)
     case targetBindingsMissing
+    case cellMappingMissing
+    case cellMappingInvalid(String)
+    case targetSetMismatch
     case duplicateTargetBinding(String)
     case targetInstanceMissing(String)
     case pinMissing(instance: String, pin: String)
@@ -32,6 +35,12 @@ public enum DFTGateLevelBISTTransformError: Error, LocalizedError, Sendable, Has
             return "BIST control signal \(name) conflicts with an existing non-input port."
         case .targetBindingsMissing:
             return "Canonical logic BIST requires explicit target input/output pin bindings."
+        case .cellMappingMissing:
+            return "Canonical logic BIST requires a process-bound helper-cell mapping."
+        case .cellMappingInvalid(let reason):
+            return "Canonical logic BIST helper-cell mapping is invalid: \(reason)."
+        case .targetSetMismatch:
+            return "Logic BIST target instances do not exactly match the bound target instances."
         case .duplicateTargetBinding(let name):
             return "BIST target instance \(name) is bound more than once."
         case .targetInstanceMissing(let name):

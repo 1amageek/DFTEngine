@@ -140,6 +140,21 @@ public extension DFTRequest {
                 cellLibrary.artifact,
                 entity: "cellLibrary.artifact"
             ))
+            if let timingLibraryArtifact = cellLibrary.timingLibraryArtifact {
+                issues.append(contentsOf: validateArtifact(
+                    timingLibraryArtifact,
+                    entity: "cellLibrary.timingLibraryArtifact"
+                ))
+                if timingLibraryArtifact.format != .liberty
+                    && timingLibraryArtifact.format != .json {
+                    issues.append(DFTRequestValidationIssue(
+                        code: "DFT_TIMING_LIBRARY_FORMAT_UNSUPPORTED",
+                        message: "Cell timing must be supplied as Liberty or canonical TimingLibrary JSON.",
+                        entity: "cellLibrary.timingLibraryArtifact",
+                        suggestedActions: ["attach_liberty_timing_library"]
+                    ))
+                }
+            }
             if cellLibrary.processID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                 || cellLibrary.version.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 issues.append(DFTRequestValidationIssue(
@@ -192,8 +207,38 @@ public extension DFTRequest {
                     entity: "insertionPolicy.scanCellName",
                     suggestedActions: ["declare_scan_cell_name"]
                 ))
+            } else if insertionPolicy?.preserveFunctionalPorts == false {
+                issues.append(DFTRequestValidationIssue(
+                    code: "DFT_SCAN_PORT_REMOVAL_UNSUPPORTED",
+                    message: "The native scan transformer preserves functional ports and cannot honor a port-removal policy.",
+                    entity: "insertionPolicy.preserveFunctionalPorts",
+                    suggestedActions: ["preserve_functional_ports", "select_a_qualified_external_backend"]
+                ))
+            } else if insertionPolicy?.allowUnknownCells == true {
+                issues.append(DFTRequestValidationIssue(
+                    code: "DFT_UNKNOWN_SCAN_CELLS_UNSUPPORTED",
+                    message: "Unknown sequential cells cannot be accepted without an explicit process-scoped cell binding.",
+                    entity: "insertionPolicy.allowUnknownCells",
+                    suggestedActions: ["provide_complete_scan_cell_bindings", "disable_unknown_cell_acceptance"]
+                ))
+            }
+            if cellLibrary?.timingLibraryArtifact == nil {
+                issues.append(DFTRequestValidationIssue(
+                    code: "DFT_TIMING_LIBRARY_MISSING",
+                    message: "Scan insertion requires timing evidence for every replacement cell.",
+                    entity: "cellLibrary.timingLibraryArtifact",
+                    suggestedActions: ["attach_liberty_timing_library"]
+                ))
             }
         case .atpg:
+            if cellLibrary != nil && cellLibrary?.timingLibraryArtifact == nil {
+                issues.append(DFTRequestValidationIssue(
+                    code: "DFT_TIMING_LIBRARY_MISSING",
+                    message: "ATPG requires timing evidence when process-scoped sequential semantics are used.",
+                    entity: "cellLibrary.timingLibraryArtifact",
+                    suggestedActions: ["attach_liberty_timing_library"]
+                ))
+            }
             if scanArchitecture == nil {
                 issues.append(DFTRequestValidationIssue(
                     code: "DFT_SCAN_ARCHITECTURE_MISSING",
@@ -238,6 +283,9 @@ public extension DFTRequest {
                     entity: "bistConfiguration.targetBindings",
                     suggestedActions: ["declare_bist_target_pin_bindings", "use_a_declared_structure_only_in_an_external_backend"]
                 ))
+            } else if let configuration = bistConfiguration,
+                      configuration.kind == .logic {
+                issues.append(contentsOf: validateLogicBISTConfiguration(configuration))
             } else if bistConfiguration?.kind == .memory,
                       bistConfiguration?.memoryBindings == nil {
                 issues.append(DFTRequestValidationIssue(
@@ -249,6 +297,77 @@ public extension DFTRequest {
             }
         }
 
+        return issues
+    }
+
+    private func validateLogicBISTConfiguration(
+        _ configuration: DFTBISTConfiguration
+    ) -> [DFTRequestValidationIssue] {
+        var issues: [DFTRequestValidationIssue] = []
+        guard let mapping = configuration.logicCellMapping else {
+            return [DFTRequestValidationIssue(
+                code: "DFT_BIST_CELL_MAPPING_MISSING",
+                message: "Native logic BIST requires a process-bound mapping for every generated helper-cell role.",
+                entity: "bistConfiguration.logicCellMapping",
+                suggestedActions: ["attach_logic_bist_cell_mapping", "select_a_qualified_external_backend"]
+            )]
+        }
+        issues.append(contentsOf: validateArtifact(
+            mapping.artifact,
+            entity: "bistConfiguration.logicCellMapping.artifact"
+        ))
+        guard mapping.processID == pdk.processID,
+              mapping.pdkDigest.caseInsensitiveCompare(pdk.digest) == .orderedSame else {
+            issues.append(DFTRequestValidationIssue(
+                code: "DFT_BIST_CELL_MAPPING_PDK_MISMATCH",
+                message: "Logic BIST cell mapping must identify the exact request PDK.",
+                entity: "bistConfiguration.logicCellMapping",
+                suggestedActions: ["select_a_pdk_bound_bist_mapping"]
+            ))
+            return issues
+        }
+        let cellTypes = [
+            mapping.controllerCellType,
+            mapping.inputMuxCellType,
+            mapping.responseCaptureCellType,
+            mapping.responseCompactorCellType,
+            mapping.signatureRegisterCellType,
+        ]
+        if cellTypes.contains(where: {
+            $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        }) || mapping.controllerCellType != configuration.controllerCellName {
+            issues.append(DFTRequestValidationIssue(
+                code: "DFT_BIST_CELL_MAPPING_INVALID",
+                message: "Logic BIST helper-cell types must be non-empty and the controller mapping must match the requested controller.",
+                entity: "bistConfiguration.logicCellMapping",
+                suggestedActions: ["repair_logic_bist_cell_mapping"]
+            ))
+        }
+        let targetInstances = Set(configuration.targetInstances)
+        let bindingInstances = Set(configuration.targetBindings?.map(\.instanceName) ?? [])
+        if targetInstances.isEmpty || targetInstances != bindingInstances {
+            issues.append(DFTRequestValidationIssue(
+                code: "DFT_BIST_TARGET_SET_MISMATCH",
+                message: "Logic BIST target instances must exactly match the bound target instances.",
+                entity: "bistConfiguration.targetInstances",
+                suggestedActions: ["align_bist_targets_and_bindings"]
+            ))
+        }
+        if mapping.prpgPolynomialTaps.isEmpty
+            || mapping.misrPolynomialTaps.isEmpty
+            || Set(mapping.prpgPolynomialTaps).count != mapping.prpgPolynomialTaps.count
+            || Set(mapping.misrPolynomialTaps).count != mapping.misrPolynomialTaps.count
+            || mapping.prpgPolynomialTaps.contains(where: { $0 <= 0 })
+            || mapping.misrPolynomialTaps.contains(where: { $0 <= 0 })
+            || mapping.expectedSignature.isEmpty
+            || !mapping.expectedSignature.allSatisfy({ $0 == "0" || $0 == "1" }) {
+            issues.append(DFTRequestValidationIssue(
+                code: "DFT_BIST_ALGORITHM_CONTRACT_INVALID",
+                message: "Logic BIST requires unique positive PRPG/MISR taps and a non-empty binary expected signature.",
+                entity: "bistConfiguration.logicCellMapping",
+                suggestedActions: ["repair_bist_polynomials_and_signature"]
+            ))
+        }
         return issues
     }
 
@@ -366,6 +485,17 @@ public extension DFTRequest {
                 message: "Supported process fault families must be non-empty and unique.",
                 entity: "atpgConfiguration.supportedProcessFamilies",
                 suggestedActions: ["declare_unique_process_fault_families"]
+            ))
+        }
+        switch configuration.patternFormat {
+        case .json:
+            break
+        case .stil, .wgl:
+            issues.append(DFTRequestValidationIssue(
+                code: "DFT_STANDARD_PATTERN_EXPORT_UNQUALIFIED",
+                message: "The native backend does not yet provide a qualified cycle-accurate STIL or WGL exporter.",
+                entity: "atpgConfiguration.patternFormat",
+                suggestedActions: ["use_json_pattern_ir", "select_a_qualified_standard_pattern_backend"]
             ))
         }
         let contractTypes = configuration.sequentialCellContracts.flatMap(\.cellTypes)
@@ -503,6 +633,12 @@ public extension DFTRequest {
                     suggestedActions: ["declare_compression_cells"]
                 ))
             }
+            issues.append(DFTRequestValidationIssue(
+                code: "DFT_SCAN_COMPRESSION_UNSUPPORTED",
+                message: "The native scan transformer does not implement decompressor and compactor insertion.",
+                entity: "scanArchitecture.compression",
+                suggestedActions: ["disable_scan_compression", "select_a_qualified_compression_backend"]
+            ))
         }
         return issues
     }

@@ -6,16 +6,19 @@ public struct DFTCellLibraryReference: Sendable, Hashable, Codable {
     public var processID: String
     public var version: String
     public var manifestDigest: String
+    public var timingLibraryArtifact: ArtifactReference?
 
     public init(
         artifact: ArtifactReference,
         processID: String,
         version: String,
-        manifestDigest: String
+        manifestDigest: String,
+        timingLibraryArtifact: ArtifactReference? = nil
     ) {
         self.artifact = artifact
         self.processID = processID
         self.version = version
         self.manifestDigest = manifestDigest
+        self.timingLibraryArtifact = timingLibraryArtifact
     }
 }

@@ -67,7 +67,9 @@ enum DFTCLI {
         let result = try await DefaultDFTEngine(
             artifactStore: store,
             designLoader: FileSystemDFTDesignLoader(rootURL: projectRoot),
-            cellLibraryLoader: FileSystemDFTCellLibraryLoader(rootURL: projectRoot)
+            cellLibraryLoader: FileSystemDFTCellLibraryLoader(rootURL: projectRoot),
+            timingLibraryLoader: FileSystemDFTTimingLibraryLoader(rootURL: projectRoot),
+            constraintLoader: FileSystemDFTConstraintLoader(rootURL: projectRoot)
         ).execute(request)
         let data = try DFTArtifactJSONEncoder().encode(result)
         if let resultPath {

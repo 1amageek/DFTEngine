@@ -75,7 +75,7 @@ public struct GateLevelSequentialSimulator: GateLevelSequentialSimulating {
                 && cycleIndex == inputCycles.count - 1
             var values: [String: Bool] = [:]
             for port in module.ports where port.direction == .input {
-                guard let net = net(for: port.name, in: module.nets) else {
+                guard let net = net(for: port, in: module) else {
                     throw GateLevelSimulationError.primaryInputNetMissing(port.name)
                 }
                 guard let value = cycleInputs[port.name] else {
@@ -520,7 +520,7 @@ public struct GateLevelSequentialSimulator: GateLevelSequentialSimulating {
     ) throws -> [String: Bool] {
         var result: [String: Bool] = [:]
         for port in module.ports where port.direction == .output {
-            guard let net = net(for: port.name, in: module.nets),
+            guard let net = net(for: port, in: module),
                   let value = values[net.id] else {
                 throw GateLevelSimulationError.primaryOutputNetMissing(port.name)
             }
@@ -591,8 +591,11 @@ public struct GateLevelSequentialSimulator: GateLevelSequentialSimulating {
             || location.hasSuffix(".\(net.name)")
     }
 
-    private func net(for name: String, in nets: [GateNet]) -> GateNet? {
-        nets.first { $0.name == name || $0.id == name }
+    private func net(for port: RTLPort, in module: GateModule) -> GateNet? {
+        if let binding = module.portBindings?.first(where: { $0.portID == port.id }) {
+            return module.nets.first { $0.id == binding.netID }
+        }
+        return module.nets.first { $0.name == port.name || $0.id == port.name }
     }
 
     private func pin(named name: String, in pins: [GatePin]) -> GatePin? {

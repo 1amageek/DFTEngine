@@ -8,6 +8,8 @@ public struct DeterministicATPGEngine: ATPGExecuting {
     public let artifactStore: any DFTArtifactStoring
     public let designLoader: (any DFTDesignLoading)?
     public let cellLibraryLoader: (any DFTCellLibraryLoading)?
+    public let timingLibraryLoader: (any DFTTimingLibraryLoading)?
+    public let constraintLoader: (any DFTConstraintLoading)?
     public let faultExtractor: any DFTFaultExtracting
     public let simulator: any GateLevelSimulating
     public let sequentialSimulator: any GateLevelSequentialSimulating
@@ -19,6 +21,8 @@ public struct DeterministicATPGEngine: ATPGExecuting {
         artifactStore: any DFTArtifactStoring = InMemoryDFTArtifactStore(),
         designLoader: (any DFTDesignLoading)? = nil,
         cellLibraryLoader: (any DFTCellLibraryLoading)? = nil,
+        timingLibraryLoader: (any DFTTimingLibraryLoading)? = nil,
+        constraintLoader: (any DFTConstraintLoading)? = nil,
         faultExtractor: any DFTFaultExtracting = GateLevelFaultExtractor(),
         simulator: any GateLevelSimulating = GateLevelCombinationalSimulator(),
         sequentialSimulator: any GateLevelSequentialSimulating = GateLevelSequentialSimulator(),
@@ -29,6 +33,8 @@ public struct DeterministicATPGEngine: ATPGExecuting {
         self.artifactStore = artifactStore
         self.designLoader = designLoader
         self.cellLibraryLoader = cellLibraryLoader
+        self.timingLibraryLoader = timingLibraryLoader
+        self.constraintLoader = constraintLoader
         self.faultExtractor = faultExtractor
         self.simulator = simulator
         self.sequentialSimulator = sequentialSimulator
@@ -70,6 +76,24 @@ public struct DeterministicATPGEngine: ATPGExecuting {
                     message: "Fault universe and ATPG configuration are required."
                 )
             }
+            if let constraintLoader {
+                do {
+                    try DFTConstraintValidator().validate(
+                        constraintLoader.load(request.constraints),
+                        request: request
+                    )
+                } catch {
+                    return try blocked(
+                        request: request,
+                        engineID: engineID,
+                        startedAt: startedAt,
+                        code: "DFT_CONSTRAINT_VALIDATION_FAILED",
+                        message: error.localizedDescription,
+                        entity: request.constraints.artifact.path,
+                        actions: ["repair_test_mode_constraints"]
+                    )
+                }
+            }
             if configuration.maximumPatternCount <= 0 || configuration.patternLength <= 0 || configuration.abortLimit < 0 {
                 return try blocked(
                     request: request,
@@ -98,6 +122,18 @@ public struct DeterministicATPGEngine: ATPGExecuting {
                 do {
                     manifest = try cellLibraryLoader.load(cellLibraryReference)
                     try validate(cellLibrary: manifest, reference: cellLibraryReference, pdk: request.pdk)
+                    guard let timingReference = cellLibraryReference.timingLibraryArtifact,
+                          let timingLibraryLoader else {
+                        throw DFTCellLibraryTimingError.timingCellMissing(
+                            bindingID: "<all>",
+                            cellName: "<timing-library>"
+                        )
+                    }
+                    let timingLibrary = try timingLibraryLoader.load(timingReference)
+                    _ = try DFTCellLibraryTimingValidator().validate(
+                        manifest: manifest,
+                        timingLibrary: timingLibrary
+                    )
                 } catch {
                     return try blocked(
                         request: request,
@@ -187,21 +223,23 @@ public struct DeterministicATPGEngine: ATPGExecuting {
             var outcomes: [DFTFaultOutcome] = []
             var patterns: [DFTTestPattern] = []
             var diagnostics: [DFTDiagnostic] = []
-            var transitionSnapshot: LogicDesignSnapshot?
+            var declaredGateSnapshot: LogicDesignSnapshot?
             var abortedCount = 0
             var untestableCount = 0
             if faultSource == .declaredUniverse,
-               activeFaults.contains(where: { $0.family == .transition }),
+               activeFaults.contains(where: {
+                   $0.family == .stuckAt || $0.family == .transition
+               }),
                let designLoader {
                 do {
-                    transitionSnapshot = try designLoader.load(request.design)
+                    declaredGateSnapshot = try designLoader.load(request.design)
                 } catch {
                     diagnostics.append(DFTDiagnostic(
                         severity: .error,
-                        code: "DFT_TRANSITION_DESIGN_LOAD_FAILED",
-                        message: "Transition-fault ATPG could not load the canonical design: \(error.localizedDescription)",
+                        code: "DFT_DECLARED_FAULT_DESIGN_LOAD_FAILED",
+                        message: "Declared-fault ATPG could not load the canonical design: \(error.localizedDescription)",
                         entity: request.design.artifact.path,
-                        suggestedActions: ["verify_design_artifact_integrity", "use_a_declared_fault_model"]
+                        suggestedActions: ["verify_design_artifact_integrity", "provide_a_qualified_fault_model"]
                     ))
                 }
             }
@@ -287,7 +325,7 @@ public struct DeterministicATPGEngine: ATPGExecuting {
                     continue
                 }
                 if fault.family == .transition {
-                    guard let transitionSnapshot,
+                    guard let declaredGateSnapshot,
                           fault.transitionDirection != nil else {
                         abortedCount += 1
                         outcomes.append(DFTFaultOutcome(
@@ -306,7 +344,7 @@ public struct DeterministicATPGEngine: ATPGExecuting {
                     }
                     do {
                         guard let bits = try searchTransitionFault(
-                            snapshot: transitionSnapshot,
+                            snapshot: declaredGateSnapshot,
                             fault: fault,
                             configuration: configuration
                         ) else {
@@ -357,6 +395,93 @@ public struct DeterministicATPGEngine: ATPGExecuting {
                             message: error.localizedDescription,
                             entity: fault.id,
                             suggestedActions: ["qualify_combinational_transition_semantics", "use_a_declared_fault_model"]
+                        ))
+                    }
+                    continue
+                }
+                if fault.family == .stuckAt {
+                    guard let declaredGateSnapshot else {
+                        abortedCount += 1
+                        outcomes.append(DFTFaultOutcome(
+                            faultID: fault.id,
+                            status: .aborted,
+                            reason: "canonical gate design is unavailable for declared stuck-at fault simulation"
+                        ))
+                        diagnostics.append(DFTDiagnostic(
+                            severity: .error,
+                            code: "DFT_DECLARED_FAULT_DESIGN_MISSING",
+                            message: "Declared stuck-at fault \(fault.id) requires a canonical gate design and independent fault simulation.",
+                            entity: fault.id,
+                            suggestedActions: ["inject_design_loader", "select_gate_level_fault_source"]
+                        ))
+                        continue
+                    }
+                    do {
+                        let search = try searchGateLevel(
+                            snapshot: declaredGateSnapshot,
+                            faults: [fault],
+                            configuration: configuration,
+                            sequentialSimulator: sequentialSimulator
+                        )
+                        guard let evaluatedOutcome = search.outcomes.first else {
+                            throw GateLevelATPGError.simulationFailed(
+                                faultID: fault.id,
+                                message: "fault simulation produced no outcome"
+                            )
+                        }
+                        diagnostics.append(contentsOf: search.diagnostics.filter {
+                            $0.severity != .info
+                        })
+                        switch evaluatedOutcome.status {
+                        case .detected:
+                            guard let detectedPattern = search.patterns.first else {
+                                throw GateLevelATPGError.simulationFailed(
+                                    faultID: fault.id,
+                                    message: "detected fault has no retained pattern"
+                                )
+                            }
+                            let patternID = "pattern-\(patterns.count + 1)"
+                            patterns.append(DFTTestPattern(
+                                id: patternID,
+                                bits: detectedPattern.bits,
+                                faultIDs: [fault.id]
+                            ))
+                            outcomes.append(DFTFaultOutcome(
+                                faultID: fault.id,
+                                status: .detected,
+                                patternID: patternID,
+                                reason: "detected by canonical gate-level fault simulation"
+                            ))
+                        case .untestable:
+                            untestableCount += 1
+                            outcomes.append(DFTFaultOutcome(
+                                faultID: fault.id,
+                                status: .untestable,
+                                reason: evaluatedOutcome.reason
+                            ))
+                        case .aborted:
+                            abortedCount += 1
+                            outcomes.append(DFTFaultOutcome(
+                                faultID: fault.id,
+                                status: .aborted,
+                                reason: evaluatedOutcome.reason
+                            ))
+                        }
+                    } catch is CancellationError {
+                        throw CancellationError()
+                    } catch {
+                        abortedCount += 1
+                        outcomes.append(DFTFaultOutcome(
+                            faultID: fault.id,
+                            status: .aborted,
+                            reason: error.localizedDescription
+                        ))
+                        diagnostics.append(DFTDiagnostic(
+                            severity: .error,
+                            code: "DFT_DECLARED_FAULT_SIMULATION_FAILED",
+                            message: "Declared stuck-at fault \(fault.id) could not be validated: \(error.localizedDescription)",
+                            entity: fault.id,
+                            suggestedActions: ["repair_fault_location", "verify_gate_semantics"]
                         ))
                     }
                     continue
@@ -525,18 +650,18 @@ public struct DeterministicATPGEngine: ATPGExecuting {
                     ))
                     continue
                 }
-                let patternID = "pattern-\(index + 1)"
-                let pattern = DFTTestPattern(
-                    id: patternID,
-                    bits: try patternBits(for: fault.id, seed: seed, length: configuration.patternLength),
-                    faultIDs: [fault.id]
-                )
-                patterns.append(pattern)
+                abortedCount += 1
                 outcomes.append(DFTFaultOutcome(
                     faultID: fault.id,
-                    status: .detected,
-                    patternID: patternID,
-                    reason: "detected by deterministic declared-fault model"
+                    status: .aborted,
+                    reason: "fault semantics require a canonical simulator or an injected qualified model"
+                ))
+                diagnostics.append(DFTDiagnostic(
+                    severity: .error,
+                    code: "DFT_FAULT_SIMULATOR_MISSING",
+                    message: "Fault \(fault.id) cannot be marked detected without an independently replayable simulation.",
+                    entity: fault.id,
+                    suggestedActions: ["provide_canonical_fault_simulator", "inject_a_qualified_fault_model"]
                 ))
               }
             }
@@ -1111,18 +1236,6 @@ public struct DeterministicATPGEngine: ATPGExecuting {
         case .wgl:
             return .wgl
         }
-    }
-
-    private func patternBits(for faultID: String, seed: UInt64, length: Int) throws -> String {
-        let digest = try SHA256ContentDigester()
-            .digest(data: Data("\(seed):\(faultID)".utf8))
-            .hexadecimalValue
-        let bytes = Array(digest.utf8)
-        return (0..<length).map { index in
-            let byte = bytes[index % bytes.count]
-            let bit = (byte >> UInt8(index % 8)) & 1
-            return bit == 0 ? "0" : "1"
-        }.joined()
     }
 
     private func patternBits(for assignment: Int, inputCount: Int, length: Int) -> String {

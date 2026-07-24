@@ -59,6 +59,12 @@ public struct DFTRequest: DFTExecutionRequest {
         var references = inputs + [design.artifact, constraints.artifact, pdk.manifest]
         if let cellLibrary {
             references.append(cellLibrary.artifact)
+            if let timingLibraryArtifact = cellLibrary.timingLibraryArtifact {
+                references.append(timingLibraryArtifact)
+            }
+        }
+        if let logicCellMapping = bistConfiguration?.logicCellMapping {
+            references.append(logicCellMapping.artifact)
         }
         var identities = Set<ArtifactReference>()
         return references.filter { identities.insert($0).inserted }

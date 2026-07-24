@@ -45,7 +45,7 @@ public struct GateLevelCombinationalSimulator: GateLevelSimulating {
         var values: [String: Bool] = [:]
 
         for port in module.ports where port.direction == .input {
-            guard let net = net(for: port.name, in: module.nets) else {
+            guard let net = net(for: port, in: module) else {
                 throw GateLevelSimulationError.primaryInputNetMissing(port.name)
             }
             guard let value = inputs[port.name] else {
@@ -101,7 +101,7 @@ public struct GateLevelCombinationalSimulator: GateLevelSimulating {
 
         var observed: [String: Bool] = [:]
         for port in module.ports where port.direction == .output {
-            guard let net = net(for: port.name, in: module.nets) else {
+            guard let net = net(for: port, in: module) else {
                 throw GateLevelSimulationError.primaryOutputNetMissing(port.name)
             }
             guard let value = values[net.id] else {
@@ -115,8 +115,11 @@ public struct GateLevelCombinationalSimulator: GateLevelSimulating {
         return GateLevelSimulationResult(observedValues: observed)
     }
 
-    private func net(for portName: String, in nets: [GateNet]) -> GateNet? {
-        nets.first { $0.name == portName || $0.id == portName }
+    private func net(for port: RTLPort, in module: GateModule) -> GateNet? {
+        if let binding = module.portBindings?.first(where: { $0.portID == port.id }) {
+            return module.nets.first { $0.id == binding.netID }
+        }
+        return module.nets.first { $0.name == port.name || $0.id == port.name }
     }
 
     private func forcedValue(for net: GateNet, fault: DFTFault?) -> Bool? {

@@ -9,6 +9,7 @@ public struct DFTBISTStructure: Sendable, Hashable, Codable {
     public var signatureRegisterName: String
     public var seed: UInt64
     public var testModeSignal: String
+    public var logicCellMapping: DFTLogicBISTCellMapping?
 
     public init(
         name: String,
@@ -18,7 +19,8 @@ public struct DFTBISTStructure: Sendable, Hashable, Codable {
         patternCount: Int,
         signatureRegisterName: String,
         seed: UInt64,
-        testModeSignal: String
+        testModeSignal: String,
+        logicCellMapping: DFTLogicBISTCellMapping? = nil
     ) {
         self.name = name
         self.kind = kind
@@ -28,5 +30,6 @@ public struct DFTBISTStructure: Sendable, Hashable, Codable {
         self.signatureRegisterName = signatureRegisterName
         self.seed = seed
         self.testModeSignal = testModeSignal
+        self.logicCellMapping = logicCellMapping
     }
 }

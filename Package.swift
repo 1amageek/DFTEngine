@@ -19,13 +19,13 @@ let logicDesignDependency: Package.Dependency = isLSIWorkspace && FileManager.de
     atPath: workspaceRoot.appendingPathComponent("LogicDesign/Package.swift").path
 )
     ? .package(path: "../LogicDesign")
-    : .package(url: "https://github.com/1amageek/LogicDesign.git", revision: "b9aa25b0b78e6168befa25df3bfe8309bd020a6d")
+    : .package(url: "https://github.com/1amageek/LogicDesign.git", revision: "ba3176f60c450ed0c1b12e7995247b0718bf9ad9")
 
 let timingEngineDependency: Package.Dependency = isLSIWorkspace && FileManager.default.fileExists(
     atPath: workspaceRoot.appendingPathComponent("TimingEngine/Package.swift").path
 )
     ? .package(path: "../TimingEngine")
-    : .package(url: "https://github.com/1amageek/TimingEngine.git", revision: "2b8f0df3e359fca274edc8ede176457de40e1648")
+    : .package(url: "https://github.com/1amageek/TimingEngine.git", revision: "1aef8fd6f06a007e9f70ebfe726ab4fb11b40c3e")
 
 let pdkKitDependency: Package.Dependency = isLSIWorkspace && FileManager.default.fileExists(
     atPath: workspaceRoot.appendingPathComponent("PDKKit/Package.swift").path
@@ -47,6 +47,7 @@ let package = Package(
         .library(name: "ScanInsertion", targets: ["ScanInsertion"]),
         .library(name: "ATPGEngine", targets: ["ATPGEngine"]),
         .library(name: "BISTEngine", targets: ["BISTEngine"]),
+        .library(name: "DFTExternalTools", targets: ["DFTExternalTools"]),
         .library(name: "DFTEngine", targets: ["DFTEngine"]),
         .executable(name: "dft-engine", targets: ["DFTCLI"]),
     ],
@@ -64,8 +65,14 @@ let package = Package(
                 .product(name: "CircuiteFoundation", package: "CircuiteFoundation"),
                 .product(name: "LogicIR", package: "LogicDesign"),
                 .product(name: "TimingCore", package: "TimingEngine"),
-                .product(name: "PDKCore", package: "PDKKit"),
-                .product(name: "SignoffToolSupport", package: "SignoffToolSupport")
+                .product(name: "PDKCore", package: "PDKKit")
+            ]
+        ),
+        .target(
+            name: "DFTExternalTools",
+            dependencies: [
+                "DFTCore",
+                .product(name: "SignoffToolSupport", package: "SignoffToolSupport"),
             ]
         ),
         .target(
@@ -111,6 +118,7 @@ let package = Package(
                 "ScanInsertion",
                 "ATPGEngine",
                 "BISTEngine",
+                "DFTExternalTools",
                 "DFTEngine",
             ],
             resources: [.copy("Fixtures")]

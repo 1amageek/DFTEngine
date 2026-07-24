@@ -7,17 +7,23 @@ public struct DeterministicScanInsertionEngine: ScanInserting {
     public let artifactStore: any DFTArtifactStoring
     public let designLoader: (any DFTDesignLoading)?
     public let cellLibraryLoader: (any DFTCellLibraryLoading)?
+    public let timingLibraryLoader: (any DFTTimingLibraryLoading)?
+    public let constraintLoader: (any DFTConstraintLoading)?
     public let implementationID: String
 
     public init(
         artifactStore: any DFTArtifactStoring = InMemoryDFTArtifactStore(),
         designLoader: (any DFTDesignLoading)? = nil,
         cellLibraryLoader: (any DFTCellLibraryLoading)? = nil,
+        timingLibraryLoader: (any DFTTimingLibraryLoading)? = nil,
+        constraintLoader: (any DFTConstraintLoading)? = nil,
         implementationID: String = "native-deterministic-scan"
     ) {
         self.artifactStore = artifactStore
         self.designLoader = designLoader
         self.cellLibraryLoader = cellLibraryLoader
+        self.timingLibraryLoader = timingLibraryLoader
+        self.constraintLoader = constraintLoader
         self.implementationID = implementationID
     }
 
@@ -55,6 +61,25 @@ public struct DeterministicScanInsertionEngine: ScanInserting {
                     code: "DFT_SCAN_PREREQUISITE_MISSING",
                     message: "Scan architecture and insertion policy are required."
                 )
+            }
+            if let constraintLoader {
+                do {
+                    try DFTConstraintValidator().validate(
+                        constraintLoader.load(request.constraints),
+                        request: request
+                    )
+                } catch {
+                    return try blocked(
+                        request: request,
+                        engineID: engineID,
+                        implementationID: implementationID,
+                        startedAt: startedAt,
+                        code: "DFT_CONSTRAINT_VALIDATION_FAILED",
+                        message: error.localizedDescription,
+                        entity: request.constraints.artifact.path,
+                        actions: ["repair_test_mode_constraints"]
+                    )
+                }
             }
             let plan: DFTScanPlan
             do {
@@ -102,6 +127,18 @@ public struct DeterministicScanInsertionEngine: ScanInserting {
             do {
                 cellLibrary = try cellLibraryLoader.load(cellLibraryReference)
                 try validate(cellLibrary: cellLibrary, reference: cellLibraryReference, pdk: request.pdk)
+                guard let timingReference = cellLibraryReference.timingLibraryArtifact,
+                      let timingLibraryLoader else {
+                    throw DFTCellLibraryTimingError.timingCellMissing(
+                        bindingID: "<all>",
+                        cellName: "<timing-library>"
+                    )
+                }
+                let timingLibrary = try timingLibraryLoader.load(timingReference)
+                _ = try DFTCellLibraryTimingValidator().validate(
+                    manifest: cellLibrary,
+                    timingLibrary: timingLibrary
+                )
             } catch {
                 return try blocked(
                     request: request,

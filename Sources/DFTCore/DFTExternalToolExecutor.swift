@@ -2,11 +2,11 @@ import Foundation
 import CircuiteFoundation
 
 public struct DFTExternalToolExecutor: Sendable {
-    public let runner: any DFTExternalToolRunning
+    public let runner: any DFTExternalToolOutputProviding
     public let artifactStore: (any DFTArtifactStoring)?
 
     public init(
-        runner: any DFTExternalToolRunning,
+        runner: any DFTExternalToolOutputProviding,
         artifactStore: (any DFTArtifactStoring)? = nil
     ) {
         self.runner = runner
@@ -22,16 +22,7 @@ public struct DFTExternalToolExecutor: Sendable {
         } catch {
             throw DFTExternalToolError.requestEncodingFailed(error.localizedDescription)
         }
-        let output: DFTExternalToolOutput
-        if let outputProvidingRunner = runner as? any DFTExternalToolOutputProviding {
-            output = try await outputProvidingRunner.runWithOutput(requestData: requestData)
-        } else {
-            output = DFTExternalToolOutput(
-                standardOutput: try await runner.run(requestData: requestData),
-                standardError: Data(),
-                exitCode: 0
-            )
-        }
+        let output = try await runner.runWithOutput(requestData: requestData)
         guard output.exitCode == 0 else {
             throw DFTExternalToolError.nonZeroExit(
                 implementationID: runner.descriptor.implementationID,
@@ -81,14 +72,7 @@ public struct DFTExternalToolExecutor: Sendable {
                 actual: result.provenance.producer.version
             )
         }
-        for artifact in result.artifacts {
-            guard artifact.byteCount > 0 else {
-                throw DFTExternalToolError.invalidArtifactReference(
-                    path: artifact.path,
-                    message: "Artifact byte count must be greater than zero."
-                )
-            }
-        }
+        try DFTResultValidator().validate(result, for: request)
         guard let artifactStore else {
             return result
         }
@@ -122,7 +106,7 @@ public struct DFTExternalToolExecutor: Sendable {
             ),
             runID: request.runID
         )
-        return DFTResult(
+        let persistedResult = DFTResult(
             schemaVersion: result.schemaVersion,
             runID: result.runID,
             status: result.status,
@@ -132,5 +116,7 @@ public struct DFTExternalToolExecutor: Sendable {
             evidenceID: result.evidence.id,
             payload: result.payload
         )
+        try DFTResultValidator().validate(persistedResult, for: request)
+        return persistedResult
     }
 }

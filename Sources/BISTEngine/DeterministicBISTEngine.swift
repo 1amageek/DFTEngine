@@ -5,15 +5,18 @@ import LogicIR
 public struct DeterministicBISTEngine: BISTExecuting {
     public let artifactStore: any DFTArtifactStoring
     public let designLoader: (any DFTDesignLoading)?
+    public let constraintLoader: (any DFTConstraintLoading)?
     public let implementationID: String
 
     public init(
         artifactStore: any DFTArtifactStoring = InMemoryDFTArtifactStore(),
         designLoader: (any DFTDesignLoading)? = nil,
+        constraintLoader: (any DFTConstraintLoading)? = nil,
         implementationID: String = "native-deterministic-bist"
     ) {
         self.artifactStore = artifactStore
         self.designLoader = designLoader
+        self.constraintLoader = constraintLoader
         self.implementationID = implementationID
     }
 
@@ -49,6 +52,24 @@ public struct DeterministicBISTEngine: BISTExecuting {
                     code: "DFT_BIST_PREREQUISITE_MISSING",
                     message: "BIST configuration is required."
                 )
+            }
+            if let constraintLoader {
+                do {
+                    try DFTConstraintValidator().validate(
+                        constraintLoader.load(request.constraints),
+                        request: request
+                    )
+                } catch {
+                    return try blocked(
+                        request: request,
+                        engineID: engineID,
+                        startedAt: startedAt,
+                        code: "DFT_CONSTRAINT_VALIDATION_FAILED",
+                        message: error.localizedDescription,
+                        entity: request.constraints.artifact.path,
+                        actions: ["repair_test_mode_constraints"]
+                    )
+                }
             }
             let testModeSignal = configuration.testModeSignal
                 ?? request.testIntent?.testModeSignal
@@ -180,7 +201,8 @@ public struct DeterministicBISTEngine: BISTExecuting {
                 patternCount: configuration.patternCount,
                 signatureRegisterName: configuration.signatureRegisterName,
                 seed: seed,
-                testModeSignal: testModeSignal
+                testModeSignal: testModeSignal,
+                logicCellMapping: configuration.logicCellMapping
             )
             let transformedArtifact = DFTTransformedDesignArtifact(
                 runID: request.runID,

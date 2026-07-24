@@ -11,14 +11,14 @@ DFTEngine is a semiconductor design-platform component, not a pattern generator 
 | M2 | Scan architecture semantics | Infer or explicitly bind clock/reset domains, identify sequential cell semantics, reject ambiguous library mappings, preserve functional/test-mode connectivity | In progress: process-scoped manifest, exact pin/net binding and Liberty timing/legal replacement validator delivered; process qualification remains |
 | M3 | Gate-level ATPG | Generate faults from transformed gate IR, implement sensitization/propagation for a declared supported cell subset, validate patterns by simulation, never claim unsupported coverage | In progress: exhaustive combinational stuck-at, bounded DFF/SDFF SI/SE scan-shift/capture, explicit reset/set control contracts, qualified level-sensitive latch semantics and bounded combinational/sequential transition slices delivered; process-specific faults now require an injected model boundary and validated model result; unknown primitives and process qualification remain |
 | M4 | BIST insertion | Insert controller, pattern source, response compactor and test-mode isolation into canonical IR; memory macros require an explicit backend protocol | In progress: canonical logic-BIST transform, typed memory-macro binding and external backend protocol delivered; backend completion requires process-qualified evidence and native memory transformation remains blocked |
-| M5 | Standard pattern and external execution | Strict STIL/WGL parsing and validation, process execution timeout/cancellation/tree cleanup, stdout/stderr and tool result artifacts | In progress: strict codec, timed process runner, stdout/stderr artifacts and Xcircuite persistence of typed DFT results delivered; process/tool qualification remains |
+| M5 | Standard pattern and external execution | Qualified STIL/WGL import/export, process execution timeout/cancellation/tree cleanup, stdout/stderr and tool result artifacts | In progress: internal interchange codec, timed process runner, stdout/stderr artifacts and Xcircuite persistence of validated typed DFT results delivered; native STIL/WGL output and process/tool qualification remain blocked |
 | M6 | Evidence emission and trust handoff | Retained corpus, reference-oracle correlation, PDK-scoped observations and request-digest-bound provenance | In progress: artifact-integrity-checked correlation and `DFTEvidenceProvenance` emission are delivered; independent process corpus remains |
 | M7 | Platform flow composition | Direct protocol consumption, ToolQualification trust evaluation, Xcircuite review/approval/resume, and equivalence/DRC/LVS/PEX handoff | Outside the domain package: DFTEngine supplies typed results and raw evidence; ToolQualification and the composing flow own the policy |
 | M8 | Production signoff and tapeout handoff | Accepted process/tool evidence, independent oracle record, real DFT/equivalence/DRC/LVS/PEX artifacts, human approval and immutable release manifest | Outside DFTEngine and incomplete at the platform level |
 
 ## Current M1 boundary
 
-M1 performs a real structural transformation of the canonical gate snapshot. It preserves the existing functional cells and ports, adds scan controls and chain connectivity, and emits a new digest-addressed snapshot plus a reviewable diff. The M2 connectivity slice checks domain assignment against explicit clock/reset net names; process-qualified clock arcs and legal scan-cell replacement remain open. `DFT_SCAN_OUT` is therefore an explicit intermediate helper and is not a foundry-legal standard-cell claim.
+M1 performs a real structural transformation of the canonical gate snapshot. It preserves functional cells and ports, adds scan controls and chain connectivity, binds scan outputs directly through canonical port/net bindings, and emits a new digest-addressed snapshot plus a reviewable diff. No synthetic observability cell is inserted.
 
 M1 does not claim:
 
@@ -29,7 +29,7 @@ M1 does not claim:
 
 ## M2 current slice
 
-The transformer now requires a process-scoped cell-library manifest, binds each functional sequential cell to an exact scan-cell mapping and pin contract, binds each sequential cell to a declared scan clock by matching the canonical gate net name, checks reset connectivity when a domain declares a reset, and verifies per-domain element counts before chain assignment. Artifact bytes, SHA-256, manifest digest, process ID, version and PDK digest are checked. A missing, ambiguous or mismatched binding is blocked with an actionable diagnostic. The timing validator checks a bound Liberty `TimingCell` for required scan/control pins, a sequential model, matching D/Q/clock semantics and a clock-to-Q arc, while requiring an explicit legal replacement group. Foundry qualification evidence remains open.
+The transformer requires a process-scoped cell-library manifest and a digest-verified Liberty/canonical timing artifact. It binds each functional sequential cell to an exact scan-cell mapping and pin contract, validates D/Q/clock semantics, required pins, clock-to-Q timing and legal replacement groups, checks reset/clock connectivity, and verifies per-domain element counts before chain assignment. Missing or mismatched timing evidence blocks execution.
 
 ## M3 current slice
 
@@ -39,11 +39,11 @@ Process-specific faults use the protocol-first `DFTProcessFaultModeling` boundar
 
 ## M4 current slice
 
-Logic BIST requires explicit target instance pin bindings. The transformer adds test-mode input muxes around bound target inputs, response capture cells, a response compactor, a controller cell, a signature register and observable done/signature ports. The resulting canonical snapshot is digest-finalized and accompanied by a structural design diff. Memory BIST now has a typed macro port/algorithm binding and external backend protocol; the external path validates the shared result identity and rejects non-completed results, while ToolQualification policy remains outside DFTEngine and native transformation remains blocked until a macro-qualified backend is injected.
+Logic BIST requires exact target bindings plus a process/PDK-bound mapping for controller, mux, capture, compactor and signature cells, PRPG/MISR polynomial taps and expected signature. The mapping is retained in the result. Memory BIST has a typed macro boundary, but a completed external result without transformed evidence is rejected.
 
 ## M5-M6 current slices
 
-JSON, STIL and WGL pattern artifacts now reject malformed metadata, duplicate IDs, inconsistent widths, non-binary vectors and incomplete containers. External execution can use the shared `SignoffToolSupport` timed process runner, which captures stdout/stderr and cleans a process tree on timeout or cancellation. Xcircuite persists the complete typed DFT result as a run artifact. `DFTOracleCorrelationEngine` verifies normalized retained oracle expectation artifacts, compares native typed results and emits a deterministic correlation digest. `DFTEvidenceProvenance` records raw evidence maturity and identity; ToolQualification performs the separate trust evaluation.
+JSON is the native ATPG output. STIL/WGL requests and scan compression fail closed until qualified implementations exist. `DFTExternalTools` owns the `SignoffToolSupport` timed process adapter; `DFTCore` owns only the typed runner/result contracts. Every external backend must report stdout, stderr and exit code, and all results pass the same exact-input and completed-payload validator.
 
 ## M7 current slice
 

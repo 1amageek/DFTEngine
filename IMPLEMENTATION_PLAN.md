@@ -9,7 +9,7 @@ The full platform goal is intentionally decomposed into the gates documented in 
 3. M2 scan clock/reset and cell-library semantics — in progress; explicit gate connectivity and Liberty timing/legal replacement validation slices delivered
 4. M3 gate-level ATPG and pattern validation — combinational stuck-at, bounded DFF/SDFF state-transition, explicit reset/set controls, qualified level-sensitive latch semantics, bounded combinational/sequential transition slices and an injected process-specific fault-model boundary delivered; unknown primitives and process qualification remain
 5. M4 canonical BIST insertion — logic target transformation and typed memory-macro backend protocol delivered; external result integrity is domain-validated while process qualification remains flow-owned; native qualified memory backend remains
-6. M5 strict standard-pattern and external-tool execution — strict codec, timed/tree-cleaning process runner, stdout/stderr artifacts and typed DFT result persistence delivered; process/tool qualification remains
+6. M5 standard-pattern and external-tool execution — internal codec, timed/tree-cleaning process runner, stdout/stderr artifacts and validated typed DFT result persistence delivered; qualified native STIL/WGL output and process/tool qualification remain
 7. M6 retained corpus and oracle correlation — raw correlation and evidence-provenance emission are delivered; independent retained process corpus remains
 8. M7 ToolQualification and flow handoff — direct DFT protocol consumption and raw evidence handoff are delivered; trust, downstream signoff policy, approval, and resume remain responsibilities of ToolQualification and the composing flow
 9. M8 production signoff and tapeout handoff — outside DFTEngine; the composing flow requires accepted tool/process evidence, independent oracle records, real DFT/equivalence/DRC/LVS/PEX artifacts, and human approval
@@ -20,7 +20,7 @@ The full platform goal is intentionally decomposed into the gates documented in 
 - Completed direct CircuiteFoundation conformance through `DFTEngineExecuting`, `DefaultDFTEngine`, and `DFTResult`; verified inputs, configuration digest, design revision, seed, and producer identity are retained in shared provenance.
 - Enforced immutable artifact-store writes, stable artifact IDs, safe request/reference paths and strict external-tool implementation identity/version matching.
 - Added canonical `LogicDesignSnapshot` loading with project-root bounds, byte-count and SHA-256 checks, design-digest verification, top-design checks and gate validation.
-- Added a real gate-level scan transformation that updates sequential cells, control ports, scan nets, chain observability helpers and stable design diffs.
+- Added a real gate-level scan transformation that updates sequential cells, control ports, scan nets, canonical port/net bindings and stable design diffs without synthetic observability cells.
 - Added explicit clock/reset connectivity binding and per-domain element-count checks; ambiguous bindings are blocked.
 - Recomputed and validated the transformed snapshot digest before persistence.
 - Added positive/negative fixtures and an explicit regression that scan insertion blocks without a canonical design loader.
@@ -30,11 +30,11 @@ The full platform goal is intentionally decomposed into the gates documented in 
 - Added bounded DFF/SDFF SI/SE scan-shift and functional-capture simulation, reset/set polarity/timing/edge contracts, qualified level-sensitive latch semantics and bounded sequential transition-fault simulation; unknown primitives and process-qualified timing remain explicitly blocked.
 - Added the protocol-first `DFTProcessFaultModeling` boundary for process-specific ATPG. A declared process family alone cannot produce coverage; the engine requires an injected model, matching model identity, a non-empty reason and a binary pattern with the configured width, with typed blocked diagnostics for missing, unsupported, failed or malformed model results.
 - Added canonical logic-BIST transformation with explicit target pin bindings, test-mode input muxing, response capture/compaction, signature output and immutable design diff.
-- Tightened JSON/STIL/WGL pattern validation and added a `SignoffToolSupport`-backed external process runner with timeout, cancellation and process-tree cleanup.
+- Kept JSON as the only native qualified output, blocked STIL/WGL requests until standards-qualified exporters exist, and moved the `SignoffToolSupport` process adapter into `DFTExternalTools`.
 - Added raw DFT evidence maturity and provenance metadata for smoke, corpus, and
   oracle-correlated observations without embedding a trust or release verdict.
 - Added retained oracle corpus contracts and correlation: normalized oracle expectation artifacts are read, byte-count/digest verified, decoded and compared against native typed results before correlation evidence is emitted.
-- Added a Liberty-backed scan-cell timing/legal replacement validator requiring scan pins, sequential D/Q/clock semantics, clock-to-Q timing and a legal replacement group.
+- Connected the Liberty-backed scan-cell timing/legal replacement validator to scan insertion and process-scoped ATPG execution; missing timing artifacts now block execution.
 - Added a typed memory-macro BIST binding and external backend protocol; non-completed or identity-mismatched external results are rejected, ToolQualification remains flow-owned, and native memory transformation remains blocked until a qualified backend is supplied.
 - Removed flow-owned review state from `DFTDesignDiff`; the current contract
   contains raw structural changes and snapshot references only.

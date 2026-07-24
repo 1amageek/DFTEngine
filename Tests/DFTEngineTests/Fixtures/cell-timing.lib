@@ -1,0 +1,27 @@
+library (fixture) {
+  time_unit : "1ns";
+  capacitive_load_unit (1, pf);
+  cell (SDFF) {
+    ff (IQ, IQN) {
+      next_state : "D";
+      clocked_on : "CLK";
+    }
+    pin (D) { direction : input; }
+    pin (CLK) { direction : input; }
+    pin (SI) { direction : input; }
+    pin (SE) { direction : input; }
+    pin (TM) { direction : input; }
+    pin (Q) {
+      direction : output;
+      timing () {
+        related_pin : "CLK";
+        timing_type : rising_edge;
+        timing_sense : positive_unate;
+        cell_rise (t) { index_1 ("0.1"); index_2 ("0.0"); values ("0.1"); }
+        cell_fall (t) { index_1 ("0.1"); index_2 ("0.0"); values ("0.1"); }
+        rise_transition (t) { index_1 ("0.1"); index_2 ("0.0"); values ("0.1"); }
+        fall_transition (t) { index_1 ("0.1"); index_2 ("0.0"); values ("0.1"); }
+      }
+    }
+  }
+}

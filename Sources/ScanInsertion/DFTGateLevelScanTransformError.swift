@@ -14,6 +14,7 @@ public enum DFTGateLevelScanTransformError: Error, LocalizedError, Sendable, Has
     case sequentialCellUnsupported(instance: String, type: String)
     case outputPinMissing(instance: String)
     case controlPortConflict(name: String)
+    case portNetMissing(String)
     case generatedNetConflict(name: String)
     case transformedDesignInvalid([LogicDiagnostic])
 
@@ -45,6 +46,8 @@ public enum DFTGateLevelScanTransformError: Error, LocalizedError, Sendable, Has
             return "Sequential cell \(instance) has no recognizable state output pin."
         case .controlPortConflict(let name):
             return "DFT control port \(name) already exists with an incompatible direction."
+        case .portNetMissing(let name):
+            return "Gate module port \(name) has no canonical net binding."
         case .generatedNetConflict(let name):
             return "DFT generated net \(name) collides with an incompatible existing net."
         case .transformedDesignInvalid(let diagnostics):

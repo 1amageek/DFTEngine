@@ -4,9 +4,14 @@ Scan, ATPG and built-in self-test transformation contracts.
 
 ## Status
 
-This repository contains the typed DFT contracts, a canonical gate-level scan transformation, process-scoped scan-cell binding, Liberty timing/legal-cell validation, gate-level combinational and bounded sequential ATPG, explicit reset/set and transition semantics, an explicit process-specific fault-model boundary, canonical logic-BIST transformation, a typed memory-macro execution boundary, strict STIL/WGL codecs, external-tool execution, retained oracle correlation, immutable Foundation artifact stores, and a headless JSON CLI.
+This repository contains typed DFT contracts, canonical gate-level scan transformation, process-scoped scan-cell and Liberty timing validation, bounded gate-level ATPG, process-specific fault-model injection, process-bound logic-BIST transformation, a typed memory-macro execution boundary, external-tool execution, retained oracle correlation, immutable Foundation artifact stores, and a headless JSON CLI.
 
-The native execution and evidence contracts through M7 are implemented and tested. STIL and WGL keep standards-compatible pattern syntax while a deterministic comment metadata record preserves the complete per-pattern fault-ID mapping across codec round trips. Production qualification remains intentionally gated by independently generated PDK, macro, oracle, equivalence, DRC, LVS, PEX and human-review evidence. No backend self-promotes fixture or smoke evidence to foundry qualification.
+Native output is JSON only. The existing STIL/WGL codec is a deterministic internal interchange codec and is not a qualified standards exporter; native requests for those formats are blocked. Scan compression is also blocked until decompressor/compactor insertion and coverage validation exist. Production qualification remains gated by independently generated PDK, macro, oracle, equivalence, DRC, LVS, PEX and human-review evidence.
+
+The CLI and Xcircuite composition load the digest-bound SDC artifact and verify
+declared DFT clocks plus asserted test-mode/scan-enable case analysis before
+execution. Invalid or missing mode semantics produce
+`DFT_CONSTRAINT_VALIDATION_FAILED`; constraints are not provenance-only inputs.
 
 ```mermaid
 flowchart LR
@@ -30,15 +35,16 @@ flowchart LR
 | `ScanInsertion` | Scan architecture and insertion |
 | `ATPGEngine` | Pattern generation and fault coverage |
 | `BISTEngine` | Memory and logic BIST |
+| `DFTExternalTools` | Process execution, timeout, stderr and exit-status capture |
 | `DFTEngine` | Umbrella API |
 
 The native implementations are:
 
 | Backend | Output | Explicit limitation |
 |---|---|---|
-| `DeterministicScanInsertionEngine` | digest-verified gate snapshot transformation, scan plan, transformed design reference, design diff | Does not infer qualified clock/reset semantics, prove cell legality or prove functional equivalence |
-| `DeterministicATPGEngine` | declared-fault ATPG, extracted combinational stuck-at ATPG, bounded DFF/SDFF state ATPG, explicit reset/set contracts, level-sensitive latch semantics, directed combinational/sequential transition ATPG and injected process-specific fault-model evaluation | Unknown primitives and process-qualified timing block coverage; `supportedProcessFamilies` is declarative only and does not replace a separately qualified injected model |
-| `DeterministicBISTEngine` | canonical logic-BIST gate transformation, structure, design diff | Native memory macros and helper-cell legality remain blocked pending qualification; external memory execution validates the typed DFT contract while the composing flow applies tool trust policy |
+| `DeterministicScanInsertionEngine` | digest-verified gate transformation, canonical port/net bindings, Liberty-validated replacement cells, scan plan and design diff | Compression and functional equivalence remain downstream gates |
+| `DeterministicATPGEngine` | simulated declared/extracted stuck-at and transition ATPG with explicit sequential contracts | A fault is never marked detected without simulation or an injected typed process model; unknown semantics remain blocked |
+| `DeterministicBISTEngine` | process-bound logic-BIST transformation, PRPG/MISR contract, structure and design diff | Native memory BIST remains blocked pending a qualified external backend |
 | `DFTResult` | Domain result with direct `ArtifactProducing`, `EvidenceProviding`, and `DiagnosticReporting` conformance | Retains immutable artifacts, provenance, and typed diagnostics without projection |
 | `DefaultDFTEngine` | Direct `DFTEngineExecuting` implementation | Returns the domain-owned `DFTResult` |
 
@@ -79,10 +85,10 @@ revision. No umbrella repository is required.
 | Dependency | Local sibling | Remote fallback revision |
 |---|---|---|
 | CircuiteFoundation | `../CircuiteFoundation` | `7abcac83517935c9b9f7553d7016d62cffde259d` |
-| LogicDesign | `../LogicDesign` | `b9aa25b0b78e6168befa25df3bfe8309bd020a6d` |
-| TimingEngine | `../TimingEngine` | `baada25223ccc1225afefa672120ba0d7d1d5d41` |
+| LogicDesign | `../LogicDesign` | `ba3176f60c450ed0c1b12e7995247b0718bf9ad9` |
+| TimingEngine | `../TimingEngine` | `1aef8fd6f06a007e9f70ebfe726ab4fb11b40c3e` |
 | PDKKit | `../PDKKit` | `b62c5ad7e5819a24977038c2133856caed52f481` |
-| SignoffToolSupport | `../SignoffToolSupport` | `9a00065522ae527342c87380f0e7faa87e7cca9f` |
+| SignoffToolSupport | `../SignoffToolSupport` | `6bf675eecb27e3bd3440c5ce8a85c85c510fc3cb` |
 
 ```bash
 swift build
@@ -94,9 +100,8 @@ swift build
 timeout 240 xcodebuild test -scheme DFTEngine-Package -destination 'platform=macOS' -parallel-testing-enabled NO
 ```
 
-The current contract suite contains 52 tests in 6 suites. The test suite
-covers positive transformations, blocked prerequisites, standard-pattern
-round trips, external-tool identity and exit checks, immutable artifact stores,
+The contract suite covers positive transformations, blocked prerequisites,
+internal pattern-codec round trips, external-tool identity and exit checks, immutable artifact stores,
 Foundation evidence identity, oracle correlation and raw memory-BIST engine validation.
 
 See `DESIGN.md`, `INTERFACES.md` and `IMPLEMENTATION_PLAN.md` before implementing a backend.
@@ -110,6 +115,7 @@ swift run dft-engine capabilities
 mkdir -p /tmp/dft-project
 cp Tests/DFTEngineTests/Fixtures/design.json /tmp/dft-project/design.json
 cp Tests/DFTEngineTests/Fixtures/cell-library.json /tmp/dft-project/cell-library.json
+cp Tests/DFTEngineTests/Fixtures/cell-timing.lib /tmp/dft-project/cell-timing.lib
 swift run dft-engine execute \
   --request Tests/DFTEngineTests/Fixtures/scan-request.json \
   --output-dir /tmp/dft-project \

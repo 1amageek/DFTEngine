@@ -12,6 +12,7 @@ public struct DFTBISTConfiguration: Sendable, Hashable, Codable {
     public var clockSignal: String?
     public var targetBindings: [DFTBISTTargetBinding]?
     public var memoryBindings: [DFTMemoryBISTBinding]?
+    public var logicCellMapping: DFTLogicBISTCellMapping?
 
     public init(
         name: String,
@@ -24,7 +25,8 @@ public struct DFTBISTConfiguration: Sendable, Hashable, Codable {
         testModeSignal: String? = nil,
         clockSignal: String? = nil,
         targetBindings: [DFTBISTTargetBinding]? = nil,
-        memoryBindings: [DFTMemoryBISTBinding]? = nil
+        memoryBindings: [DFTMemoryBISTBinding]? = nil,
+        logicCellMapping: DFTLogicBISTCellMapping? = nil
     ) {
         self.name = name
         self.kind = kind
@@ -37,5 +39,6 @@ public struct DFTBISTConfiguration: Sendable, Hashable, Codable {
         self.clockSignal = clockSignal
         self.targetBindings = targetBindings
         self.memoryBindings = memoryBindings
+        self.logicCellMapping = logicCellMapping
     }
 }

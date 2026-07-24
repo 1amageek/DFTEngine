@@ -23,14 +23,23 @@ public struct DFTGateLevelBISTTransformer: Sendable {
         guard let bindings = configuration.targetBindings, !bindings.isEmpty else {
             throw DFTGateLevelBISTTransformError.targetBindingsMissing
         }
+        guard let cellMapping = configuration.logicCellMapping else {
+            throw DFTGateLevelBISTTransformError.cellMappingMissing
+        }
+        try validate(cellMapping: cellMapping, configuration: configuration)
         let bindingNames = bindings.map(\.instanceName)
         guard Set(bindingNames).count == bindingNames.count else {
             let duplicate = bindingNames.first { name in bindingNames.filter { $0 == name }.count > 1 } ?? "<unknown>"
             throw DFTGateLevelBISTTransformError.duplicateTargetBinding(duplicate)
         }
+        guard Set(configuration.targetInstances) == Set(bindingNames),
+              !configuration.targetInstances.isEmpty else {
+            throw DFTGateLevelBISTTransformError.targetSetMismatch
+        }
 
         var transformedGate = gate
         var module = transformedGate.modules[moduleIndex]
+        try ensureExplicitPortBindings(module: &module)
         guard module.nets.contains(where: { $0.name == clockSignal || $0.id == clockSignal }) else {
             throw DFTGateLevelBISTTransformError.clockNetMissing(clockSignal)
         }
@@ -118,7 +127,7 @@ public struct DFTGateLevelBISTTransformer: Sendable {
                 let outputPinID = "\(muxID)_out"
                 let mux = GateCell(
                     id: muxID,
-                    type: "DFT_BIST_INPUT_MUX",
+                    type: cellMapping.inputMuxCellType,
                     instanceName: muxID,
                     pins: [
                         GatePin(id: funcPinID, name: "FUNC", direction: .input, netID: originalNetID),
@@ -173,7 +182,7 @@ public struct DFTGateLevelBISTTransformer: Sendable {
                 let outputPinID = "\(captureID)_out"
                 module.cells.append(GateCell(
                     id: captureID,
-                    type: "DFT_BIST_RESPONSE_CAPTURE",
+                    type: cellMapping.responseCaptureCellType,
                     instanceName: captureID,
                     pins: [
                         GatePin(id: inputPinID, name: "I", direction: .input, netID: originalNetID),
@@ -199,7 +208,7 @@ public struct DFTGateLevelBISTTransformer: Sendable {
         let compactorOutputID = "\(compactorID)_out"
         module.cells.append(GateCell(
             id: compactorID,
-            type: "DFT_BIST_RESPONSE_COMPACTOR",
+            type: cellMapping.responseCompactorCellType,
             instanceName: compactorID,
             pins: compactorInputPins + [GatePin(id: compactorOutputID, name: "Y", direction: .output, netID: responseNetID)]
         ))
@@ -223,7 +232,7 @@ public struct DFTGateLevelBISTTransformer: Sendable {
         ]
         module.cells.append(GateCell(
             id: controllerID,
-            type: configuration.controllerCellName,
+            type: cellMapping.controllerCellType,
             instanceName: controllerID,
             pins: controllerPins
         ))
@@ -240,7 +249,7 @@ public struct DFTGateLevelBISTTransformer: Sendable {
         ]
         module.cells.append(GateCell(
             id: signatureID,
-            type: "DFT_BIST_SIGNATURE_REGISTER",
+            type: cellMapping.signatureRegisterCellType,
             instanceName: configuration.signatureRegisterName,
             pins: signaturePins
         ))
@@ -249,8 +258,8 @@ public struct DFTGateLevelBISTTransformer: Sendable {
         updateNet(testModeNetID, in: &module) { net in net.loadPinIDs.append(signaturePins[2].id) }
         updateNet(signatureNetID, in: &module) { net in net.driverPinIDs.append(signaturePins[3].id) }
 
-        appendOutputPortIfNeeded(name: "\(prefix)_done", netID: doneNetID, module: &module)
-        appendOutputPortIfNeeded(name: "\(prefix)_signature", netID: signatureNetID, module: &module)
+        try appendOutputPortIfNeeded(name: "\(prefix)_done", netID: doneNetID, module: &module)
+        try appendOutputPortIfNeeded(name: "\(prefix)_signature", netID: signatureNetID, module: &module)
         transformedGate.modules[moduleIndex] = module
         let validation = LogicDesignValidator().validate(transformedGate)
         guard validation.isValid else {
@@ -276,19 +285,26 @@ public struct DFTGateLevelBISTTransformer: Sendable {
     }
 
     private func ensureInputControlSignal(named name: String, module: inout GateModule) throws -> String {
+        let port: RTLPort
         if let existing = module.ports.first(where: { $0.name == name }) {
             guard existing.direction == .input else {
                 throw DFTGateLevelBISTTransformError.controlSignalConflict(name)
             }
+            port = existing
         } else {
-            module.ports.append(RTLPort(id: "port-\(safeIdentifier(name))", name: name, direction: .input))
+            port = RTLPort(id: "port-\(safeIdentifier(name))", name: name, direction: .input)
+            module.ports.append(port)
         }
+        let netID: String
         if let net = module.nets.first(where: { $0.name == name || $0.id == name }) {
-            return net.id
+            netID = net.id
+        } else {
+            let id = "net-\(safeIdentifier(name))"
+            _ = try appendNet(id: id, name: name, to: &module)
+            netID = id
         }
-        let id = "net-\(safeIdentifier(name))"
-        _ = try appendNet(id: id, name: name, to: &module)
-        return id
+        bind(portID: port.id, to: netID, module: &module)
+        return netID
     }
 
     private func appendNet(id: String, name: String, to module: inout GateModule) throws -> String {
@@ -314,12 +330,79 @@ public struct DFTGateLevelBISTTransformer: Sendable {
         update(&module.nets[index])
     }
 
-    private func appendOutputPortIfNeeded(name: String, netID: String, module: inout GateModule) {
-        if module.ports.contains(where: { $0.name == name }) { return }
-        module.ports.append(RTLPort(id: "port-\(safeIdentifier(name))", name: name, direction: .output))
+    private func appendOutputPortIfNeeded(
+        name: String,
+        netID: String,
+        module: inout GateModule
+    ) throws {
+        let port: RTLPort
+        if let existing = module.ports.first(where: { $0.name == name }) {
+            guard existing.direction == .output else {
+                throw DFTGateLevelBISTTransformError.controlSignalConflict(name)
+            }
+            port = existing
+        } else {
+            port = RTLPort(id: "port-\(safeIdentifier(name))", name: name, direction: .output)
+            module.ports.append(port)
+        }
         if !module.nets.contains(where: { $0.id == netID }) {
             module.nets.append(GateNet(id: netID, name: name))
         }
+        bind(portID: port.id, to: netID, module: &module)
+    }
+
+    private func ensureExplicitPortBindings(module: inout GateModule) throws {
+        var bindings = module.portBindings ?? []
+        let boundPortIDs = Set(bindings.map(\.portID))
+        for port in module.ports where !boundPortIDs.contains(port.id) {
+            guard let net = module.nets.first(where: {
+                $0.name == port.name || $0.id == port.name
+            }) else {
+                throw DFTGateLevelBISTTransformError.netMissing(port.name)
+            }
+            bindings.append(GatePortBinding(portID: port.id, netID: net.id))
+        }
+        module.portBindings = bindings.sorted { $0.portID < $1.portID }
+    }
+
+    private func bind(portID: String, to netID: String, module: inout GateModule) {
+        var bindings = module.portBindings ?? []
+        bindings.removeAll { $0.portID == portID }
+        bindings.append(GatePortBinding(portID: portID, netID: netID))
+        module.portBindings = bindings.sorted { $0.portID < $1.portID }
+    }
+
+    private func validate(
+        cellMapping: DFTLogicBISTCellMapping,
+        configuration: DFTBISTConfiguration
+    ) throws {
+        let cellTypes = [
+            cellMapping.controllerCellType,
+            cellMapping.inputMuxCellType,
+            cellMapping.responseCaptureCellType,
+            cellMapping.responseCompactorCellType,
+            cellMapping.signatureRegisterCellType,
+        ]
+        guard cellTypes.allSatisfy({ !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }),
+              cellMapping.controllerCellType == configuration.controllerCellName else {
+            throw DFTGateLevelBISTTransformError.cellMappingInvalid("cell type contract mismatch")
+        }
+        guard !cellMapping.processID.isEmpty,
+              !cellMapping.pdkDigest.isEmpty else {
+            throw DFTGateLevelBISTTransformError.cellMappingInvalid("process identity is missing")
+        }
+        guard validPolynomialTaps(cellMapping.prpgPolynomialTaps),
+              validPolynomialTaps(cellMapping.misrPolynomialTaps) else {
+            throw DFTGateLevelBISTTransformError.cellMappingInvalid("polynomial taps must be unique positive integers")
+        }
+        guard !cellMapping.expectedSignature.isEmpty,
+              cellMapping.expectedSignature.allSatisfy({ $0 == "0" || $0 == "1" }) else {
+            throw DFTGateLevelBISTTransformError.cellMappingInvalid("expected signature must be binary")
+        }
+    }
+
+    private func validPolynomialTaps(_ taps: [Int]) -> Bool {
+        !taps.isEmpty && taps.allSatisfy { $0 > 0 } && Set(taps).count == taps.count
     }
 
     private func safeIdentifier(_ value: String) -> String {

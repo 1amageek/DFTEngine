@@ -5,7 +5,7 @@ public struct ExternalATPGEngine: ATPGExecuting {
     public let executor: DFTExternalToolExecutor
 
     public init(
-        runner: any DFTExternalToolRunning,
+        runner: any DFTExternalToolOutputProviding,
         artifactStore: (any DFTArtifactStoring)? = nil
     ) {
         self.executor = DFTExternalToolExecutor(runner: runner, artifactStore: artifactStore)

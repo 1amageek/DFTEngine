@@ -57,7 +57,7 @@ public struct DFTExecutionSupport: Sendable {
         startedAt: Date,
         seed: UInt64? = nil
     ) throws -> DFTResult {
-        DFTResult(
+        let result = DFTResult(
             schemaVersion: DFTRequest.currentSchemaVersion,
             runID: request.runID,
             status: status,
@@ -73,5 +73,7 @@ public struct DFTExecutionSupport: Sendable {
             ),
             payload: payload
         )
+        try DFTResultValidator().validate(result, for: request)
+        return result
     }
 }

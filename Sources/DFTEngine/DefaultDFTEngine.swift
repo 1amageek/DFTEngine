@@ -38,22 +38,29 @@ public struct DefaultDFTEngine: DFTEngineExecuting {
     public init(
         artifactStore: any DFTArtifactStoring,
         designLoader: any DFTDesignLoading,
-        cellLibraryLoader: any DFTCellLibraryLoading
+        cellLibraryLoader: any DFTCellLibraryLoading,
+        timingLibraryLoader: any DFTTimingLibraryLoading,
+        constraintLoader: any DFTConstraintLoading
     ) {
         self.init(
             scanInsertion: DeterministicScanInsertionEngine(
                 artifactStore: artifactStore,
                 designLoader: designLoader,
-                cellLibraryLoader: cellLibraryLoader
+                cellLibraryLoader: cellLibraryLoader,
+                timingLibraryLoader: timingLibraryLoader,
+                constraintLoader: constraintLoader
             ),
             atpg: DeterministicATPGEngine(
                 artifactStore: artifactStore,
                 designLoader: designLoader,
-                cellLibraryLoader: cellLibraryLoader
+                cellLibraryLoader: cellLibraryLoader,
+                timingLibraryLoader: timingLibraryLoader,
+                constraintLoader: constraintLoader
             ),
             bist: DeterministicBISTEngine(
                 artifactStore: artifactStore,
-                designLoader: designLoader
+                designLoader: designLoader,
+                constraintLoader: constraintLoader
             )
         )
     }

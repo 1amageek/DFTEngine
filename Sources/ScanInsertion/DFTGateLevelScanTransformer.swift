@@ -19,6 +19,7 @@ public struct DFTGateLevelScanTransformer: Sendable {
         }
 
         var module = gate.modules[topIndex]
+        try ensureExplicitPortBindings(module: &module)
         try DFTCellLibraryManifestCodec.validate(cellLibrary)
         let bindingsByFunctionalType = Dictionary(
             uniqueKeysWithValues: cellLibrary.bindings.map { ($0.functionalCellType, $0) }
@@ -123,7 +124,7 @@ public struct DFTGateLevelScanTransformer: Sendable {
             indices.sorted { module.cells[$0].instanceName < module.cells[$1].instanceName }
         }
         var transformedCellIDs: [String] = []
-        var helperCellIDs: [String] = []
+        let helperCellIDs: [String] = []
 
         for chain in plan.chains {
             let count = chain.estimatedElementCount
@@ -137,13 +138,9 @@ public struct DFTGateLevelScanTransformer: Sendable {
                 module: &module,
                 path: "\(module.name).\(chain.scanInSignal)"
             )
-            let scanOutNet = try ensureNet(
-                name: chain.scanOutSignal,
-                module: &module,
-                path: "\(module.name).\(chain.scanOutSignal)"
-            )
             try ensurePort(name: chain.scanInSignal, direction: .input, module: &module)
             try ensurePort(name: chain.scanOutSignal, direction: .output, module: &module)
+            try bindPort(named: chain.scanInSignal, to: scanInNet, module: &module)
 
             let scanEnableNet = try ensureNet(
                 name: architecture.scanEnableSignal,
@@ -155,6 +152,8 @@ public struct DFTGateLevelScanTransformer: Sendable {
                 module: &module,
                 path: "\(module.name).\(architecture.testModeSignal)"
             )
+            try bindPort(named: architecture.scanEnableSignal, to: scanEnableNet, module: &module)
+            try bindPort(named: architecture.testModeSignal, to: testModeNet, module: &module)
 
             var previousOutputNetID = scanInNet
             for cellIndex in chainIndices {
@@ -214,34 +213,7 @@ public struct DFTGateLevelScanTransformer: Sendable {
                 previousOutputNetID = outputPin.netID ?? previousOutputNetID
             }
 
-            let helperID = StableLogicID.make(
-                kind: "dft-scan-output",
-                path: module.name,
-                name: chain.id
-            )
-            let helperInputID = StableLogicID.make(
-                kind: "dft-scan-output-pin",
-                path: module.name,
-                name: "\(chain.id).I"
-            )
-            let helperOutputID = StableLogicID.make(
-                kind: "dft-scan-output-pin",
-                path: module.name,
-                name: "\(chain.id).O"
-            )
-            let helper = GateCell(
-                id: helperID,
-                type: "DFT_SCAN_OUT",
-                instanceName: "\(chain.id)_scan_out",
-                pins: [
-                    GatePin(id: helperInputID, name: "I", direction: .input, netID: previousOutputNetID),
-                    GatePin(id: helperOutputID, name: "O", direction: .output, netID: scanOutNet),
-                ]
-            )
-            module.cells.append(helper)
-            appendLoad(helperInputID, to: previousOutputNetID, module: &module)
-            appendDriver(helperOutputID, to: scanOutNet, module: &module)
-            helperCellIDs.append(helperID)
+            try bindPort(named: chain.scanOutSignal, to: previousOutputNetID, module: &module)
         }
 
         gate.modules[topIndex] = module
@@ -264,7 +236,7 @@ public struct DFTGateLevelScanTransformer: Sendable {
             assumptions: [
                 "sequential cell domain assignment follows explicit clock/reset connectivity in the canonical gate IR",
                 "cell type recognition remains limited to the declared structural DFF/FF/LATCH naming contract",
-                "DFT_SCAN_OUT helper cells represent top-level scan observability until process-qualified library mapping is supplied",
+                "top-level scan ports use canonical port-to-net bindings without synthetic helper cells",
                 "functional ports are preserved"
             ]
         )
@@ -338,6 +310,34 @@ public struct DFTGateLevelScanTransformer: Sendable {
         )
     }
 
+    private func ensureExplicitPortBindings(module: inout GateModule) throws {
+        var bindings = module.portBindings ?? []
+        let bindingByPortID = Dictionary(uniqueKeysWithValues: bindings.map { ($0.portID, $0) })
+        for port in module.ports where bindingByPortID[port.id] == nil {
+            guard let net = module.nets.first(where: {
+                $0.name == port.name || $0.id == port.name
+            }) else {
+                throw DFTGateLevelScanTransformError.portNetMissing(port.name)
+            }
+            bindings.append(GatePortBinding(portID: port.id, netID: net.id))
+        }
+        module.portBindings = bindings.sorted { $0.portID < $1.portID }
+    }
+
+    private func bindPort(
+        named name: String,
+        to netID: String,
+        module: inout GateModule
+    ) throws {
+        guard let port = module.ports.first(where: { $0.name == name }) else {
+            throw DFTGateLevelScanTransformError.controlPortConflict(name: name)
+        }
+        var bindings = module.portBindings ?? []
+        bindings.removeAll { $0.portID == port.id }
+        bindings.append(GatePortBinding(portID: port.id, netID: netID))
+        module.portBindings = bindings.sorted { $0.portID < $1.portID }
+    }
+
     private func ensureNet(
         name: String,
         module: inout GateModule,
@@ -361,10 +361,4 @@ public struct DFTGateLevelScanTransformer: Sendable {
         }
     }
 
-    private func appendDriver(_ pinID: String, to netID: String, module: inout GateModule) {
-        guard let index = module.nets.firstIndex(where: { $0.id == netID }) else { return }
-        if !module.nets[index].driverPinIDs.contains(pinID) {
-            module.nets[index].driverPinIDs.append(pinID)
-        }
-    }
 }

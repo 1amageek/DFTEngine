@@ -32,9 +32,26 @@
       },
       "digest" : {
         "algorithm" : "sha256",
-        "hexadecimalValue" : "e144c3cb28031d16731f15d47d68c7958c681b41223b9066e750503136f1cdc2"
+        "hexadecimalValue" : "9deddffd50075c6a795c1dc407ee39480b4dca4d13d9ee79b04acfe6a28304d4"
       },
-      "byteCount" : 760
+      "byteCount" : 797
+    },
+    {
+      "id" : "cell-timing-library",
+      "locator" : {
+        "location" : {
+          "storage" : "workspaceRelative",
+          "value" : "cell-timing.lib"
+        },
+        "role" : "input",
+        "kind" : "technology",
+        "format" : "liberty"
+      },
+      "digest" : {
+        "algorithm" : "sha256",
+        "hexadecimalValue" : "8a48cfd29ce2108c11ff95620a7e97bf42824b8da042590d3769c1ef75ff9b6d"
+      },
+      "byteCount" : 841
     }
   ],
   "design" : {
@@ -72,13 +89,30 @@
       },
       "digest" : {
         "algorithm" : "sha256",
-        "hexadecimalValue" : "e144c3cb28031d16731f15d47d68c7958c681b41223b9066e750503136f1cdc2"
+        "hexadecimalValue" : "9deddffd50075c6a795c1dc407ee39480b4dca4d13d9ee79b04acfe6a28304d4"
       },
-      "byteCount" : 760
+      "byteCount" : 797
     },
     "processID" : "fixture-process",
     "version" : "1",
-    "manifestDigest" : "18d60d96ea632fe1f6240cb0b3cc062dd68769f4a6ded99637631618d4624186"
+    "manifestDigest" : "0bd506fc3efa25d9b6d4d94cae142b9060b58d6e65cca9e3005d4decb1ccbb3b",
+    "timingLibraryArtifact" : {
+      "id" : "cell-timing-library",
+      "locator" : {
+        "location" : {
+          "storage" : "workspaceRelative",
+          "value" : "cell-timing.lib"
+        },
+        "role" : "input",
+        "kind" : "technology",
+        "format" : "liberty"
+      },
+      "digest" : {
+        "algorithm" : "sha256",
+        "hexadecimalValue" : "8a48cfd29ce2108c11ff95620a7e97bf42824b8da042590d3769c1ef75ff9b6d"
+      },
+      "byteCount" : 841
+    }
   },
   "constraints" : {
     "artifact" : {
@@ -94,9 +128,9 @@
       },
       "digest" : {
         "algorithm" : "sha256",
-        "hexadecimalValue" : "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+        "hexadecimalValue" : "32edaf3b4c6f05dfd5712f742e6823ffe0ae9eaceeaac292fcca90a2c29d8e5c"
       },
-      "byteCount" : 10
+      "byteCount" : 142
     },
     "modeIDs" : [ "test" ]
   },
