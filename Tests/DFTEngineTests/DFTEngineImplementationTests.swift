@@ -778,7 +778,7 @@ struct DFTEngineImplementationTests {
                 engineID: "external.atpg",
                 implementationID: "stub-atpg",
                 implementationVersion: "1.0.0",
-                inputs: memoryRequest.inputs,
+                inputs: memoryRequest.executionInputArtifacts,
                 startedAt: Date(timeIntervalSince1970: 0),
                 completedAt: Date(timeIntervalSince1970: 1),
                 seed: 1

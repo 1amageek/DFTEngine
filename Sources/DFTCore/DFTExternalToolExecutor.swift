@@ -63,15 +63,15 @@ public struct DFTExternalToolExecutor: Sendable {
         guard result.provenance.inputs == request.executionInputArtifacts else {
             throw DFTExternalToolError.provenanceInputMismatch
         }
-        guard result.provenance.producer.identifier == runner.descriptor.engineID else {
-            throw DFTExternalToolError.descriptorMismatch(
-                expected: runner.descriptor.engineID,
+        guard result.provenance.producer.identifier == runner.descriptor.implementationID else {
+            throw DFTExternalToolError.implementationMismatch(
+                expected: runner.descriptor.implementationID,
                 actual: result.provenance.producer.identifier
             )
         }
-        guard result.provenance.producer.build == runner.descriptor.implementationID else {
-            throw DFTExternalToolError.implementationMismatch(
-                expected: runner.descriptor.implementationID,
+        guard result.provenance.producer.build == runner.descriptor.engineID else {
+            throw DFTExternalToolError.descriptorMismatch(
+                expected: runner.descriptor.engineID,
                 actual: result.provenance.producer.build ?? ""
             )
         }
