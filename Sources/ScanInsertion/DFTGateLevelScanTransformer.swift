@@ -311,7 +311,7 @@ public struct DFTGateLevelScanTransformer: Sendable {
     }
 
     private func ensureExplicitPortBindings(module: inout GateModule) throws {
-        var bindings = module.portBindings ?? []
+        var bindings = module.portBindings
         let bindingByPortID = Dictionary(uniqueKeysWithValues: bindings.map { ($0.portID, $0) })
         for port in module.ports where bindingByPortID[port.id] == nil {
             guard let net = module.nets.first(where: {
@@ -332,7 +332,7 @@ public struct DFTGateLevelScanTransformer: Sendable {
         guard let port = module.ports.first(where: { $0.name == name }) else {
             throw DFTGateLevelScanTransformError.controlPortConflict(name: name)
         }
-        var bindings = module.portBindings ?? []
+        var bindings = module.portBindings
         bindings.removeAll { $0.portID == port.id }
         bindings.append(GatePortBinding(portID: port.id, netID: netID))
         module.portBindings = bindings.sorted { $0.portID < $1.portID }

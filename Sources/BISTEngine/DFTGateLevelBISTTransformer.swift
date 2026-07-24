@@ -352,7 +352,7 @@ public struct DFTGateLevelBISTTransformer: Sendable {
     }
 
     private func ensureExplicitPortBindings(module: inout GateModule) throws {
-        var bindings = module.portBindings ?? []
+        var bindings = module.portBindings
         let boundPortIDs = Set(bindings.map(\.portID))
         for port in module.ports where !boundPortIDs.contains(port.id) {
             guard let net = module.nets.first(where: {
@@ -366,7 +366,7 @@ public struct DFTGateLevelBISTTransformer: Sendable {
     }
 
     private func bind(portID: String, to netID: String, module: inout GateModule) {
-        var bindings = module.portBindings ?? []
+        var bindings = module.portBindings
         bindings.removeAll { $0.portID == portID }
         bindings.append(GatePortBinding(portID: portID, netID: netID))
         module.portBindings = bindings.sorted { $0.portID < $1.portID }

@@ -5,18 +5,22 @@ import LogicIR
 public struct DeterministicBISTEngine: BISTExecuting {
     public let artifactStore: any DFTArtifactStoring
     public let designLoader: (any DFTDesignLoading)?
-    public let constraintLoader: (any DFTConstraintLoading)?
+    public let constraintLoader: any DFTConstraintLoading
+    public let logicBISTCellMappingLoader: any DFTLogicBISTCellMappingLoading
     public let implementationID: String
 
     public init(
         artifactStore: any DFTArtifactStoring = InMemoryDFTArtifactStore(),
         designLoader: (any DFTDesignLoading)? = nil,
-        constraintLoader: (any DFTConstraintLoading)? = nil,
+        constraintLoader: any DFTConstraintLoading = UnavailableDFTConstraintLoader(),
+        logicBISTCellMappingLoader: any DFTLogicBISTCellMappingLoading =
+            UnavailableDFTLogicBISTCellMappingLoader(),
         implementationID: String = "native-deterministic-bist"
     ) {
         self.artifactStore = artifactStore
         self.designLoader = designLoader
         self.constraintLoader = constraintLoader
+        self.logicBISTCellMappingLoader = logicBISTCellMappingLoader
         self.implementationID = implementationID
     }
 
@@ -53,23 +57,21 @@ public struct DeterministicBISTEngine: BISTExecuting {
                     message: "BIST configuration is required."
                 )
             }
-            if let constraintLoader {
-                do {
-                    try DFTConstraintValidator().validate(
-                        constraintLoader.load(request.constraints),
-                        request: request
-                    )
-                } catch {
-                    return try blocked(
-                        request: request,
-                        engineID: engineID,
-                        startedAt: startedAt,
-                        code: "DFT_CONSTRAINT_VALIDATION_FAILED",
-                        message: error.localizedDescription,
-                        entity: request.constraints.artifact.path,
-                        actions: ["repair_test_mode_constraints"]
-                    )
-                }
+            do {
+                try DFTConstraintValidator().validate(
+                    constraintLoader.load(request.constraints),
+                    request: request
+                )
+            } catch {
+                return try blocked(
+                    request: request,
+                    engineID: engineID,
+                    startedAt: startedAt,
+                    code: "DFT_CONSTRAINT_VALIDATION_FAILED",
+                    message: error.localizedDescription,
+                    entity: request.constraints.artifacts.first?.path ?? "constraints",
+                    actions: ["provide_constraint_loader", "repair_test_mode_constraints"]
+                )
             }
             let testModeSignal = configuration.testModeSignal
                 ?? request.testIntent?.testModeSignal
@@ -132,6 +134,33 @@ public struct DeterministicBISTEngine: BISTExecuting {
                     message: "Canonical logic BIST requires target input/output pin bindings.",
                     entity: "bistConfiguration.targetBindings",
                     actions: ["declare_bist_target_pin_bindings"]
+                )
+            }
+            guard let declaredMapping = configuration.logicCellMapping else {
+                return try blocked(
+                    request: request,
+                    engineID: engineID,
+                    startedAt: startedAt,
+                    code: "DFT_BIST_CELL_MAPPING_MISSING",
+                    message: "Canonical logic BIST requires a process-bound helper-cell mapping artifact.",
+                    entity: "bistConfiguration.logicCellMapping",
+                    actions: ["attach_logic_bist_cell_mapping"]
+                )
+            }
+            do {
+                let loadedMapping = try logicBISTCellMappingLoader.load(declaredMapping)
+                guard loadedMapping == declaredMapping.manifest else {
+                    throw DFTLogicBISTCellMappingError.contentMismatch
+                }
+            } catch {
+                return try blocked(
+                    request: request,
+                    engineID: engineID,
+                    startedAt: startedAt,
+                    code: "DFT_BIST_CELL_MAPPING_LOAD_FAILED",
+                    message: error.localizedDescription,
+                    entity: declaredMapping.artifact.path,
+                    actions: ["verify_bist_mapping_artifact", "align_inline_mapping_with_artifact"]
                 )
             }
             guard let designLoader else {
@@ -202,7 +231,8 @@ public struct DeterministicBISTEngine: BISTExecuting {
                 signatureRegisterName: configuration.signatureRegisterName,
                 seed: seed,
                 testModeSignal: testModeSignal,
-                logicCellMapping: configuration.logicCellMapping
+                logicCellMapping: configuration.logicCellMapping,
+                memoryBindings: nil
             )
             let transformedArtifact = DFTTransformedDesignArtifact(
                 runID: request.runID,

@@ -18,7 +18,12 @@ The full platform goal is intentionally decomposed into the gates documented in 
 
 - Implemented versioned request/result contracts, immutable artifact stores, deterministic CLI and structured blocked/cancelled states.
 - Completed direct CircuiteFoundation conformance through `DFTEngineExecuting`, `DefaultDFTEngine`, and `DFTResult`; verified inputs, configuration digest, design revision, seed, and producer identity are retained in shared provenance.
-- Enforced immutable artifact-store writes, stable artifact IDs, safe request/reference paths and strict external-tool implementation identity/version matching.
+- Enforced immutable artifact-store writes, stable artifact IDs, safe request/reference paths and strict external-tool engine/version plus executable SHA-256 matching.
+- Added one digest-bound constraint artifact per mode, mandatory constraint
+  loading, exact mode-set validation, clock/test-mode/scan-enable checks, and
+  conflicting case-analysis rejection.
+- Enforced the PDK reference's manifest identity before dispatch instead of
+  treating the inline process metadata as sufficient.
 - Added canonical `LogicDesignSnapshot` loading with project-root bounds, byte-count and SHA-256 checks, design-digest verification, top-design checks and gate validation.
 - Added a real gate-level scan transformation that updates sequential cells, control ports, scan nets, canonical port/net bindings and stable design diffs without synthetic observability cells.
 - Added explicit clock/reset connectivity binding and per-domain element-count checks; ambiguous bindings are blocked.
@@ -29,7 +34,10 @@ The full platform goal is intentionally decomposed into the gates documented in 
 - Added gate-level stuck-at fault extraction and exhaustive binary simulation for a bounded combinational primitive subset; unsupported sequential semantics block coverage.
 - Added bounded DFF/SDFF SI/SE scan-shift and functional-capture simulation, reset/set polarity/timing/edge contracts, qualified level-sensitive latch semantics and bounded sequential transition-fault simulation; unknown primitives and process-qualified timing remain explicitly blocked.
 - Added the protocol-first `DFTProcessFaultModeling` boundary for process-specific ATPG. A declared process family alone cannot produce coverage; the engine requires an injected model, matching model identity, a non-empty reason and a binary pattern with the configured width, with typed blocked diagnostics for missing, unsupported, failed or malformed model results.
-- Added canonical logic-BIST transformation with explicit target pin bindings, test-mode input muxing, response capture/compaction, signature output and immutable design diff.
+- Added canonical logic-BIST transformation with explicit target pin bindings,
+  test-mode input muxing, response capture/compaction, signature output,
+  immutable design diff, and a separately loaded process/PDK-bound helper-cell
+  mapping artifact.
 - Kept JSON as the only native qualified output, blocked STIL/WGL requests until standards-qualified exporters exist, and moved the `SignoffToolSupport` process adapter into `DFTExternalTools`.
 - Added raw DFT evidence maturity and provenance metadata for smoke, corpus, and
   oracle-correlated observations without embedding a trust or release verdict.
@@ -39,8 +47,13 @@ The full platform goal is intentionally decomposed into the gates documented in 
 - Removed flow-owned review state from `DFTDesignDiff`; the current contract
   contains raw structural changes and snapshot references only.
 - Rejected non-zero external exits before response decoding, bound external
-  provenance inputs to the request, and preserved Foundation evidence identity
-  when stdout/stderr artifacts are attached.
+  provenance inputs to the request, verified the executable digest before and
+  after execution, and preserved Foundation evidence identity when
+  stdout/stderr artifacts are attached.
+- Added `DFTResultSemanticVerifier` to reopen source/transformed design and
+  mapping artifacts, recheck identity and canonical validity, and reject
+  unchanged or structurally inconsistent completed mutations. Xcircuite stage
+  and release boundaries delegate to this verifier.
 - Preserved request digests in evidence provenance so ToolQualification and flow
   policy can bind observations to the exact DFT execution.
 - Defined the integration boundary: the composing runtime persists typed DFT

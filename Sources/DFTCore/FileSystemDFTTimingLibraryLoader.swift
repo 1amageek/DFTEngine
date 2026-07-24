@@ -13,18 +13,17 @@ public struct FileSystemDFTTimingLibraryLoader: DFTTimingLibraryLoading {
         guard reference.format == .liberty || reference.format == .json else {
             throw DFTCellLibraryError.unsupportedFormat(reference.format)
         }
-        guard !reference.path.isEmpty,
-              !reference.path.hasPrefix("/"),
-              !reference.path.split(separator: "/").contains("..") else {
-            throw DFTCellLibraryError.invalidPath(reference.path)
-        }
-        let url = rootURL.appendingPathComponent(reference.path).standardizedFileURL
-        guard url.path == rootURL.path || url.path.hasPrefix(rootURL.path + "/") else {
+        let url: URL
+        do {
+            url = try DFTProjectArtifactResolver(rootURL: rootURL).resolve(
+                reference.path
+            )
+        } catch {
             throw DFTCellLibraryError.invalidPath(reference.path)
         }
         let data: Data
         do {
-            data = try Data(contentsOf: url)
+            data = try Data(contentsOf: url, options: .mappedIfSafe)
         } catch {
             throw DFTCellLibraryError.readFailed(
                 path: reference.path,

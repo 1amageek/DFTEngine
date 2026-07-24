@@ -1,8 +1,6 @@
-import CircuiteFoundation
 import Foundation
 
-public struct DFTLogicBISTCellMapping: Sendable, Hashable, Codable {
-    public var artifact: ArtifactReference
+public struct DFTLogicBISTCellMappingManifest: Sendable, Hashable, Codable {
     public var processID: String
     public var pdkDigest: String
     public var controllerCellType: String
@@ -15,7 +13,6 @@ public struct DFTLogicBISTCellMapping: Sendable, Hashable, Codable {
     public var expectedSignature: String
 
     public init(
-        artifact: ArtifactReference,
         processID: String,
         pdkDigest: String,
         controllerCellType: String,
@@ -27,7 +24,6 @@ public struct DFTLogicBISTCellMapping: Sendable, Hashable, Codable {
         misrPolynomialTaps: [Int],
         expectedSignature: String
     ) {
-        self.artifact = artifact
         self.processID = processID
         self.pdkDigest = pdkDigest
         self.controllerCellType = controllerCellType
@@ -38,20 +34,5 @@ public struct DFTLogicBISTCellMapping: Sendable, Hashable, Codable {
         self.prpgPolynomialTaps = prpgPolynomialTaps.sorted()
         self.misrPolynomialTaps = misrPolynomialTaps.sorted()
         self.expectedSignature = expectedSignature
-    }
-
-    public var manifest: DFTLogicBISTCellMappingManifest {
-        DFTLogicBISTCellMappingManifest(
-            processID: processID,
-            pdkDigest: pdkDigest,
-            controllerCellType: controllerCellType,
-            inputMuxCellType: inputMuxCellType,
-            responseCaptureCellType: responseCaptureCellType,
-            responseCompactorCellType: responseCompactorCellType,
-            signatureRegisterCellType: signatureRegisterCellType,
-            prpgPolynomialTaps: prpgPolynomialTaps,
-            misrPolynomialTaps: misrPolynomialTaps,
-            expectedSignature: expectedSignature
-        )
     }
 }

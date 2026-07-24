@@ -75,7 +75,8 @@ public struct DFTResultValidator: Sendable {
         case .scanInsertion:
             guard let transformedDesign = payload.transformedDesign,
                   artifacts.contains(transformedDesign.artifact),
-                  payload.scanPlan?.architecture == request.scanArchitecture,
+                  let scanPlan = payload.scanPlan,
+                  validateScanPlan(scanPlan, request: request),
                   request.insertionPolicy?.generateDesignDiff != true
                     || validateDesignDiff(
                         payload.designDiff,
@@ -108,21 +109,80 @@ public struct DFTResultValidator: Sendable {
                   ) else {
                 throw DFTResultValidationError.completedPayloadIncomplete(.bist)
             }
-            guard let configuration = request.bistConfiguration,
+            guard let configuration = request.bistConfiguration else {
+                throw DFTResultValidationError.completedPayloadIncomplete(.bist)
+            }
+            let expectedSeed = try expectedBISTSeed(configuration, request: request)
+            guard
+                  structure.name == configuration.name,
                   structure.kind == configuration.kind,
                   structure.controllerCellName == configuration.controllerCellName,
                   structure.targetInstances == configuration.targetInstances.sorted(),
                   structure.patternCount == configuration.patternCount,
-                  structure.signatureRegisterName == configuration.signatureRegisterName else {
+                  structure.signatureRegisterName == configuration.signatureRegisterName,
+                  structure.seed == expectedSeed,
+                  structure.testModeSignal == expectedBISTTestModeSignal(
+                      configuration,
+                      request: request
+                  ) else {
                 throw DFTResultValidationError.completedPayloadIncomplete(.bist)
             }
             if configuration.kind == .logic {
                 guard let mapping = configuration.logicCellMapping,
-                      structure.logicCellMapping == mapping else {
+                      structure.logicCellMapping == mapping,
+                      structure.memoryBindings == nil else {
+                    throw DFTResultValidationError.completedPayloadIncomplete(.bist)
+                }
+            } else {
+                guard structure.logicCellMapping == nil,
+                      structure.memoryBindings == configuration.memoryBindings else {
                     throw DFTResultValidationError.completedPayloadIncomplete(.bist)
                 }
             }
         }
+    }
+
+    private func validateScanPlan(
+        _ plan: DFTScanPlan,
+        request: DFTRequest
+    ) -> Bool {
+        guard let architecture = request.scanArchitecture,
+              plan.architecture == architecture,
+              !plan.chains.isEmpty,
+              Set(plan.chains.map(\.id)).count == plan.chains.count,
+              plan.totalEstimatedElementCount
+                == plan.chains.reduce(0, { $0 + $1.estimatedElementCount }),
+              plan.maximumEstimatedChainLength
+                == plan.chains.map(\.estimatedElementCount).max() else {
+            return false
+        }
+        return architecture.domains.allSatisfy { domain in
+            let chains = plan.chains.filter { $0.domainID == domain.id }
+            return chains.count == domain.chainCount
+                && chains.reduce(0, { $0 + $1.estimatedElementCount })
+                    == domain.estimatedElementCount
+        }
+    }
+
+    private func expectedBISTSeed(
+        _ configuration: DFTBISTConfiguration,
+        request: DFTRequest
+    ) throws -> UInt64 {
+        if let randomSeed = configuration.randomSeed {
+            return randomSeed
+        }
+        return try DFTDeterministicHasher().seed(
+            for: "\(request.design.designDigest):\(configuration.name)"
+        )
+    }
+
+    private func expectedBISTTestModeSignal(
+        _ configuration: DFTBISTConfiguration,
+        request: DFTRequest
+    ) -> String? {
+        configuration.testModeSignal
+            ?? request.testIntent?.testModeSignal
+            ?? request.scanArchitecture?.testModeSignal
     }
 
     private func validateCoverage(

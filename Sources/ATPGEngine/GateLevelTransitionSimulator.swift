@@ -268,7 +268,7 @@ public struct GateLevelTransitionSimulator: GateLevelTransitionSimulating {
     }
 
     private func net(for port: RTLPort, in module: GateModule) -> GateNet? {
-        if let binding = module.portBindings?.first(where: { $0.portID == port.id }) {
+        if let binding = module.portBindings.first(where: { $0.portID == port.id }) {
             return module.nets.first { $0.id == binding.netID }
         }
         return module.nets.first { $0.name == port.name || $0.id == port.name }

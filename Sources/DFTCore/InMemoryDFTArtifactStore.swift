@@ -1,7 +1,7 @@
 import Foundation
 import CircuiteFoundation
 
-public actor InMemoryDFTArtifactStore: DFTArtifactStoring {
+public actor InMemoryDFTArtifactStore: DFTArtifactStoring, DFTArtifactReading {
     private var contents: [String: DFTArtifactContent] = [:]
 
     public init() {}
@@ -32,6 +32,13 @@ public actor InMemoryDFTArtifactStore: DFTArtifactStoring {
 
     public func data(for path: String) -> Data? {
         contents[path]?.data
+    }
+
+    public func data(for reference: ArtifactReference) async throws -> Data {
+        guard let data = contents[reference.path]?.data else {
+            throw DFTArtifactStoreError.artifactMissing(reference.path)
+        }
+        return data
     }
 
     private static func validate(

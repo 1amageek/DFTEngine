@@ -20,6 +20,13 @@ Shared DFT request and result contract.
 `DefaultDFTEngine` conforms directly, and `DFTResult` directly provides the
 CircuiteFoundation artifact, evidence, and diagnostic contracts.
 
+`DFTConstraintReference` contains one immutable artifact per declared mode.
+`DFTConstraintLoading` parses each mode independently; engines require an
+injected loader and never skip validation. `DFTResultValidator` checks the
+closed typed result, while `DFTResultSemanticVerifier` reopens immutable design
+and mapping artifacts to validate completed mutations at integration
+boundaries.
+
 ### ScanInsertion
 
 Scan architecture and insertion.
@@ -34,8 +41,14 @@ Process-specific fault semantics are injected through `DFTProcessFaultModeling`.
 
 Memory and logic BIST.
 
+Logic BIST consumes `DFTLogicBISTCellMappingLoading`; the decoded artifact must
+exactly match the process/PDK-bound inline mapping contract. Memory BIST retains
+exact macro bindings and remains an external execution boundary.
+
 `ExternalMemoryBISTEngine` validates the memory-BIST operation, complete macro
-bindings, the shared external-result identity contract, and completed status.
+bindings, the shared external-result identity contract, completed status, and
+artifact-backed semantic evidence. External descriptors identify the resolved
+executable by SHA-256 rather than an engine label.
 It does not import ToolQualification or decide whether a tool is trusted.
 
 ### DFTEngine

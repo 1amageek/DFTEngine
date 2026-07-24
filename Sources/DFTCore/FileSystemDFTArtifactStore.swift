@@ -1,7 +1,7 @@
 import Foundation
 import CircuiteFoundation
 
-public actor FileSystemDFTArtifactStore: DFTArtifactStoring {
+public actor FileSystemDFTArtifactStore: DFTArtifactStoring, DFTArtifactReading {
     public let rootURL: URL
 
     public init(rootURL: URL) {
@@ -67,6 +67,29 @@ public actor FileSystemDFTArtifactStore: DFTArtifactStoring {
             digest: digest,
             byteCount: UInt64(content.data.count)
         )
+    }
+
+    public func data(for reference: ArtifactReference) async throws -> Data {
+        let path = reference.path
+        guard !path.isEmpty,
+              !path.hasPrefix("/"),
+              !path.split(separator: "/").contains("..") else {
+            throw DFTArtifactStoreError.pathOutsideRoot(path)
+        }
+        let url = rootURL.appendingPathComponent(path).standardizedFileURL
+        let resolvedRoot = rootURL.resolvingSymlinksInPath()
+        let resolvedURL = url.resolvingSymlinksInPath()
+        guard Self.isInside(resolvedURL, root: resolvedRoot) else {
+            throw DFTArtifactStoreError.pathOutsideRoot(path)
+        }
+        guard FileManager.default.fileExists(atPath: url.path) else {
+            throw DFTArtifactStoreError.artifactMissing(path)
+        }
+        do {
+            return try Data(contentsOf: url, options: .mappedIfSafe)
+        } catch {
+            throw DFTArtifactStoreError.readFailed(error.localizedDescription)
+        }
     }
 
     private static func isInside(_ candidate: URL, root: URL) -> Bool {

@@ -56,7 +56,7 @@ public struct DFTRequest: DFTExecutionRequest {
     }
 
     public var executionInputArtifacts: [ArtifactReference] {
-        var references = inputs + [design.artifact, constraints.artifact, pdk.manifest]
+        var references = inputs + [design.artifact, pdk.manifest] + constraints.artifacts
         if let cellLibrary {
             references.append(cellLibrary.artifact)
             if let timingLibraryArtifact = cellLibrary.timingLibraryArtifact {

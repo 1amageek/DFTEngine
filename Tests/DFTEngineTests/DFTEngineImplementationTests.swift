@@ -40,7 +40,8 @@ struct DFTEngineImplementationTests {
             cellLibraryLoader: InMemoryDFTCellLibraryLoader(manifest: libraryManifest),
             timingLibraryLoader: InMemoryDFTTimingLibraryLoader(
                 library: try makeTimingLibrary(for: libraryManifest)
-            )
+            ),
+            constraintLoader: FixtureConstraintLoader()
         ).execute(request)
 
         #expect(result.status == .completed)
@@ -60,7 +61,7 @@ struct DFTEngineImplementationTests {
         let scanOutputPorts = transformedModule.ports.filter { $0.name.hasPrefix("scan_out_") }
         #expect(scanOutputPorts.count == 2)
         #expect(scanOutputPorts.allSatisfy { port in
-            transformedModule.portBindings?.contains { $0.portID == port.id } == true
+            transformedModule.portBindings.contains { $0.portID == port.id }
         })
     }
 
@@ -78,11 +79,82 @@ struct DFTEngineImplementationTests {
             cellLibraryLoader: InMemoryDFTCellLibraryLoader(manifest: libraryManifest),
             timingLibraryLoader: InMemoryDFTTimingLibraryLoader(
                 library: try makeTimingLibrary(for: libraryManifest)
-            )
+            ),
+            constraintLoader: FixtureConstraintLoader()
         ).execute(request)
 
         #expect(result.status == .blocked)
         #expect(result.dftDiagnostics.contains { $0.code == "DFT_DESIGN_LOADER_MISSING" })
+    }
+
+    @Test("scan insertion blocks when constraint loading is unavailable")
+    func scanInsertionRequiresConstraintLoader() async throws {
+        let sourceSnapshot = makeGateSnapshot(sequentialCellCount: 1)
+        let sourceDigest = try LogicDesignSnapshotCodec.digest(sourceSnapshot)
+        let libraryManifest = makeCellLibraryManifest()
+        let request = makeRequest(
+            operation: .scanInsertion,
+            designDigest: sourceDigest,
+            cellLibrary: try makeCellLibraryReference(manifest: libraryManifest),
+            scanArchitecture: scanArchitecture(),
+            insertionPolicy: DFTScanInsertionPolicy(scanCellName: "SDFF")
+        )
+
+        let result = try await DeterministicScanInsertionEngine(
+            designLoader: InMemoryDFTDesignLoader(snapshot: sourceSnapshot),
+            cellLibraryLoader: InMemoryDFTCellLibraryLoader(manifest: libraryManifest),
+            timingLibraryLoader: InMemoryDFTTimingLibraryLoader(
+                library: try makeTimingLibrary(for: libraryManifest)
+            )
+        ).execute(request)
+
+        #expect(result.status == .blocked)
+        #expect(result.dftDiagnostics.contains {
+            $0.code == "DFT_CONSTRAINT_VALIDATION_FAILED"
+                && $0.message.contains("unavailable")
+        })
+    }
+
+    @Test("scan insertion requires every declared constraint mode")
+    func scanInsertionRequiresExactConstraintModes() async throws {
+        let sourceSnapshot = makeGateSnapshot(sequentialCellCount: 1)
+        let sourceDigest = try LogicDesignSnapshotCodec.digest(sourceSnapshot)
+        let libraryManifest = makeCellLibraryManifest()
+        let request = makeRequest(
+            operation: .scanInsertion,
+            designDigest: sourceDigest,
+            cellLibrary: try makeCellLibraryReference(manifest: libraryManifest),
+            scanArchitecture: scanArchitecture(),
+            insertionPolicy: DFTScanInsertionPolicy(scanCellName: "SDFF")
+        )
+
+        let result = try await DeterministicScanInsertionEngine(
+            designLoader: InMemoryDFTDesignLoader(snapshot: sourceSnapshot),
+            cellLibraryLoader: InMemoryDFTCellLibraryLoader(manifest: libraryManifest),
+            timingLibraryLoader: InMemoryDFTTimingLibraryLoader(
+                library: try makeTimingLibrary(for: libraryManifest)
+            ),
+            constraintLoader: MissingModeConstraintLoader()
+        ).execute(request)
+
+        #expect(result.status == .blocked)
+        #expect(result.dftDiagnostics.contains {
+            $0.code == "DFT_CONSTRAINT_VALIDATION_FAILED"
+        })
+    }
+
+    @Test("request validation rejects a PDK digest detached from its manifest")
+    func requestRequiresExactPDKIdentity() {
+        var request = makeRequest(
+            operation: .scanInsertion,
+            scanArchitecture: scanArchitecture(),
+            insertionPolicy: DFTScanInsertionPolicy(scanCellName: "SDFF")
+        )
+        request.pdk.digest = String(repeating: "f", count: 64)
+
+        #expect(request.validationIssues(for: .scanInsertion).contains {
+            $0.code == "DFT_PDK_IDENTITY_MISMATCH"
+        })
     }
 
     @Test("scan insertion blocks when clock connectivity is ambiguous")
@@ -107,6 +179,9 @@ struct DFTEngineImplementationTests {
             cellLibraryLoader: InMemoryDFTCellLibraryLoader(manifest: libraryManifest),
             timingLibraryLoader: InMemoryDFTTimingLibraryLoader(
                 library: try makeTimingLibrary(for: libraryManifest)
+            ),
+            constraintLoader: FixtureConstraintLoader(
+                clockSignal: "unbound_clock"
             )
         ).execute(request)
 
@@ -135,7 +210,8 @@ struct DFTEngineImplementationTests {
             cellLibraryLoader: InMemoryDFTCellLibraryLoader(manifest: mismatchedManifest),
             timingLibraryLoader: InMemoryDFTTimingLibraryLoader(
                 library: try makeTimingLibrary(for: mismatchedManifest)
-            )
+            ),
+            constraintLoader: FixtureConstraintLoader()
         ).execute(request)
 
         #expect(result.status == .blocked)
@@ -161,7 +237,10 @@ struct DFTEngineImplementationTests {
             faultUniverse: universe,
             atpgConfiguration: DFTATPGConfiguration(patternLength: 8, randomSeed: 42)
         )
-        let engine = DeterministicATPGEngine(artifactStore: store)
+        let engine = DeterministicATPGEngine(
+            artifactStore: store,
+            constraintLoader: FixtureConstraintLoader()
+        )
 
         let first = try await engine.execute(request)
         let second = try await engine.execute(request)
@@ -192,7 +271,8 @@ struct DFTEngineImplementationTests {
             )
         )
         let result = try await DeterministicATPGEngine(
-            designLoader: InMemoryDFTDesignLoader(snapshot: snapshot)
+            designLoader: InMemoryDFTDesignLoader(snapshot: snapshot),
+            constraintLoader: FixtureConstraintLoader()
         ).execute(request)
 
         #expect(result.status == .completed)
@@ -217,7 +297,8 @@ struct DFTEngineImplementationTests {
             )
         )
         var result = try await DeterministicATPGEngine(
-            designLoader: InMemoryDFTDesignLoader(snapshot: snapshot)
+            designLoader: InMemoryDFTDesignLoader(snapshot: snapshot),
+            constraintLoader: FixtureConstraintLoader()
         ).execute(request)
         result.payload.coverageEvidence?.outcomes.removeLast()
 
@@ -249,7 +330,8 @@ struct DFTEngineImplementationTests {
         )
 
         let result = try await DeterministicATPGEngine(
-            designLoader: InMemoryDFTDesignLoader(snapshot: snapshot)
+            designLoader: InMemoryDFTDesignLoader(snapshot: snapshot),
+            constraintLoader: FixtureConstraintLoader()
         ).execute(request)
 
         #expect(result.status == .completed)
@@ -274,6 +356,13 @@ struct DFTEngineImplementationTests {
                         RTLPort(id: "port-clk", name: "scan_clk", direction: .input),
                         RTLPort(id: "port-d", name: "d", direction: .input),
                         RTLPort(id: "port-q", name: "q", direction: .output),
+                    ],
+                    portBindings: [
+                        GatePortBinding(portID: "port-scan-in", netID: "net-scan-in"),
+                        GatePortBinding(portID: "port-scan-en", netID: "net-scan-en"),
+                        GatePortBinding(portID: "port-clk", netID: "net-clk"),
+                        GatePortBinding(portID: "port-d", netID: "net-d"),
+                        GatePortBinding(portID: "port-q", netID: "net-q"),
                     ],
                     cells: [GateCell(
                         id: "cell-sdff",
@@ -476,7 +565,8 @@ struct DFTEngineImplementationTests {
         )
 
         let result = try await DeterministicATPGEngine(
-            designLoader: InMemoryDFTDesignLoader(snapshot: snapshot)
+            designLoader: InMemoryDFTDesignLoader(snapshot: snapshot),
+            constraintLoader: FixtureConstraintLoader()
         ).execute(request)
 
         #expect(result.status == .completed)
@@ -518,7 +608,8 @@ struct DFTEngineImplementationTests {
         )
 
         let result = try await DeterministicATPGEngine(
-            designLoader: InMemoryDFTDesignLoader(snapshot: snapshot)
+            designLoader: InMemoryDFTDesignLoader(snapshot: snapshot),
+            constraintLoader: FixtureConstraintLoader()
         ).execute(request)
 
         #expect(result.status == .completed)
@@ -574,7 +665,8 @@ struct DFTEngineImplementationTests {
             cellLibraryLoader: InMemoryDFTCellLibraryLoader(manifest: manifest),
             timingLibraryLoader: InMemoryDFTTimingLibraryLoader(
                 library: try makeTimingLibrary(for: manifest)
-            )
+            ),
+            constraintLoader: FixtureConstraintLoader()
         ).execute(request)
 
         #expect(result.status == .completed)
@@ -598,7 +690,8 @@ struct DFTEngineImplementationTests {
         )
 
         let result = try await DeterministicATPGEngine(
-            designLoader: InMemoryDFTDesignLoader(snapshot: snapshot)
+            designLoader: InMemoryDFTDesignLoader(snapshot: snapshot),
+            constraintLoader: FixtureConstraintLoader()
         ).execute(request)
 
         #expect(result.status == .blocked)
@@ -615,7 +708,9 @@ struct DFTEngineImplementationTests {
             atpgConfiguration: DFTATPGConfiguration()
         )
 
-        let result = try await DeterministicATPGEngine().execute(request)
+        let result = try await DeterministicATPGEngine(
+            constraintLoader: FixtureConstraintLoader()
+        ).execute(request)
 
         #expect(result.status == .blocked)
         #expect(result.payload.faultCoverage == nil)
@@ -642,7 +737,9 @@ struct DFTEngineImplementationTests {
             atpgConfiguration: DFTATPGConfiguration()
         )
 
-        let result = try await DeterministicATPGEngine().execute(request)
+        let result = try await DeterministicATPGEngine(
+            constraintLoader: FixtureConstraintLoader()
+        ).execute(request)
 
         #expect(result.status == .blocked)
         #expect(result.payload.faultCoverage == nil)
@@ -672,7 +769,9 @@ struct DFTEngineImplementationTests {
             )
         )
 
-        let result = try await DeterministicATPGEngine().execute(request)
+        let result = try await DeterministicATPGEngine(
+            constraintLoader: FixtureConstraintLoader()
+        ).execute(request)
 
         #expect(result.status == .blocked)
         #expect(result.payload.faultCoverage == nil)
@@ -703,6 +802,7 @@ struct DFTEngineImplementationTests {
         )
 
         let result = try await DeterministicATPGEngine(
+            constraintLoader: FixtureConstraintLoader(),
             processFaultModel: ProcessSpecificFaultModelFixture()
         ).execute(request)
 
@@ -728,7 +828,9 @@ struct DFTEngineImplementationTests {
             atpgConfiguration: DFTATPGConfiguration()
         )
 
-        let result = try await DeterministicATPGEngine().execute(request)
+        let result = try await DeterministicATPGEngine(
+            constraintLoader: FixtureConstraintLoader()
+        ).execute(request)
 
         #expect(result.status == .blocked)
         #expect(result.payload.faultCoverage == nil)
@@ -769,7 +871,9 @@ struct DFTEngineImplementationTests {
 
         let result = try await DeterministicBISTEngine(
             artifactStore: store,
-            designLoader: InMemoryDFTDesignLoader(snapshot: sourceSnapshot)
+            designLoader: InMemoryDFTDesignLoader(snapshot: sourceSnapshot),
+            constraintLoader: FixtureConstraintLoader(),
+            logicBISTCellMappingLoader: FixtureLogicBISTCellMappingLoader()
         ).execute(request)
 
         #expect(result.status == .completed)
@@ -785,6 +889,53 @@ struct DFTEngineImplementationTests {
         #expect(transformedCells.contains { $0.type == "LBIST_RESPONSE_COMPACTOR" })
         #expect(transformedSnapshot.gate?.modules.first?.ports.contains { $0.name == "bist_logic_bist_signature" } == true)
         #expect(result.payload.bistStructure?.logicCellMapping == makeLogicBISTCellMapping())
+    }
+
+    @Test("logic BIST blocks a mapping artifact that differs from its inline contract")
+    func logicBISTRequiresExactMappingArtifact() async throws {
+        let sourceSnapshot = makeGateSnapshot(sequentialCellCount: 1)
+        let sourceDigest = try LogicDesignSnapshotCodec.digest(sourceSnapshot)
+        let mapping = makeLogicBISTCellMapping()
+        let request = makeRequest(
+            operation: .bist,
+            testIntent: DFTTestIntent(
+                name: "production-test",
+                modes: ["bist"],
+                testModeSignal: "test_mode",
+                scanEnableSignal: "scan_en"
+            ),
+            designDigest: sourceDigest,
+            bistConfiguration: DFTBISTConfiguration(
+                name: "logic-bist",
+                kind: .logic,
+                controllerCellName: "LBIST_CTRL",
+                targetInstances: ["u_ff0"],
+                patternCount: 128,
+                signatureRegisterName: "misr_q",
+                clockSignal: "scan_clk",
+                targetBindings: [DFTBISTTargetBinding(
+                    instanceName: "u_ff0",
+                    patternInputPinNames: ["D"],
+                    responseOutputPinNames: ["Q"]
+                )],
+                logicCellMapping: mapping
+            )
+        )
+        var mismatchedManifest = mapping.manifest
+        mismatchedManifest.expectedSignature = "0000"
+
+        let result = try await DeterministicBISTEngine(
+            designLoader: InMemoryDFTDesignLoader(snapshot: sourceSnapshot),
+            constraintLoader: FixtureConstraintLoader(),
+            logicBISTCellMappingLoader: FixedLogicBISTCellMappingLoader(
+                manifest: mismatchedManifest
+            )
+        ).execute(request)
+
+        #expect(result.status == .blocked)
+        #expect(result.dftDiagnostics.contains {
+            $0.code == "DFT_BIST_CELL_MAPPING_LOAD_FAILED"
+        })
     }
 
     @Test("memory BIST requires a complete external engine boundary")
@@ -816,7 +967,9 @@ struct DFTEngineImplementationTests {
             dataOutputPinNames: ["DO0"],
             algorithmID: "march-c"
         )]
-        let qualifiedBoundary = try await DeterministicBISTEngine().execute(
+        let qualifiedBoundary = try await DeterministicBISTEngine(
+            constraintLoader: FixtureConstraintLoader()
+        ).execute(
             makeRequest(operation: .bist, bistConfiguration: configured)
         )
         #expect(qualifiedBoundary.status == .blocked)
@@ -828,7 +981,7 @@ struct DFTEngineImplementationTests {
             runID: "run-bist",
             status: DFTExecutionStatus.completed,
             provenance: try DFTExecutionSupport.provenance(
-                engineID: "external.atpg",
+                engineID: stubExternalBinaryDigest,
                 implementationID: "stub-atpg",
                 implementationVersion: "1.0.0",
                 inputs: memoryRequest.executionInputArtifacts,
@@ -916,8 +1069,9 @@ struct DFTEngineImplementationTests {
             DFTRequest.self,
             from: Data(contentsOf: requestURL)
         )
+        let store = InMemoryDFTArtifactStore()
         let result = try await DefaultDFTEngine(
-            artifactStore: InMemoryDFTArtifactStore(),
+            artifactStore: store,
             designLoader: FileSystemDFTDesignLoader(rootURL: fixtureRoot),
             cellLibraryLoader: FileSystemDFTCellLibraryLoader(rootURL: fixtureRoot),
             timingLibraryLoader: FileSystemDFTTimingLibraryLoader(rootURL: fixtureRoot),
@@ -927,6 +1081,45 @@ struct DFTEngineImplementationTests {
         #expect(result.status == .completed)
         #expect(result.artifacts.count == 2)
         #expect(result.payload.designDiff != nil)
+
+        let reader = FixtureDFTArtifactReader(
+            inputRoot: fixtureRoot,
+            outputStore: store
+        )
+        try await DFTResultSemanticVerifier().validate(
+            result,
+            for: request,
+            reading: reader
+        )
+        await #expect(throws: DFTResultSemanticValidationError.self) {
+            try await DFTResultSemanticVerifier().validate(
+                result,
+                for: request,
+                reading: TamperedDFTArtifactReader(
+                    base: reader,
+                    tamperedPath: try #require(
+                        result.payload.transformedDesign?.artifact.path
+                    )
+                )
+            )
+        }
+
+        var mismatchedReference = request.design
+        mismatchedReference.artifact = ArtifactReference(
+            id: mismatchedReference.artifact.id,
+            locator: mismatchedReference.artifact.locator,
+            digest: try ContentDigest(
+                algorithm: .sha256,
+                hexadecimalValue: String(repeating: "0", count: 64)
+            ),
+            byteCount: mismatchedReference.artifact.byteCount,
+            producer: mismatchedReference.artifact.producer
+        )
+        #expect(throws: DFTDesignLoaderError.self) {
+            _ = try FileSystemDFTDesignLoader(rootURL: fixtureRoot).load(
+                mismatchedReference
+            )
+        }
     }
 
     @Test("DFT result directly exposes stable Foundation evidence")
@@ -1061,13 +1254,18 @@ struct DFTEngineImplementationTests {
 
     @Test("external process runner passes a request artifact with timeout control")
     func externalProcessRunner() async throws {
+        let shellURL = URL(fileURLWithPath: "/bin/sh")
+        let shellDigest = try SHA256ContentDigester().digest(
+            data: Data(contentsOf: shellURL, options: .mappedIfSafe)
+        ).hexadecimalValue
         let runner = ProcessDFTExternalToolRunner(
             descriptor: DFTExternalToolDescriptor(
                 engineID: "external.atpg",
                 implementationID: "fixture-process",
-                implementationVersion: "1"
+                implementationVersion: "1",
+                binaryDigest: shellDigest
             ),
-            executableURL: URL(fileURLWithPath: "/bin/sh"),
+            executableURL: shellURL,
             arguments: ["-c", "cat \"$1\"", "fixture", "{request}"],
             timeoutSeconds: 5
         )
@@ -1090,7 +1288,7 @@ struct DFTEngineImplementationTests {
         )
         let expected = try DFTExecutionSupport.result(
             request: request,
-            engineID: "external.atpg",
+            engineID: stubExternalBinaryDigest,
             implementationID: "stub-atpg",
             status: .blocked,
             diagnostics: [],
@@ -1140,7 +1338,7 @@ struct DFTEngineImplementationTests {
             runID: expected.runID,
             status: expected.status,
             provenance: try DFTExecutionSupport.provenance(
-                engineID: "external.atpg",
+                engineID: stubExternalBinaryDigest,
                 implementationID: "stub-atpg",
                 implementationVersion: "1.0.0",
                 inputs: [],
@@ -1208,7 +1406,7 @@ struct DFTEngineImplementationTests {
                     path: "pdk.json",
                     kind: .technology,
                     format: .json,
-                    sha256: String(repeating: "d", count: 64),
+                    sha256: String(repeating: "e", count: 64),
                     byteCount: 10,
                     role: .input
                 ),
@@ -1257,6 +1455,9 @@ struct DFTEngineImplementationTests {
                     id: "module-top",
                     name: moduleName,
                     ports: [RTLPort(id: "port-clk", name: "clk", direction: .input)],
+                    portBindings: [
+                        GatePortBinding(portID: "port-clk", netID: "clk")
+                    ],
                     cells: cells,
                     nets: nets
                 )
@@ -1278,6 +1479,13 @@ struct DFTEngineImplementationTests {
                 RTLPort(id: "port-reset", name: "reset_n", direction: .input),
                 RTLPort(id: "port-set", name: "set", direction: .input),
                 RTLPort(id: "port-q", name: "q", direction: .output),
+            ],
+            portBindings: [
+                GatePortBinding(portID: "port-d", netID: "net-d"),
+                GatePortBinding(portID: "port-clk", netID: "net-clk"),
+                GatePortBinding(portID: "port-reset", netID: "net-reset"),
+                GatePortBinding(portID: "port-set", netID: "net-set"),
+                GatePortBinding(portID: "port-q", netID: "net-q"),
             ],
             cells: [GateCell(
                 id: "cell-ff",
@@ -1313,6 +1521,11 @@ struct DFTEngineImplementationTests {
                 RTLPort(id: "port-d", name: "d", direction: .input),
                 RTLPort(id: "port-en", name: "en", direction: .input),
                 RTLPort(id: "port-q", name: "q", direction: .output),
+            ],
+            portBindings: [
+                GatePortBinding(portID: "port-d", netID: "net-d"),
+                GatePortBinding(portID: "port-en", netID: "net-en"),
+                GatePortBinding(portID: "port-q", netID: "net-q"),
             ],
             cells: [GateCell(
                 id: "cell-latch",
@@ -1354,6 +1567,11 @@ struct DFTEngineImplementationTests {
                 RTLPort(id: "port-b", name: "b", direction: .input),
                 RTLPort(id: "port-y", name: "y", direction: .output),
             ],
+            portBindings: [
+                GatePortBinding(portID: "port-a", netID: "net-a"),
+                GatePortBinding(portID: "port-b", netID: "net-b"),
+                GatePortBinding(portID: "port-y", netID: "net-y"),
+            ],
             cells: [
                 GateCell(id: "cell-and", type: "AND2", instanceName: "u_and", pins: andPins),
                 GateCell(id: "cell-buffer", type: "BUF", instanceName: "u_buf", pins: bufferPins),
@@ -1379,6 +1597,11 @@ struct DFTEngineImplementationTests {
                 RTLPort(id: "port-d", name: "d", direction: .input),
                 RTLPort(id: "port-clk", name: "clk", direction: .input),
                 RTLPort(id: "port-q", name: "q", direction: .output),
+            ],
+            portBindings: [
+                GatePortBinding(portID: "port-d", netID: "net-d"),
+                GatePortBinding(portID: "port-clk", netID: "net-clk"),
+                GatePortBinding(portID: "port-q", netID: "net-q"),
             ],
             cells: [GateCell(
                 id: "cell-dff",
@@ -1551,7 +1774,8 @@ private struct StubExternalRunner: DFTExternalToolOutputProviding {
         DFTExternalToolDescriptor(
             engineID: "external.atpg",
             implementationID: "stub-atpg",
-            implementationVersion: "1.0.0"
+            implementationVersion: "1.0.0",
+            binaryDigest: stubExternalBinaryDigest
         )
     }
 
@@ -1565,5 +1789,117 @@ private struct StubExternalRunner: DFTExternalToolOutputProviding {
             standardError: standardError,
             exitCode: exitCode
         )
+    }
+}
+
+private let stubExternalBinaryDigest = String(repeating: "f", count: 64)
+
+private struct FixtureConstraintLoader: DFTConstraintLoading {
+    var clockSignal = "scan_clk"
+
+    func load(
+        _ reference: DFTConstraintReference
+    ) throws -> [TimingConstraintSet] {
+        reference.modeIDs.map { modeID in
+            TimingConstraintSet(
+                modeID: modeID,
+                clocks: [
+                    TimingConstraintSet.Clock(
+                        name: clockSignal,
+                        source: clockSignal,
+                        period: 10e-9
+                    ),
+                ],
+                caseAnalyses: [
+                    TimingConstraintSet.CaseAnalysis(
+                        target: "scan_en",
+                        value: .one
+                    ),
+                    TimingConstraintSet.CaseAnalysis(
+                        target: "test_mode",
+                        value: .one
+                    ),
+                ]
+            )
+        }
+    }
+}
+
+private struct MissingModeConstraintLoader: DFTConstraintLoading {
+    func load(
+        _ reference: DFTConstraintReference
+    ) throws -> [TimingConstraintSet] {
+        guard let modeID = reference.modeIDs.first else {
+            return []
+        }
+        return [
+            TimingConstraintSet(
+                modeID: modeID,
+                clocks: [
+                    TimingConstraintSet.Clock(
+                        name: "scan_clk",
+                        source: "scan_clk",
+                        period: 10e-9
+                    )
+                ],
+                caseAnalyses: [
+                    TimingConstraintSet.CaseAnalysis(
+                        target: "scan_en",
+                        value: .one
+                    ),
+                    TimingConstraintSet.CaseAnalysis(
+                        target: "test_mode",
+                        value: .one
+                    ),
+                ]
+            )
+        ]
+    }
+}
+
+private struct FixtureLogicBISTCellMappingLoader: DFTLogicBISTCellMappingLoading {
+    func load(
+        _ mapping: DFTLogicBISTCellMapping
+    ) throws -> DFTLogicBISTCellMappingManifest {
+        mapping.manifest
+    }
+}
+
+private struct FixedLogicBISTCellMappingLoader: DFTLogicBISTCellMappingLoading {
+    let manifest: DFTLogicBISTCellMappingManifest
+
+    func load(
+        _ mapping: DFTLogicBISTCellMapping
+    ) throws -> DFTLogicBISTCellMappingManifest {
+        _ = mapping
+        return manifest
+    }
+}
+
+private struct FixtureDFTArtifactReader: DFTArtifactReading {
+    let inputRoot: URL
+    let outputStore: InMemoryDFTArtifactStore
+
+    func data(for reference: ArtifactReference) async throws -> Data {
+        if reference.locator.role == .output {
+            return try await outputStore.data(for: reference)
+        }
+        return try Data(
+            contentsOf: inputRoot.appending(path: reference.path),
+            options: .mappedIfSafe
+        )
+    }
+}
+
+private struct TamperedDFTArtifactReader: DFTArtifactReading {
+    let base: any DFTArtifactReading
+    let tamperedPath: String
+
+    func data(for reference: ArtifactReference) async throws -> Data {
+        var data = try await base.data(for: reference)
+        if reference.path == tamperedPath {
+            data.append(0)
+        }
+        return data
     }
 }

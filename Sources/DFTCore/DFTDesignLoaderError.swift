@@ -11,6 +11,7 @@ public enum DFTDesignLoaderError: Error, LocalizedError, Sendable, Hashable {
     case designDigestMismatch(expected: String, actual: String)
     case topDesignMismatch(expected: String, actual: String)
     case gateDesignMissing
+    case gateDesignInvalid([String])
 
     public var errorDescription: String? {
         switch self {
@@ -32,6 +33,8 @@ public enum DFTDesignLoaderError: Error, LocalizedError, Sendable, Hashable {
             return "Design top \(actual) does not match the requested top \(expected)."
         case .gateDesignMissing:
             return "DFT scan insertion requires a gate-level design in the LogicDesignSnapshot."
+        case .gateDesignInvalid(let diagnostics):
+            return "DFT design is not a valid canonical gate design: \(diagnostics.joined(separator: "; "))"
         }
     }
 }

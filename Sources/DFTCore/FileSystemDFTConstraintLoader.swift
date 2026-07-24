@@ -10,29 +10,34 @@ public struct FileSystemDFTConstraintLoader: DFTConstraintLoading {
     }
 
     public func load(_ reference: DFTConstraintReference) throws -> [TimingConstraintSet] {
-        let path = reference.artifact.path
-        guard reference.artifact.format == .sdc,
-              !path.isEmpty,
-              !path.hasPrefix("/"),
-              !path.split(separator: "/").contains("..") else {
+        try reference.modes.map { mode in
+            try load(mode)
+        }
+    }
+
+    private func load(
+        _ mode: DFTConstraintModeReference
+    ) throws -> TimingConstraintSet {
+        let path = mode.artifact.path
+        guard mode.artifact.format == .sdc else {
             throw DFTConstraintError.invalidPath(path)
         }
-        let url = rootURL.appendingPathComponent(path).standardizedFileURL
-        guard url.path == rootURL.path || url.path.hasPrefix(rootURL.path + "/") else {
+        let url: URL
+        do {
+            url = try DFTProjectArtifactResolver(rootURL: rootURL).resolve(path)
+        } catch {
             throw DFTConstraintError.invalidPath(path)
         }
         let data: Data
         do {
-            data = try Data(contentsOf: url)
+            data = try Data(contentsOf: url, options: .mappedIfSafe)
         } catch {
             throw DFTConstraintError.readFailed(error.localizedDescription)
         }
-        guard UInt64(data.count) == reference.artifact.byteCount,
-              try SHA256ContentDigester().digest(data: data) == reference.artifact.digest else {
+        guard UInt64(data.count) == mode.artifact.byteCount,
+              try SHA256ContentDigester().digest(data: data) == mode.artifact.digest else {
             throw DFTConstraintError.identityMismatch(path)
         }
-        return try reference.modeIDs.map { modeID in
-            try SDCParser().parse(data, modeID: modeID)
-        }
+        return try SDCParser().parse(data, modeID: mode.modeID)
     }
 }

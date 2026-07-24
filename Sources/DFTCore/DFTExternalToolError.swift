@@ -13,6 +13,8 @@ public enum DFTExternalToolError: Error, LocalizedError, Sendable, Hashable {
     case implementationVersionMismatch(expected: String, actual: String)
     case invalidArtifactReference(path: String, message: String)
     case processFailed(executablePath: String, exitCode: Int32, standardError: String)
+    case executableIdentityMismatch(expected: String, actual: String)
+    case artifactReaderUnavailable
     case requestFileWriteFailed(String)
     case requestFileCleanupFailed(String)
 
@@ -42,6 +44,10 @@ public enum DFTExternalToolError: Error, LocalizedError, Sendable, Hashable {
             return "External DFT artifact reference \(path) is invalid: \(message)"
         case .processFailed(let executablePath, let exitCode, let standardError):
             return "External DFT tool \(executablePath) exited with code \(exitCode): \(standardError)"
+        case .executableIdentityMismatch(let expected, let actual):
+            return "External DFT executable digest \(actual) does not match descriptor \(expected)."
+        case .artifactReaderUnavailable:
+            return "Completed external DFT results require a digest-verifying artifact reader."
         case .requestFileWriteFailed(let message):
             return "External DFT request file could not be written: \(message)"
         case .requestFileCleanupFailed(let message):

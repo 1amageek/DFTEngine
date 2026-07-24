@@ -79,6 +79,16 @@ public extension DFTRequest {
                 suggestedActions: ["verify_pdk_manifest_integrity"]
             ))
         }
+        do {
+            try pdk.validate()
+        } catch {
+            issues.append(DFTRequestValidationIssue(
+                code: "DFT_PDK_IDENTITY_MISMATCH",
+                message: error.localizedDescription,
+                entity: "pdk",
+                suggestedActions: ["repair_pdk_reference_identity"]
+            ))
+        }
         issues.append(contentsOf: validateArtifact(
             pdk.manifest,
             entity: "pdk.manifest"
@@ -102,10 +112,12 @@ public extension DFTRequest {
                 suggestedActions: ["declare_unique_timing_modes"]
             ))
         }
-        issues.append(contentsOf: validateArtifact(
-            constraints.artifact,
-            entity: "constraints.artifact"
-        ))
+        for mode in constraints.modes {
+            issues.append(contentsOf: validateArtifact(
+                mode.artifact,
+                entity: "constraints.modes[\(mode.modeID)].artifact"
+            ))
+        }
         if inputs.isEmpty {
             issues.append(DFTRequestValidationIssue(
                 code: "DFT_INPUT_ARTIFACTS_EMPTY",

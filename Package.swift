@@ -19,13 +19,13 @@ let logicDesignDependency: Package.Dependency = isLSIWorkspace && FileManager.de
     atPath: workspaceRoot.appendingPathComponent("LogicDesign/Package.swift").path
 )
     ? .package(path: "../LogicDesign")
-    : .package(url: "https://github.com/1amageek/LogicDesign.git", revision: "ba3176f60c450ed0c1b12e7995247b0718bf9ad9")
+    : .package(url: "https://github.com/1amageek/LogicDesign.git", revision: "4894cd89862f43300a3ca9d4cf73b3d9e6034626")
 
 let timingEngineDependency: Package.Dependency = isLSIWorkspace && FileManager.default.fileExists(
     atPath: workspaceRoot.appendingPathComponent("TimingEngine/Package.swift").path
 )
     ? .package(path: "../TimingEngine")
-    : .package(url: "https://github.com/1amageek/TimingEngine.git", revision: "1aef8fd6f06a007e9f70ebfe726ab4fb11b40c3e")
+    : .package(url: "https://github.com/1amageek/TimingEngine.git", revision: "709af87cf5c898d47605b0ab287786828ee2267c")
 
 let pdkKitDependency: Package.Dependency = isLSIWorkspace && FileManager.default.fileExists(
     atPath: workspaceRoot.appendingPathComponent("PDKKit/Package.swift").path
@@ -72,6 +72,7 @@ let package = Package(
             name: "DFTExternalTools",
             dependencies: [
                 "DFTCore",
+                .product(name: "CircuiteFoundation", package: "CircuiteFoundation"),
                 .product(name: "SignoffToolSupport", package: "SignoffToolSupport"),
             ]
         ),

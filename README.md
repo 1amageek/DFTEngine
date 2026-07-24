@@ -8,9 +8,10 @@ This repository contains typed DFT contracts, canonical gate-level scan transfor
 
 Native output is JSON only. The existing STIL/WGL codec is a deterministic internal interchange codec and is not a qualified standards exporter; native requests for those formats are blocked. Scan compression is also blocked until decompressor/compactor insertion and coverage validation exist. Production qualification remains gated by independently generated PDK, macro, oracle, equivalence, DRC, LVS, PEX and human-review evidence.
 
-The CLI and Xcircuite composition load the digest-bound SDC artifact and verify
-declared DFT clocks plus asserted test-mode/scan-enable case analysis before
-execution. Invalid or missing mode semantics produce
+The CLI and Xcircuite composition load every digest-bound, mode-specific SDC
+artifact and verify declared DFT clocks plus asserted test-mode/scan-enable
+case analysis before execution. Missing loaders, missing modes, duplicate
+modes, conflicting case analysis, and artifact identity failures produce
 `DFT_CONSTRAINT_VALIDATION_FAILED`; constraints are not provenance-only inputs.
 
 ```mermaid
@@ -62,6 +63,12 @@ Every executing product uses:
 Domain engines return `DFTResult` directly. The result itself publishes verified
 artifacts, diagnostics, and execution provenance without a wrapper.
 
+`DFTResultValidator` validates the self-contained result contract.
+`DFTResultSemanticVerifier` separately reopens immutable source and transformed
+artifacts, verifies their identities, decodes canonical LogicDesign state, and
+checks that scan/BIST structures actually exist. Flow and release integrations
+must use the semantic verifier before accepting a completed mutation.
+
 ## Flow integration
 
 Xcircuite records every DFT mutation as a new LogicDesignReference and requires formal equivalence or approved test-mode exceptions before physical design.
@@ -76,6 +83,17 @@ ToolQualification decisions, repair loops and human approval.
 
 Process-specific ATPG is intentionally an integration boundary. `DFTProcessFaultModeling` is injected by the integrating project and returns a typed result that the engine validates before creating a pattern or coverage outcome. Model injection is not process qualification; the result still requires independent oracle and ToolQualification evidence before release.
 
+Logic BIST requires a process- and PDK-bound helper-cell mapping artifact.
+`DFTLogicBISTCellMappingLoading` owns loading and identity verification; the
+native BIST engine compares the decoded immutable manifest with the inline
+request contract before transforming the design. A missing loader or mismatch
+blocks execution.
+
+External backends bind their descriptor to the SHA-256 digest of the executable.
+The process runner verifies the executable before and after execution, and a
+completed external mutation is accepted only when an artifact reader is
+available for the same semantic verification used by native backends.
+
 ## Build
 
 `Package.swift` resolves every dependency independently. A sibling checkout is
@@ -85,8 +103,8 @@ revision. No umbrella repository is required.
 | Dependency | Local sibling | Remote fallback revision |
 |---|---|---|
 | CircuiteFoundation | `../CircuiteFoundation` | `7abcac83517935c9b9f7553d7016d62cffde259d` |
-| LogicDesign | `../LogicDesign` | `ba3176f60c450ed0c1b12e7995247b0718bf9ad9` |
-| TimingEngine | `../TimingEngine` | `1aef8fd6f06a007e9f70ebfe726ab4fb11b40c3e` |
+| LogicDesign | `../LogicDesign` | `4894cd89862f43300a3ca9d4cf73b3d9e6034626` |
+| TimingEngine | `../TimingEngine` | `709af87cf5c898d47605b0ab287786828ee2267c` |
 | PDKKit | `../PDKKit` | `b62c5ad7e5819a24977038c2133856caed52f481` |
 | SignoffToolSupport | `../SignoffToolSupport` | `6bf675eecb27e3bd3440c5ce8a85c85c510fc3cb` |
 
@@ -116,6 +134,8 @@ mkdir -p /tmp/dft-project
 cp Tests/DFTEngineTests/Fixtures/design.json /tmp/dft-project/design.json
 cp Tests/DFTEngineTests/Fixtures/cell-library.json /tmp/dft-project/cell-library.json
 cp Tests/DFTEngineTests/Fixtures/cell-timing.lib /tmp/dft-project/cell-timing.lib
+cp Tests/DFTEngineTests/Fixtures/constraints.sdc /tmp/dft-project/constraints.sdc
+cp Tests/DFTEngineTests/Fixtures/pdk.json /tmp/dft-project/pdk.json
 swift run dft-engine execute \
   --request Tests/DFTEngineTests/Fixtures/scan-request.json \
   --output-dir /tmp/dft-project \
@@ -164,4 +184,5 @@ injected and validated model remains blocked.
 
 The owning flow integration executes a project-relative request headlessly,
 injects either a test double or `DefaultDFTEngine`, verifies returned
-Foundation artifact integrity, and maps the result to its flow stage result.
+Foundation artifact integrity, reopens completed mutation artifacts through
+`DFTResultSemanticVerifier`, and maps the result to its flow stage result.

@@ -6,9 +6,14 @@ public struct ExternalATPGEngine: ATPGExecuting {
 
     public init(
         runner: any DFTExternalToolOutputProviding,
-        artifactStore: (any DFTArtifactStoring)? = nil
+        artifactStore: (any DFTArtifactStoring)? = nil,
+        artifactReader: (any DFTArtifactReading)? = nil
     ) {
-        self.executor = DFTExternalToolExecutor(runner: runner, artifactStore: artifactStore)
+        self.executor = DFTExternalToolExecutor(
+            runner: runner,
+            artifactStore: artifactStore,
+            artifactReader: artifactReader
+        )
     }
 
     public func execute(

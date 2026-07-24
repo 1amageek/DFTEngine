@@ -70,7 +70,7 @@ struct DFTExecutionContractTests {
                     path: "pdk.json",
                     kind: .technology,
                     format: .json,
-                    sha256: String(repeating: "d", count: 64),
+                    sha256: String(repeating: "e", count: 64),
                     byteCount: 4,
                     role: .input
                 ),

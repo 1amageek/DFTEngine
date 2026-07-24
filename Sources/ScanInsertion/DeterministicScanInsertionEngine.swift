@@ -8,7 +8,7 @@ public struct DeterministicScanInsertionEngine: ScanInserting {
     public let designLoader: (any DFTDesignLoading)?
     public let cellLibraryLoader: (any DFTCellLibraryLoading)?
     public let timingLibraryLoader: (any DFTTimingLibraryLoading)?
-    public let constraintLoader: (any DFTConstraintLoading)?
+    public let constraintLoader: any DFTConstraintLoading
     public let implementationID: String
 
     public init(
@@ -16,7 +16,7 @@ public struct DeterministicScanInsertionEngine: ScanInserting {
         designLoader: (any DFTDesignLoading)? = nil,
         cellLibraryLoader: (any DFTCellLibraryLoading)? = nil,
         timingLibraryLoader: (any DFTTimingLibraryLoading)? = nil,
-        constraintLoader: (any DFTConstraintLoading)? = nil,
+        constraintLoader: any DFTConstraintLoading = UnavailableDFTConstraintLoader(),
         implementationID: String = "native-deterministic-scan"
     ) {
         self.artifactStore = artifactStore
@@ -62,24 +62,22 @@ public struct DeterministicScanInsertionEngine: ScanInserting {
                     message: "Scan architecture and insertion policy are required."
                 )
             }
-            if let constraintLoader {
-                do {
-                    try DFTConstraintValidator().validate(
-                        constraintLoader.load(request.constraints),
-                        request: request
-                    )
-                } catch {
-                    return try blocked(
-                        request: request,
-                        engineID: engineID,
-                        implementationID: implementationID,
-                        startedAt: startedAt,
-                        code: "DFT_CONSTRAINT_VALIDATION_FAILED",
-                        message: error.localizedDescription,
-                        entity: request.constraints.artifact.path,
-                        actions: ["repair_test_mode_constraints"]
-                    )
-                }
+            do {
+                try DFTConstraintValidator().validate(
+                    constraintLoader.load(request.constraints),
+                    request: request
+                )
+            } catch {
+                return try blocked(
+                    request: request,
+                    engineID: engineID,
+                    implementationID: implementationID,
+                    startedAt: startedAt,
+                    code: "DFT_CONSTRAINT_VALIDATION_FAILED",
+                    message: error.localizedDescription,
+                    entity: request.constraints.artifacts.first?.path ?? "constraints",
+                    actions: ["provide_constraint_loader", "repair_test_mode_constraints"]
+                )
             }
             let plan: DFTScanPlan
             do {
@@ -364,7 +362,7 @@ public struct DeterministicScanInsertionEngine: ScanInserting {
             ],
             limitations: [
                 "The binding manifest is verified, but process-qualified timing arcs and legal library mapping require M6 evidence.",
-                "DFT_SCAN_OUT helper cells require process-qualified library mapping before physical signoff.",
+                "Top-level scan observability routing and physical legality require downstream physical-design and signoff evidence.",
                 "A self-declared evidenceProvenance status is not promoted to process evidenceProvenance by this backend."
             ],
             evidenceProvenance: evidenceProvenance

@@ -30,15 +30,26 @@ DesignFlowKernel and .xcircuite artifacts
 
 Backends may depend on lower-level data packages. This package must never import `Xcircuite` or `circuit-studio`.
 
-M0 native backends operate on declared, machine-readable DFT metadata. M1 scan insertion additionally loads and transforms the canonical `LogicDesignSnapshot` gate IR, verifies its input digest, validates the transformed graph and persists the resulting snapshot. Clock/reset library semantics, functional equivalence, cell legality, external-oracle correlation and process qualification remain separate gates. Unsupported semantics produce `blocked`; they are never converted into passing coverage.
+Native backends load and identity-check canonical design, PDK, cell-library,
+timing, mode-specific constraint and logic-BIST mapping artifacts through
+specialized protocols. Scan and logic-BIST engines transform the canonical
+`LogicDesignSnapshot`, validate the resulting graph and persist a new immutable
+snapshot. `DFTResultSemanticVerifier` independently reopens the source and
+output artifacts before a completed mutation crosses a flow or release
+boundary. Functional equivalence, physical legality, external-oracle
+correlation and process qualification remain separate gates. Unsupported or
+unavailable semantics produce `blocked`; they are never converted into passing
+coverage.
 
 ## Trust model
 
 Kernel availability, corpus validation, oracle correlation, process-scoped qualification and release approval are distinct states. The package reports capability and evidence; Xcircuite and ToolQualification apply flow policy.
 
 External DFT engines validate request/result identity, operation-specific
-preconditions, process exit status and raw completion status. They do not
-import ToolQualification or apply release policy.
+preconditions, process exit status, executable digest before and after
+execution, and raw completion status. Completed mutation results use the same
+artifact-backed semantic verifier as native engines. External integration does
+not import ToolQualification or apply release policy.
 
 ## Artifact requirements
 

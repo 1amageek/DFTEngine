@@ -2,6 +2,7 @@ import DFTCore
 import Foundation
 import Testing
 import CircuiteFoundation
+import LogicIR
 
 @Suite("DFT artifact stores")
 struct DFTArtifactStoreTests {
@@ -92,15 +93,15 @@ struct DFTArtifactStoreTests {
     @Test("file-system storage rejects a symlink that escapes the root")
     func fileSystemStoreRejectsEscapedSymlink() async throws {
         let root = FileManager.default.temporaryDirectory
-            .appending(path: "dft-artifact-root-(UUID().uuidString)")
+            .appending(path: "dft-artifact-root-\(UUID().uuidString)")
         let outside = FileManager.default.temporaryDirectory
-            .appending(path: "dft-artifact-outside-(UUID().uuidString)")
+            .appending(path: "dft-artifact-outside-\(UUID().uuidString)")
         defer {
             for url in [root, outside] {
                 do {
                     try FileManager.default.removeItem(at: url)
                 } catch {
-                    Issue.record("Could not remove symlink fixture: (error.localizedDescription)")
+                    Issue.record("Could not remove symlink fixture: \(error.localizedDescription)")
                 }
             }
         }
@@ -132,6 +133,57 @@ struct DFTArtifactStoreTests {
             Issue.record("Artifact storage must reject a path that escapes its root through a symlink.")
         } catch let error as DFTArtifactStoreError {
             #expect(error == .pathOutsideRoot("dft/runs/run-a/result.json"))
+        }
+    }
+
+    @Test("file-system input loaders reject a symlink that escapes the root")
+    func fileSystemInputLoaderRejectsEscapedSymlink() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appending(path: "dft-input-root-\(UUID().uuidString)")
+        let outside = FileManager.default.temporaryDirectory
+            .appending(path: "dft-input-outside-\(UUID().uuidString)")
+        defer {
+            for url in [root, outside] {
+                do {
+                    try FileManager.default.removeItem(at: url)
+                } catch {
+                    Issue.record(
+                        "Could not remove input-loader fixture: \(error.localizedDescription)"
+                    )
+                }
+            }
+        }
+        try FileManager.default.createDirectory(
+            at: root,
+            withIntermediateDirectories: true
+        )
+        try FileManager.default.createDirectory(
+            at: outside,
+            withIntermediateDirectories: true
+        )
+        let outsideDesign = outside.appending(path: "design.json")
+        try Data("{}".utf8).write(to: outsideDesign)
+        try FileManager.default.createSymbolicLink(
+            at: root.appending(path: "design.json"),
+            withDestinationURL: outsideDesign
+        )
+        let artifact = testArtifact(
+            artifactID: "design",
+            path: "design.json",
+            kind: .netlist,
+            format: .json,
+            sha256: String(repeating: "0", count: 64),
+            byteCount: 2,
+            role: .input
+        )
+        let reference = LogicDesignReference(
+            artifact: artifact,
+            topDesignName: "top",
+            designDigest: String(repeating: "1", count: 64)
+        )
+
+        #expect(throws: DFTDesignLoaderError.invalidPath("design.json")) {
+            _ = try FileSystemDFTDesignLoader(rootURL: root).load(reference)
         }
     }
 }

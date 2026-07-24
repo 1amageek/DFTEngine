@@ -8,6 +8,8 @@ public enum DFTArtifactStoreError: Error, LocalizedError, Sendable, Hashable {
     case artifactConflict(String)
     case directoryCreationFailed(String)
     case writeFailed(String)
+    case readFailed(String)
+    case artifactMissing(String)
 
     public var errorDescription: String? {
         switch self {
@@ -25,6 +27,10 @@ public enum DFTArtifactStoreError: Error, LocalizedError, Sendable, Hashable {
             return "DFT artifact directory could not be created: \(message)."
         case .writeFailed(let message):
             return "DFT artifact could not be written: \(message)."
+        case .readFailed(let message):
+            return "DFT artifact could not be read: \(message)."
+        case .artifactMissing(let path):
+            return "DFT artifact is missing: \(path)."
         }
     }
 }

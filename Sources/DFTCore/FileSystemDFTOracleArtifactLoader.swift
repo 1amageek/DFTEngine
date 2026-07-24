@@ -12,15 +12,17 @@ public actor FileSystemDFTOracleArtifactLoader: DFTOracleArtifactLoading {
         try Self.validate(reference)
         let expectedByteCount = reference.byteCount
         let expectedDigest = reference.digest.hexadecimalValue
-        let resolvedRoot = rootURL.resolvingSymlinksInPath()
-        let url = rootURL.appending(path: reference.path).standardizedFileURL
-        let resolvedURL = url.resolvingSymlinksInPath()
-        guard Self.isInside(resolvedURL, root: resolvedRoot) else {
+        let resolvedURL: URL
+        do {
+            resolvedURL = try DFTProjectArtifactResolver(
+                rootURL: rootURL
+            ).resolve(reference.path)
+        } catch {
             throw DFTOracleArtifactError.invalidReference(reference.path)
         }
         let data: Data
         do {
-            data = try Data(contentsOf: resolvedURL)
+            data = try Data(contentsOf: resolvedURL, options: .mappedIfSafe)
         } catch {
             throw DFTOracleArtifactError.readFailed(
                 path: reference.path,
@@ -77,8 +79,4 @@ public actor FileSystemDFTOracleArtifactLoader: DFTOracleArtifactLoading {
             .contains(where: { $0.isEmpty || $0 == "." || $0 == ".." })
     }
 
-    private static func isInside(_ candidate: URL, root: URL) -> Bool {
-        let rootPath = root.path.hasSuffix("/") ? root.path : root.path + "/"
-        return candidate.path == root.path || candidate.path.hasPrefix(rootPath)
-    }
 }

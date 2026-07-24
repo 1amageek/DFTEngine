@@ -9,7 +9,7 @@ public struct DeterministicATPGEngine: ATPGExecuting {
     public let designLoader: (any DFTDesignLoading)?
     public let cellLibraryLoader: (any DFTCellLibraryLoading)?
     public let timingLibraryLoader: (any DFTTimingLibraryLoading)?
-    public let constraintLoader: (any DFTConstraintLoading)?
+    public let constraintLoader: any DFTConstraintLoading
     public let faultExtractor: any DFTFaultExtracting
     public let simulator: any GateLevelSimulating
     public let sequentialSimulator: any GateLevelSequentialSimulating
@@ -22,7 +22,7 @@ public struct DeterministicATPGEngine: ATPGExecuting {
         designLoader: (any DFTDesignLoading)? = nil,
         cellLibraryLoader: (any DFTCellLibraryLoading)? = nil,
         timingLibraryLoader: (any DFTTimingLibraryLoading)? = nil,
-        constraintLoader: (any DFTConstraintLoading)? = nil,
+        constraintLoader: any DFTConstraintLoading = UnavailableDFTConstraintLoader(),
         faultExtractor: any DFTFaultExtracting = GateLevelFaultExtractor(),
         simulator: any GateLevelSimulating = GateLevelCombinationalSimulator(),
         sequentialSimulator: any GateLevelSequentialSimulating = GateLevelSequentialSimulator(),
@@ -76,23 +76,21 @@ public struct DeterministicATPGEngine: ATPGExecuting {
                     message: "Fault universe and ATPG configuration are required."
                 )
             }
-            if let constraintLoader {
-                do {
-                    try DFTConstraintValidator().validate(
-                        constraintLoader.load(request.constraints),
-                        request: request
-                    )
-                } catch {
-                    return try blocked(
-                        request: request,
-                        engineID: engineID,
-                        startedAt: startedAt,
-                        code: "DFT_CONSTRAINT_VALIDATION_FAILED",
-                        message: error.localizedDescription,
-                        entity: request.constraints.artifact.path,
-                        actions: ["repair_test_mode_constraints"]
-                    )
-                }
+            do {
+                try DFTConstraintValidator().validate(
+                    constraintLoader.load(request.constraints),
+                    request: request
+                )
+            } catch {
+                return try blocked(
+                    request: request,
+                    engineID: engineID,
+                    startedAt: startedAt,
+                    code: "DFT_CONSTRAINT_VALIDATION_FAILED",
+                    message: error.localizedDescription,
+                    entity: request.constraints.artifacts.first?.path ?? "constraints",
+                    actions: ["provide_constraint_loader", "repair_test_mode_constraints"]
+                )
             }
             if configuration.maximumPatternCount <= 0 || configuration.patternLength <= 0 || configuration.abortLimit < 0 {
                 return try blocked(

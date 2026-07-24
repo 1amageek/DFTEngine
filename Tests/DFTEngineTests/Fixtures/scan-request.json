@@ -32,7 +32,7 @@
       },
       "digest" : {
         "algorithm" : "sha256",
-        "hexadecimalValue" : "9deddffd50075c6a795c1dc407ee39480b4dca4d13d9ee79b04acfe6a28304d4"
+        "hexadecimalValue" : "baa099deedbdeb35f9c7a404d4172549d76899bb53efcdb772fb42a3b6b41e17"
       },
       "byteCount" : 797
     },
@@ -73,7 +73,7 @@
       "byteCount" : 2333
     },
     "topDesignName" : "top",
-    "designDigest" : "6ca9e7c9b9fb67998b742c7f3f02b6bdc093eaf7baedf1fc216c3cd0e1cd1fb5"
+    "designDigest" : "d59378a080c442b84c1d5a0634650f18eba92923d439f8a9a0aeb2a0e2946761"
   },
   "cellLibrary" : {
     "artifact" : {
@@ -89,13 +89,13 @@
       },
       "digest" : {
         "algorithm" : "sha256",
-        "hexadecimalValue" : "9deddffd50075c6a795c1dc407ee39480b4dca4d13d9ee79b04acfe6a28304d4"
+        "hexadecimalValue" : "baa099deedbdeb35f9c7a404d4172549d76899bb53efcdb772fb42a3b6b41e17"
       },
       "byteCount" : 797
     },
     "processID" : "fixture-process",
     "version" : "1",
-    "manifestDigest" : "0bd506fc3efa25d9b6d4d94cae142b9060b58d6e65cca9e3005d4decb1ccbb3b",
+    "manifestDigest" : "e4741e25c86cb1fc1105c606bcb05e75586d189a24057278bec43b6a277e1bab",
     "timingLibraryArtifact" : {
       "id" : "cell-timing-library",
       "locator" : {
@@ -115,24 +115,28 @@
     }
   },
   "constraints" : {
-    "artifact" : {
-      "id" : "constraints",
-      "locator" : {
-        "location" : {
-          "storage" : "workspaceRelative",
-          "value" : "constraints.sdc"
-        },
-        "role" : "input",
-        "kind" : "constraint",
-        "format" : "sdc"
-      },
-      "digest" : {
-        "algorithm" : "sha256",
-        "hexadecimalValue" : "32edaf3b4c6f05dfd5712f742e6823ffe0ae9eaceeaac292fcca90a2c29d8e5c"
-      },
-      "byteCount" : 142
-    },
-    "modeIDs" : [ "test" ]
+    "modes" : [
+      {
+        "modeID" : "test",
+        "artifact" : {
+          "id" : "constraints",
+          "locator" : {
+            "location" : {
+              "storage" : "workspaceRelative",
+              "value" : "constraints.sdc"
+            },
+            "role" : "input",
+            "kind" : "constraint",
+            "format" : "sdc"
+          },
+          "digest" : {
+            "algorithm" : "sha256",
+            "hexadecimalValue" : "32edaf3b4c6f05dfd5712f742e6823ffe0ae9eaceeaac292fcca90a2c29d8e5c"
+          },
+          "byteCount" : 142
+        }
+      }
+    ]
   },
   "pdk" : {
     "manifest" : {
@@ -148,13 +152,13 @@
       },
       "digest" : {
         "algorithm" : "sha256",
-        "hexadecimalValue" : "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+        "hexadecimalValue" : "78c2e9d99a2aa11d653b10852bb6249718b931f5af017af39a71c526dc7a4291"
       },
-      "byteCount" : 10
+      "byteCount" : 151
     },
     "processID" : "fixture-process",
     "version" : "1",
-    "digest" : "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+    "digest" : "78c2e9d99a2aa11d653b10852bb6249718b931f5af017af39a71c526dc7a4291"
   },
   "operation" : "scanInsertion",
   "scanArchitecture" : {

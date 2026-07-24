@@ -4,13 +4,16 @@ import CircuiteFoundation
 public struct DFTExternalToolExecutor: Sendable {
     public let runner: any DFTExternalToolOutputProviding
     public let artifactStore: (any DFTArtifactStoring)?
+    public let artifactReader: (any DFTArtifactReading)?
 
     public init(
         runner: any DFTExternalToolOutputProviding,
-        artifactStore: (any DFTArtifactStoring)? = nil
+        artifactStore: (any DFTArtifactStoring)? = nil,
+        artifactReader: (any DFTArtifactReading)? = nil
     ) {
         self.runner = runner
         self.artifactStore = artifactStore
+        self.artifactReader = artifactReader
     }
 
     public func execute(
@@ -60,9 +63,11 @@ public struct DFTExternalToolExecutor: Sendable {
                 actual: result.provenance.producer.identifier
             )
         }
-        guard result.provenance.producer.build == runner.descriptor.engineID else {
+        guard result.provenance.producer.build?.caseInsensitiveCompare(
+            runner.descriptor.binaryDigest
+        ) == .orderedSame else {
             throw DFTExternalToolError.descriptorMismatch(
-                expected: runner.descriptor.engineID,
+                expected: runner.descriptor.binaryDigest,
                 actual: result.provenance.producer.build ?? ""
             )
         }
@@ -73,6 +78,16 @@ public struct DFTExternalToolExecutor: Sendable {
             )
         }
         try DFTResultValidator().validate(result, for: request)
+        if result.status == .completed, request.operation != .atpg {
+            guard let artifactReader else {
+                throw DFTExternalToolError.artifactReaderUnavailable
+            }
+            try await DFTResultSemanticVerifier().validate(
+                result,
+                for: request,
+                reading: artifactReader
+            )
+        }
         guard let artifactStore else {
             return result
         }

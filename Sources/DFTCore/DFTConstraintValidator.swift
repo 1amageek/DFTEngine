@@ -10,49 +10,82 @@ public struct DFTConstraintValidator: Sendable {
         guard !constraints.isEmpty else {
             throw DFTConstraintError.modeMissing
         }
-        if let architecture = request.scanArchitecture {
-            let clocks = constraints.flatMap(\.clocks)
-            for clock in architecture.clocks where !clocks.contains(where: {
-                $0.name == clock.signalName || $0.source == clock.signalName
-            }) {
-                throw DFTConstraintError.clockMissing(clock.signalName)
-            }
-            try requireAsserted(
-                architecture.testModeSignal,
-                constraints: constraints
+        let expectedModes = request.constraints.modeIDs.sorted()
+        let actualModes = constraints.map(\.modeID).sorted()
+        guard expectedModes == actualModes,
+              Set(actualModes).count == actualModes.count else {
+            throw DFTConstraintError.modeSetMismatch(
+                expected: expectedModes,
+                actual: actualModes
             )
-            if request.operation != .bist {
-                try requireAsserted(
-                    architecture.scanEnableSignal,
-                    constraints: constraints
-                )
-            }
-        } else if let configuration = request.bistConfiguration {
-            if let clockSignal = configuration.clockSignal {
-                let clocks = constraints.flatMap(\.clocks)
-                guard clocks.contains(where: {
-                    $0.name == clockSignal || $0.source == clockSignal
-                }) else {
-                    throw DFTConstraintError.clockMissing(clockSignal)
+        }
+        for constraint in constraints {
+            try validateCaseAnalysisConsistency(constraint)
+            if let architecture = request.scanArchitecture {
+                for clock in architecture.clocks where !constraint.clocks.contains(where: {
+                    $0.name == clock.signalName || $0.source == clock.signalName
+                }) {
+                    throw DFTConstraintError.clockMissing(
+                        modeID: constraint.modeID,
+                        signal: clock.signalName
+                    )
                 }
-            }
-            if let testModeSignal = configuration.testModeSignal
-                ?? request.testIntent?.testModeSignal {
-                try requireAsserted(testModeSignal, constraints: constraints)
+                try requireAsserted(
+                    architecture.testModeSignal,
+                    constraint: constraint
+                )
+                if request.operation != .bist {
+                    try requireAsserted(
+                        architecture.scanEnableSignal,
+                        constraint: constraint
+                    )
+                }
+            } else if let configuration = request.bistConfiguration {
+                if let clockSignal = configuration.clockSignal,
+                   !constraint.clocks.contains(where: {
+                       $0.name == clockSignal || $0.source == clockSignal
+                   }) {
+                    throw DFTConstraintError.clockMissing(
+                        modeID: constraint.modeID,
+                        signal: clockSignal
+                    )
+                }
+                if let testModeSignal = configuration.testModeSignal
+                    ?? request.testIntent?.testModeSignal {
+                    try requireAsserted(
+                        testModeSignal,
+                        constraint: constraint
+                    )
+                }
             }
         }
     }
 
     private func requireAsserted(
         _ signal: String,
-        constraints: [TimingConstraintSet]
+        constraint: TimingConstraintSet
     ) throws {
-        guard constraints.contains(where: { constraint in
-            constraint.caseAnalyses.contains {
-                $0.target == signal && $0.value == .one
-            }
+        guard constraint.caseAnalyses.contains(where: {
+            $0.target == signal && $0.value == .one
         }) else {
-            throw DFTConstraintError.testSignalNotAsserted(signal)
+            throw DFTConstraintError.testSignalNotAsserted(
+                modeID: constraint.modeID,
+                signal: signal
+            )
+        }
+    }
+
+    private func validateCaseAnalysisConsistency(
+        _ constraint: TimingConstraintSet
+    ) throws {
+        let grouped = Dictionary(grouping: constraint.caseAnalyses, by: \.target)
+        if let conflict = grouped.first(where: {
+            Set($0.value.map(\.value)).count > 1
+        }) {
+            throw DFTConstraintError.conflictingCaseAnalysis(
+                modeID: constraint.modeID,
+                signal: conflict.key
+            )
         }
     }
 }

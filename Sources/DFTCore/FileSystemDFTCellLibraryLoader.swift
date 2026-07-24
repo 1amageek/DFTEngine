@@ -15,7 +15,7 @@ public struct FileSystemDFTCellLibraryLoader: DFTCellLibraryLoading {
         let url = try resolve(reference.artifact.path)
         let data: Data
         do {
-            data = try Data(contentsOf: url)
+            data = try Data(contentsOf: url, options: .mappedIfSafe)
         } catch {
             throw DFTCellLibraryError.readFailed(
                 path: reference.artifact.path,
@@ -52,16 +52,11 @@ public struct FileSystemDFTCellLibraryLoader: DFTCellLibraryLoading {
     }
 
     private func resolve(_ path: String) throws -> URL {
-        guard !path.isEmpty,
-              !path.hasPrefix("/"),
-              !path.split(separator: "/").contains("..") else {
+        do {
+            return try DFTProjectArtifactResolver(rootURL: rootURL).resolve(path)
+        } catch {
             throw DFTCellLibraryError.invalidPath(path)
         }
-        let url = rootURL.appendingPathComponent(path).standardizedFileURL
-        guard url.path == rootURL.path || url.path.hasPrefix(rootURL.path + "/") else {
-            throw DFTCellLibraryError.invalidPath(path)
-        }
-        return url
     }
 
     private func validate(

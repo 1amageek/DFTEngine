@@ -1,4 +1,5 @@
 import DFTCore
+import CircuiteFoundation
 import Foundation
 import SignoffToolSupport
 
@@ -24,6 +25,8 @@ public struct ProcessDFTExternalToolRunner: DFTExternalToolOutputProviding {
     ) {
         self.descriptor = descriptor
         self.executableURL = executableURL
+            .standardizedFileURL
+            .resolvingSymlinksInPath()
         self.arguments = arguments
         self.workingDirectory = workingDirectory
         self.environment = environment
@@ -37,6 +40,13 @@ public struct ProcessDFTExternalToolRunner: DFTExternalToolOutputProviding {
     }
 
     public func runWithOutput(requestData: Data) async throws -> DFTExternalToolOutput {
+        let digestBefore = try executableDigest()
+        guard digestBefore.caseInsensitiveCompare(descriptor.binaryDigest) == .orderedSame else {
+            throw DFTExternalToolError.executableIdentityMismatch(
+                expected: descriptor.binaryDigest,
+                actual: digestBefore
+            )
+        }
         let requestURL = FileManager.default.temporaryDirectory
             .appending(path: "dft-external-request-\(UUID().uuidString).json")
         do {
@@ -62,6 +72,13 @@ public struct ProcessDFTExternalToolRunner: DFTExternalToolOutputProviding {
                 timeoutSeconds: timeoutSeconds,
                 terminationGraceSeconds: terminationGraceSeconds
             ).run(process: process)
+            let digestAfter = try executableDigest()
+            guard digestAfter == digestBefore else {
+                throw DFTExternalToolError.executableIdentityMismatch(
+                    expected: digestBefore,
+                    actual: digestAfter
+                )
+            }
             guard result.exitCode == 0 else {
                 throw DFTExternalToolError.processFailed(
                     executablePath: executableURL.path,
@@ -88,5 +105,12 @@ public struct ProcessDFTExternalToolRunner: DFTExternalToolOutputProviding {
             }
             throw error
         }
+    }
+
+    private func executableDigest() throws -> String {
+        let data = try Data(contentsOf: executableURL, options: .mappedIfSafe)
+        return try SHA256ContentDigester()
+            .digest(data: data)
+            .hexadecimalValue
     }
 }

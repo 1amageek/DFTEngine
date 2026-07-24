@@ -1,5 +1,6 @@
 import ATPGEngine
 import BISTEngine
+import CircuiteFoundation
 import DFTCore
 import DFTEngine
 import Darwin
@@ -64,12 +65,23 @@ enum DFTCLI {
         }
         let projectRoot = URL(fileURLWithPath: outputDirectory)
         let store = FileSystemDFTArtifactStore(rootURL: projectRoot)
+        for artifact in request.executionInputArtifacts {
+            let input = try await store.data(for: artifact)
+            guard UInt64(input.count) == artifact.byteCount,
+                  try SHA256ContentDigester().digest(data: input)
+                    == artifact.digest else {
+                throw CLIError.inputIdentityMismatch(artifact.path)
+            }
+        }
         let result = try await DefaultDFTEngine(
             artifactStore: store,
             designLoader: FileSystemDFTDesignLoader(rootURL: projectRoot),
             cellLibraryLoader: FileSystemDFTCellLibraryLoader(rootURL: projectRoot),
             timingLibraryLoader: FileSystemDFTTimingLibraryLoader(rootURL: projectRoot),
-            constraintLoader: FileSystemDFTConstraintLoader(rootURL: projectRoot)
+            constraintLoader: FileSystemDFTConstraintLoader(rootURL: projectRoot),
+            logicBISTCellMappingLoader: FileSystemDFTLogicBISTCellMappingLoader(
+                rootURL: projectRoot
+            )
         ).execute(request)
         let data = try DFTArtifactJSONEncoder().encode(result)
         if let resultPath {
@@ -172,6 +184,7 @@ private enum CLIError: Error, LocalizedError {
     case unexpectedArguments([String])
     case optionMissing(String)
     case inputReadFailed(String, String)
+    case inputIdentityMismatch(String)
     case requestDecodeFailed(String)
     case resultWriteFailed(String, String)
 
@@ -191,6 +204,8 @@ private enum CLIError: Error, LocalizedError {
             return "Required option \(option) is missing."
         case .inputReadFailed(let path, let message):
             return "Could not read request \(path): \(message)."
+        case .inputIdentityMismatch(let path):
+            return "Input artifact identity does not match retained content at \(path)."
         case .requestDecodeFailed(let message):
             return "Could not decode DFT request: \(message)."
         case .resultWriteFailed(let path, let message):

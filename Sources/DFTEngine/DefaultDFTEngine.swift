@@ -40,7 +40,9 @@ public struct DefaultDFTEngine: DFTEngineExecuting {
         designLoader: any DFTDesignLoading,
         cellLibraryLoader: any DFTCellLibraryLoading,
         timingLibraryLoader: any DFTTimingLibraryLoading,
-        constraintLoader: any DFTConstraintLoading
+        constraintLoader: any DFTConstraintLoading,
+        logicBISTCellMappingLoader: any DFTLogicBISTCellMappingLoading =
+            UnavailableDFTLogicBISTCellMappingLoader()
     ) {
         self.init(
             scanInsertion: DeterministicScanInsertionEngine(
@@ -60,7 +62,8 @@ public struct DefaultDFTEngine: DFTEngineExecuting {
             bist: DeterministicBISTEngine(
                 artifactStore: artifactStore,
                 designLoader: designLoader,
-                constraintLoader: constraintLoader
+                constraintLoader: constraintLoader,
+                logicBISTCellMappingLoader: logicBISTCellMappingLoader
             )
         )
     }
