@@ -2,7 +2,7 @@
 
 ## Current state
 
-**M0 and M1 are complete. M2 has process-scoped binding plus a Liberty timing/legal-cell validator. M3 has combinational stuck-at, bounded DFF/SDFF state-transition, explicit reset/set polarity/timing/edge contracts, level-sensitive latch semantics, bounded sequential transition-fault simulation, and an injected model boundary for process-specific faults. M4 has canonical logic-BIST plus a typed memory backend protocol. M5-M6 provide reusable artifacts, oracle correlation, and request-digest-bound evidence provenance. DFTEngine emits observations only; ToolQualification owns implementation trust and the composing flow owns downstream policy, approval, resume, and release.**
+**M0 and M1 are complete. M2 has process-scoped binding plus a Liberty timing/legal-cell validator. M3 has combinational stuck-at, bounded DFF/SDFF state-transition, explicit reset/set polarity/timing/edge contracts, level-sensitive latch semantics, bounded sequential transition-fault simulation, and independently verified process-specific outcomes with clock-bound capture timing. M4 has canonical logic-BIST plus a typed memory backend protocol. M5-M6 provide reusable artifacts, oracle correlation, and request-digest-bound evidence provenance. DFTEngine emits observations only; ToolQualification owns implementation trust and the composing flow owns downstream policy, approval, resume, and release.**
 
 | Maturity gate | Status | Evidence |
 |---|---|---|
@@ -80,7 +80,7 @@ equivalence/DRC/LVS/PEX evidence, and final approval.
 
 ## Current blockers
 
-- The native gate-level ATPG covers exhaustive binary combinational simulation, bounded DFF/SDFF clock-edge/state semantics including SI/SE scan shift and functional capture, explicit reset/set polarity/timing/edge contracts, qualified level-sensitive latch semantics and bounded combinational/sequential transition semantics. Process-specific faults require an injected `DFTProcessFaultModeling` implementation and validated result; unknown primitives and process-qualified timing remain blocked.
+- The native gate-level ATPG covers exhaustive binary combinational simulation, bounded DFF/SDFF clock-edge/state semantics including SI/SE scan shift and functional capture, explicit reset/set polarity/timing/edge contracts, qualified level-sensitive latch semantics and bounded combinational/sequential transition semantics. Process-specific faults require an injected `DFTProcessFaultModeling` implementation, a distinct `DFTProcessFaultPatternVerifying` implementation, and capture timing validated against a declared DFT clock. Unknown primitives without an injected model and independent process qualification remain blocked.
 - Native logic BIST requires explicit target pin bindings and transforms a canonical gate snapshot; controller, mux, capture and compactor helper cells still require process qualification.
 - Native JSON pattern IR, typed STIL/WGL rejection, a timeout/tree-cleaning external runner, atomic external result/stdout/stderr artifacts, and retained-oracle correlation are available; qualified standard-pattern translation, independent process evidence, and tool promotion remain integrating-flow responsibilities.
 - `DFTOracleCorrelationEngine` can verify normalized retained oracle expectation artifacts, compare native envelopes and emit a deterministic correlation digest; no real process corpus is bundled in this package.

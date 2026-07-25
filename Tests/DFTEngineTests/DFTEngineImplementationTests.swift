@@ -825,15 +825,121 @@ struct DFTEngineImplementationTests {
 
         let result = try await DeterministicATPGEngine(
             constraintLoader: FixtureConstraintLoader(),
-            processFaultModel: ProcessSpecificFaultModelFixture()
+            processFaultModel: ProcessSpecificFaultModelFixture(),
+            processFaultPatternVerifier: ProcessSpecificFaultPatternVerifierFixture()
         ).execute(request)
 
         #expect(result.status == .completed)
         #expect(result.payload.faultCoverage == 1)
         #expect(result.payload.patterns?.patterns.first?.bits == "11111111")
         #expect(result.payload.coverageEvidence?.outcomes.first?.modelID == "fixture-process-fault-model")
+        #expect(
+            result.payload.coverageEvidence?.outcomes.first?.verificationID
+                == "fixture-independent-process-pattern-verifier"
+        )
+        #expect(
+            result.payload.coverageEvidence?.outcomes.first?
+                .processCaptureTiming?.clockSignal == "scan_clk"
+        )
         #expect(result.payload.evidenceProvenance.status == .smokeObserved)
         #expect(result.dftDiagnostics.contains { $0.code == "DFT_ATPG_COMPLETED" })
+    }
+
+    @Test("process-specific ATPG rejects model self-approval")
+    func processSpecificFaultModelRequiresIndependentPatternVerifier() async throws {
+        let universe = DFTFaultUniverse(
+            name: "process-faults",
+            revision: "r1",
+            faults: [DFTFault(
+                id: "m1-leakage",
+                family: .processSpecific,
+                location: "m1",
+                processFamily: "leakage"
+            )],
+            declaredBy: "fixture"
+        )
+        let request = makeRequest(
+            operation: .atpg,
+            scanArchitecture: scanArchitecture(),
+            faultUniverse: universe,
+            atpgConfiguration: DFTATPGConfiguration(
+                patternLength: 8,
+                supportedProcessFamilies: ["leakage"]
+            )
+        )
+
+        let result = try await DeterministicATPGEngine(
+            constraintLoader: FixtureConstraintLoader(),
+            processFaultModel: ProcessSpecificFaultModelFixture()
+        ).execute(request)
+
+        #expect(result.status == .blocked)
+        #expect(result.payload.faultCoverage == nil)
+        #expect(result.dftDiagnostics.contains {
+            $0.code == "DFT_PROCESS_FAULT_PATTERN_VERIFIER_MISSING"
+        })
+    }
+
+    @Test("process-specific ATPG rejects unbound capture timing")
+    func processSpecificFaultModelRequiresBoundCaptureTiming() async throws {
+        let request = makeProcessSpecificATPGRequest()
+        let invalidTiming = DFTProcessCaptureTiming(
+            clockSignal: "undeclared_clock",
+            launchEdge: .rising,
+            captureEdge: .rising,
+            launchToCaptureNanoseconds: 10,
+            sampleOffsetNanoseconds: 9,
+            assumptions: ["fixture timing references an undeclared clock"]
+        )
+
+        let result = try await DeterministicATPGEngine(
+            constraintLoader: FixtureConstraintLoader(),
+            processFaultModel: ProcessSpecificFaultModelFixture(
+                captureTiming: invalidTiming
+            ),
+            processFaultPatternVerifier: ProcessSpecificFaultPatternVerifierFixture()
+        ).execute(request)
+
+        #expect(result.status == .blocked)
+        #expect(result.payload.faultCoverage == nil)
+        #expect(result.dftDiagnostics.contains {
+            $0.code == "DFT_PROCESS_FAULT_CAPTURE_TIMING_INVALID"
+        })
+    }
+
+    @Test("process-specific ATPG retains independent pattern rejection")
+    func processSpecificFaultPatternRejectionBlocksCoverage() async throws {
+        let result = try await DeterministicATPGEngine(
+            constraintLoader: FixtureConstraintLoader(),
+            processFaultModel: ProcessSpecificFaultModelFixture(),
+            processFaultPatternVerifier: ProcessSpecificFaultPatternVerifierFixture(
+                acceptedPattern: "00000000"
+            )
+        ).execute(makeProcessSpecificATPGRequest())
+
+        #expect(result.status == .blocked)
+        #expect(result.payload.faultCoverage == nil)
+        #expect(
+            result.payload.coverageEvidence?.outcomes.first?.verificationID
+                == "fixture-independent-process-pattern-verifier"
+        )
+        #expect(result.dftDiagnostics.contains {
+            $0.code == "DFT_PROCESS_FAULT_PATTERN_REJECTED"
+        })
+    }
+
+    @Test("ATPG capability report does not advertise blocked standard formats")
+    func atpgCapabilityReportMatchesExecutableFormatContract() {
+        let unavailable = DeterministicATPGEngine().capabilityReport
+        #expect(unavailable.capabilities["stil_export"] == .blocked)
+        #expect(unavailable.capabilities["wgl_export"] == .blocked)
+        #expect(unavailable.capabilities["process_specific_faults"] == .blocked)
+
+        let processBound = DeterministicATPGEngine(
+            processFaultModel: ProcessSpecificFaultModelFixture(),
+            processFaultPatternVerifier: ProcessSpecificFaultPatternVerifierFixture()
+        ).capabilityReport
+        #expect(processBound.capabilities["process_specific_faults"] == .available)
     }
 
     @Test("ATPG records untestable faults without claiming coverage")
@@ -1389,6 +1495,28 @@ struct DFTEngineImplementationTests {
         } catch let error as DFTExternalToolError {
             #expect(error == .provenanceInputMismatch)
         }
+    }
+
+    private func makeProcessSpecificATPGRequest() -> DFTRequest {
+        makeRequest(
+            operation: .atpg,
+            scanArchitecture: scanArchitecture(),
+            faultUniverse: DFTFaultUniverse(
+                name: "process-faults",
+                revision: "r1",
+                faults: [DFTFault(
+                    id: "m1-leakage",
+                    family: .processSpecific,
+                    location: "m1",
+                    processFamily: "leakage"
+                )],
+                declaredBy: "fixture"
+            ),
+            atpgConfiguration: DFTATPGConfiguration(
+                patternLength: 8,
+                supportedProcessFamilies: ["leakage"]
+            )
+        )
     }
 
     private func makeRequest(

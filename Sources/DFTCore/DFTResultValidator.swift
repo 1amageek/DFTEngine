@@ -250,6 +250,41 @@ public struct DFTResultValidator: Sendable {
                 "coverage evidence must exactly identify every active requested fault"
             )
         }
+        if let universe = request.faultUniverse {
+            let processFaultIDs = Set(
+                universe.faults.lazy
+                    .filter { $0.family == .processSpecific }
+                    .map(\.id)
+            ).intersection(activeFaultIDs)
+            let outcomesByFaultID = Dictionary(
+                uniqueKeysWithValues: evidence.outcomes.map {
+                    ($0.faultID, $0)
+                }
+            )
+            for faultID in processFaultIDs {
+                guard let outcome = outcomesByFaultID[faultID],
+                      let modelID = outcome.modelID,
+                      !modelID.isEmpty,
+                      let verificationID = outcome.verificationID,
+                      !verificationID.isEmpty,
+                      verificationID != modelID,
+                      let timing = outcome.processCaptureTiming else {
+                    throw DFTResultValidationError.coverageInvalid(
+                        "process fault \(faultID) requires distinct model/verifier identities and retained capture timing"
+                    )
+                }
+                do {
+                    try DFTProcessCaptureTimingValidator().validate(
+                        timing,
+                        architecture: request.scanArchitecture
+                    )
+                } catch {
+                    throw DFTResultValidationError.coverageInvalid(
+                        "process fault \(faultID) has invalid capture timing: \(error.localizedDescription)"
+                    )
+                }
+            }
+        }
         let expectedSeed = try configuration.randomSeed
             ?? DFTDeterministicHasher().seed(for: universeDigest)
         let patternIDs = patterns.patterns.map(\.id)

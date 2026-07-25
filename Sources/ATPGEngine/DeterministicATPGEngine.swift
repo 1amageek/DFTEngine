@@ -15,6 +15,7 @@ public struct DeterministicATPGEngine: ATPGExecuting {
     public let sequentialSimulator: any GateLevelSequentialSimulating
     public let transitionSimulator: any GateLevelTransitionSimulating
     public let processFaultModel: (any DFTProcessFaultModeling)?
+    public let processFaultPatternVerifier: (any DFTProcessFaultPatternVerifying)?
     public let implementationID: String
 
     public init(
@@ -28,6 +29,7 @@ public struct DeterministicATPGEngine: ATPGExecuting {
         sequentialSimulator: any GateLevelSequentialSimulating = GateLevelSequentialSimulator(),
         transitionSimulator: any GateLevelTransitionSimulating = GateLevelTransitionSimulator(),
         processFaultModel: (any DFTProcessFaultModeling)? = nil,
+        processFaultPatternVerifier: (any DFTProcessFaultPatternVerifying)? = nil,
         implementationID: String = "native-deterministic-atpg"
     ) {
         self.artifactStore = artifactStore
@@ -40,6 +42,7 @@ public struct DeterministicATPGEngine: ATPGExecuting {
         self.sequentialSimulator = sequentialSimulator
         self.transitionSimulator = transitionSimulator
         self.processFaultModel = processFaultModel
+        self.processFaultPatternVerifier = processFaultPatternVerifier
         self.implementationID = implementationID
     }
 
@@ -614,6 +617,115 @@ public struct DeterministicATPGEngine: ATPGExecuting {
                             ))
                             continue
                         }
+                        guard let captureTiming = modelResult.captureTiming else {
+                            abortedCount += 1
+                            outcomes.append(DFTFaultOutcome(
+                                faultID: fault.id,
+                                status: .aborted,
+                                modelID: processFaultModel.modelID,
+                                reason: "process fault model returned invalid or unbound capture timing"
+                            ))
+                            diagnostics.append(DFTDiagnostic(
+                                severity: .error,
+                                code: "DFT_PROCESS_FAULT_CAPTURE_TIMING_INVALID",
+                                message: "Process fault model returned capture timing that is not bound to a declared DFT clock for \(fault.id).",
+                                entity: fault.id,
+                                suggestedActions: ["bind_process_capture_timing", "repair_process_fault_model_result"]
+                            ))
+                            continue
+                        }
+                        do {
+                            try DFTProcessCaptureTimingValidator().validate(
+                                captureTiming,
+                                architecture: request.scanArchitecture
+                            )
+                        } catch {
+                            abortedCount += 1
+                            outcomes.append(DFTFaultOutcome(
+                                faultID: fault.id,
+                                status: .aborted,
+                                modelID: processFaultModel.modelID,
+                                processCaptureTiming: captureTiming,
+                                reason: "process fault capture timing validation failed: \(error.localizedDescription)"
+                            ))
+                            diagnostics.append(DFTDiagnostic(
+                                severity: .error,
+                                code: "DFT_PROCESS_FAULT_CAPTURE_TIMING_INVALID",
+                                message: "Process fault model returned invalid capture timing for \(fault.id): \(error.localizedDescription)",
+                                entity: fault.id,
+                                suggestedActions: ["bind_process_capture_timing", "repair_process_fault_model_result"]
+                            ))
+                            continue
+                        }
+                        guard let processFaultPatternVerifier,
+                              !processFaultPatternVerifier.verifierID.isEmpty,
+                              processFaultPatternVerifier.verifierID
+                                != processFaultModel.modelID else {
+                            abortedCount += 1
+                            outcomes.append(DFTFaultOutcome(
+                                faultID: fault.id,
+                                status: .aborted,
+                                modelID: processFaultModel.modelID,
+                                processCaptureTiming: captureTiming,
+                                reason: "no independent process fault pattern verifier was injected"
+                            ))
+                            diagnostics.append(DFTDiagnostic(
+                                severity: .error,
+                                code: "DFT_PROCESS_FAULT_PATTERN_VERIFIER_MISSING",
+                                message: "Detected process fault \(fault.id) requires a non-self verifier with a distinct identity.",
+                                entity: fault.id,
+                                suggestedActions: ["inject_independent_process_pattern_verifier"]
+                            ))
+                            continue
+                        }
+                        let isPatternValid: Bool
+                        do {
+                            isPatternValid = try await processFaultPatternVerifier.validate(
+                                result: modelResult,
+                                fault: fault,
+                                request: request,
+                                configuration: configuration
+                            )
+                        } catch is CancellationError {
+                            throw CancellationError()
+                        } catch {
+                            abortedCount += 1
+                            outcomes.append(DFTFaultOutcome(
+                                faultID: fault.id,
+                                status: .aborted,
+                                modelID: processFaultModel.modelID,
+                                verificationID: processFaultPatternVerifier.verifierID,
+                                processCaptureTiming: captureTiming,
+                                reason: "process fault pattern verification failed: \(error.localizedDescription)"
+                            ))
+                            diagnostics.append(DFTDiagnostic(
+                                severity: .error,
+                                code: "DFT_PROCESS_FAULT_PATTERN_VERIFICATION_FAILED",
+                                message: "Independent process pattern verifier \(processFaultPatternVerifier.verifierID) failed for \(fault.id): \(error.localizedDescription)",
+                                entity: fault.id,
+                                suggestedActions: ["inspect_process_pattern_verifier_evidence"]
+                            ))
+                            continue
+                        }
+                        guard isPatternValid else {
+                            abortedCount += 1
+                            outcomes.append(DFTFaultOutcome(
+                                faultID: fault.id,
+                                status: .aborted,
+                                modelID: processFaultModel.modelID,
+                                verificationID: processFaultPatternVerifier.verifierID,
+                                processCaptureTiming: captureTiming,
+                                reason: "independent process fault pattern verification rejected the result"
+                            ))
+                            diagnostics.append(DFTDiagnostic(
+                                severity: .error,
+                                code: "DFT_PROCESS_FAULT_PATTERN_REJECTED",
+                                message: "Independent process pattern verifier \(processFaultPatternVerifier.verifierID) rejected \(fault.id).",
+                                entity: fault.id,
+                                suggestedActions: ["repair_process_fault_pattern", "inspect_process_model_disagreement"]
+                            ))
+                            continue
+                        }
                         let patternID = "pattern-\(patterns.count + 1)"
                         patterns.append(DFTTestPattern(
                             id: patternID,
@@ -625,6 +737,8 @@ public struct DeterministicATPGEngine: ATPGExecuting {
                             status: .detected,
                             patternID: patternID,
                             modelID: modelResult.modelID,
+                            verificationID: processFaultPatternVerifier.verifierID,
+                            processCaptureTiming: captureTiming,
                             reason: "detected by process fault model \(modelResult.modelID): \(modelResult.reason)"
                         ))
                     case .untestable:
@@ -820,10 +934,15 @@ public struct DeterministicATPGEngine: ATPGExecuting {
                 "sequential_atpg": .available,
                 "sequential_control_semantics": .available,
                 "sequential_transition_faults": .available,
-                "process_specific_faults": .blocked,
+                "process_specific_faults": processFaultModel != nil
+                    && processFaultPatternVerifier != nil
+                    && processFaultModel?.modelID
+                        != processFaultPatternVerifier?.verifierID
+                    ? .available
+                    : .blocked,
                 "coverage_evidence": .available,
-                "stil_export": .available,
-                "wgl_export": .available
+                "stil_export": .blocked,
+                "wgl_export": .blocked
             ],
             limitations: [
                 "Gate-level ATPG currently supports exhaustive binary simulation for a qualified combinational primitive subset.",

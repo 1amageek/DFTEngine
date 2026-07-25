@@ -4,7 +4,7 @@ Scan, ATPG and built-in self-test transformation contracts.
 
 ## Status
 
-This repository contains typed DFT contracts, canonical gate-level scan transformation, process-scoped scan-cell and Liberty timing validation, bounded gate-level ATPG, process-specific fault-model injection, process-bound logic-BIST transformation, a typed memory-macro execution boundary, external-tool execution, retained oracle correlation, immutable Foundation artifact stores, and a headless JSON CLI.
+This repository contains typed DFT contracts, canonical gate-level scan transformation, process-scoped scan-cell and Liberty timing validation, bounded gate-level ATPG, independently verified process-specific fault-model injection with capture-timing evidence, process-bound logic-BIST transformation, a typed memory-macro execution boundary, external-tool execution, retained oracle correlation, immutable Foundation artifact stores, and a headless JSON CLI.
 
 Native output is JSON only. `DeterministicTestPatternCodec` rejects STIL and WGL with a typed unsupported-format error because the native backend does not implement their cycle-accurate standard semantics; native requests for those formats are also blocked during request validation. Scan compression is blocked until decompressor/compactor insertion and coverage validation exist. Production qualification remains gated by independently generated PDK, macro, oracle, equivalence, DRC, LVS, PEX and human-review evidence.
 
@@ -44,7 +44,7 @@ The native implementations are:
 | Backend | Output | Explicit limitation |
 |---|---|---|
 | `DeterministicScanInsertionEngine` | digest-verified gate transformation, canonical port/net bindings, Liberty-validated replacement cells, scan plan and design diff | Compression and functional equivalence remain downstream gates |
-| `DeterministicATPGEngine` | simulated declared/extracted stuck-at and transition ATPG with explicit sequential contracts | Every detected stuck-at or transition outcome is independently replayable; process-specific outcomes require a dedicated replay verifier |
+| `DeterministicATPGEngine` | simulated declared/extracted stuck-at and transition ATPG with explicit sequential contracts; injected process-specific models with a distinct pattern verifier and clock-bound capture timing | Independent process corpora and ToolQualification evidence remain external gates |
 | `DeterministicBISTEngine` | process-bound logic-BIST transformation, explicit PRPG/MISR/seed/signature parameters, structure and design diff | Native memory BIST remains blocked pending a qualified external backend |
 | `DFTResult` | Domain result with direct `ArtifactProducing`, `EvidenceProviding`, and `DiagnosticReporting` conformance | Retains immutable artifacts, provenance, and typed diagnostics without projection |
 | `DefaultDFTEngine` | Direct `DFTEngineExecuting` implementation | Returns the domain-owned `DFTResult` |
@@ -84,7 +84,16 @@ ToolQualification decisions, repair loops and human approval.
 
 `DFTOracleCorpus` describes process-scoped cases with request digests, normalized oracle expectation artifacts and PDK identity. `DFTOracleCorrelationEngine` verifies retained artifact byte counts and SHA-256 digests, decodes the normalized expectations, compares native results and emits raw correlation observations with a deterministic digest. It does not promote those observations to trusted-tool or release status; ToolQualification and the composing flow policy own that decision.
 
-Process-specific ATPG is intentionally an integration boundary. `DFTProcessFaultModeling` is injected by the integrating project and returns a typed result that the engine validates before creating a pattern or coverage outcome. Model injection is not process qualification; the result still requires independent oracle and ToolQualification evidence before release.
+Process-specific ATPG is intentionally an integration boundary.
+`DFTProcessFaultModeling` generates the candidate outcome while the separately
+injected `DFTProcessFaultPatternVerifying` implementation validates it. Their
+identities must be non-empty and distinct. A detected outcome must also retain
+`DFTProcessCaptureTiming` bound to a declared DFT clock, a finite
+launch-to-capture interval within that clock period, a valid sample offset, and
+explicit assumptions. `DFTResultValidator` enforces the same evidence contract
+for native and external completed results. Model injection and verification are
+not process qualification; independent corpus and ToolQualification evidence
+remain required before release.
 
 Logic BIST requires a process- and PDK-bound helper-cell mapping artifact.
 `DFTLogicBISTCellMappingLoading` owns loading and identity verification; the

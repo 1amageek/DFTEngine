@@ -33,7 +33,7 @@ The full platform goal is intentionally decomposed into the gates documented in 
 - Added process-scoped scan-cell binding manifests with artifact and PDK digest verification.
 - Added gate-level stuck-at fault extraction and exhaustive binary simulation for a bounded combinational primitive subset; unsupported sequential semantics block coverage.
 - Added bounded DFF/SDFF SI/SE scan-shift and functional-capture simulation, reset/set polarity/timing/edge contracts, qualified level-sensitive latch semantics and bounded sequential transition-fault simulation; unknown primitives and process-qualified timing remain explicitly blocked.
-- Added the protocol-first `DFTProcessFaultModeling` boundary for process-specific ATPG. A declared process family alone cannot produce coverage; the engine requires an injected model, matching model identity, a non-empty reason and a binary pattern with the configured width, with typed blocked diagnostics for missing, unsupported, failed or malformed model results.
+- Added protocol-first `DFTProcessFaultModeling` generation and `DFTProcessFaultPatternVerifying` validation boundaries for process-specific ATPG. A declared process family alone cannot produce coverage; detected outcomes require distinct model/verifier identities, a verified binary pattern, and capture timing bound to a declared DFT clock. The same contract is enforced for external completed results, with typed blocked diagnostics for missing, unsupported, failed, rejected, or malformed evidence.
 - Added canonical logic-BIST transformation with explicit target pin bindings,
   test-mode input muxing, response capture/compaction, signature output,
   immutable design diff, and a separately loaded process/PDK-bound helper-cell
