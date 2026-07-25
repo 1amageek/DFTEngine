@@ -6,7 +6,7 @@ Scan, ATPG and built-in self-test transformation contracts.
 
 This repository contains typed DFT contracts, canonical gate-level scan transformation, process-scoped scan-cell and Liberty timing validation, bounded gate-level ATPG, process-specific fault-model injection, process-bound logic-BIST transformation, a typed memory-macro execution boundary, external-tool execution, retained oracle correlation, immutable Foundation artifact stores, and a headless JSON CLI.
 
-Native output is JSON only. The existing STIL/WGL codec is a deterministic internal interchange codec and is not a qualified standards exporter; native requests for those formats are blocked. Scan compression is also blocked until decompressor/compactor insertion and coverage validation exist. Production qualification remains gated by independently generated PDK, macro, oracle, equivalence, DRC, LVS, PEX and human-review evidence.
+Native output is JSON only. `DeterministicTestPatternCodec` rejects STIL and WGL with a typed unsupported-format error because the native backend does not implement their cycle-accurate standard semantics; native requests for those formats are also blocked during request validation. Scan compression is blocked until decompressor/compactor insertion and coverage validation exist. Production qualification remains gated by independently generated PDK, macro, oracle, equivalence, DRC, LVS, PEX and human-review evidence.
 
 The CLI and Xcircuite composition load every digest-bound, mode-specific SDC
 artifact and verify declared DFT clocks plus asserted test-mode/scan-enable
@@ -44,8 +44,8 @@ The native implementations are:
 | Backend | Output | Explicit limitation |
 |---|---|---|
 | `DeterministicScanInsertionEngine` | digest-verified gate transformation, canonical port/net bindings, Liberty-validated replacement cells, scan plan and design diff | Compression and functional equivalence remain downstream gates |
-| `DeterministicATPGEngine` | simulated declared/extracted stuck-at and transition ATPG with explicit sequential contracts | A fault is never marked detected without simulation or an injected typed process model; unknown semantics remain blocked |
-| `DeterministicBISTEngine` | process-bound logic-BIST transformation, PRPG/MISR contract, structure and design diff | Native memory BIST remains blocked pending a qualified external backend |
+| `DeterministicATPGEngine` | simulated declared/extracted stuck-at and transition ATPG with explicit sequential contracts | Every detected stuck-at or transition outcome is independently replayable; process-specific outcomes require a dedicated replay verifier |
+| `DeterministicBISTEngine` | process-bound logic-BIST transformation, explicit PRPG/MISR/seed/signature parameters, structure and design diff | Native memory BIST remains blocked pending a qualified external backend |
 | `DFTResult` | Domain result with direct `ArtifactProducing`, `EvidenceProviding`, and `DiagnosticReporting` conformance | Retains immutable artifacts, provenance, and typed diagnostics without projection |
 | `DefaultDFTEngine` | Direct `DFTEngineExecuting` implementation | Returns the domain-owned `DFTResult` |
 
@@ -64,10 +64,13 @@ Domain engines return `DFTResult` directly. The result itself publishes verified
 artifacts, diagnostics, and execution provenance without a wrapper.
 
 `DFTResultValidator` validates the self-contained result contract.
-`DFTResultSemanticVerifier` separately reopens immutable source and transformed
-artifacts, verifies their identities, decodes canonical LogicDesign state, and
-checks that scan/BIST structures actually exist. Flow and release integrations
-must use the semantic verifier before accepting a completed mutation.
+`DFTResultSemanticVerifier` separately reopens immutable PDK, cell-library,
+mapping, source, and transformed artifacts; verifies their identities and PDK
+semantics; decodes canonical LogicDesign state; and checks exact scan-chain and
+logic-BIST connectivity. ATPG completion additionally requires an injected
+`DFTATPGResultSemanticVerifying` implementation. The native verifier replays
+every detected stuck-at and transition pattern. Flow, external-tool, and release
+integrations use the same verifier before accepting a completed result.
 
 ## Flow integration
 
@@ -86,8 +89,19 @@ Process-specific ATPG is intentionally an integration boundary. `DFTProcessFault
 Logic BIST requires a process- and PDK-bound helper-cell mapping artifact.
 `DFTLogicBISTCellMappingLoading` owns loading and identity verification; the
 native BIST engine compares the decoded immutable manifest with the inline
-request contract before transforming the design. A missing loader or mismatch
-blocks execution.
+request contract before transforming the design. The transformed helper cells
+retain pattern count, deterministic seed, PRPG taps, MISR taps, response width,
+and expected signature as typed LogicIR parameters; semantic validation checks
+those parameters, preserves RTL plus every non-top module and functional
+top-level port/net identity, and checks the exact generated port, pin, mux,
+capture, compactor, control, clock, and signature connectivity. A missing
+loader or mismatch blocks execution.
+
+Multi-artifact output uses `storeBatch`. The filesystem implementation stages a
+complete immutable batch and publishes it with one directory rename; the
+in-memory actor validates the whole batch before mutating storage. Artifact paths
+therefore include a deterministic batch directory. Concurrent store instances
+accept a byte-identical winning publication and reject a conflicting batch.
 
 External backends bind their descriptor to the SHA-256 digest of the executable.
 The process runner verifies the executable before and after execution, and a

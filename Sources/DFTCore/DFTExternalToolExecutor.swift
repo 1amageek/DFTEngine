@@ -5,15 +5,18 @@ public struct DFTExternalToolExecutor: Sendable {
     public let runner: any DFTExternalToolOutputProviding
     public let artifactStore: (any DFTArtifactStoring)?
     public let artifactReader: (any DFTArtifactReading)?
+    public let semanticVerifier: DFTResultSemanticVerifier
 
     public init(
         runner: any DFTExternalToolOutputProviding,
         artifactStore: (any DFTArtifactStoring)? = nil,
-        artifactReader: (any DFTArtifactReading)? = nil
+        artifactReader: (any DFTArtifactReading)? = nil,
+        semanticVerifier: DFTResultSemanticVerifier = DFTResultSemanticVerifier()
     ) {
         self.runner = runner
         self.artifactStore = artifactStore
         self.artifactReader = artifactReader
+        self.semanticVerifier = semanticVerifier
     }
 
     public func execute(
@@ -78,11 +81,11 @@ public struct DFTExternalToolExecutor: Sendable {
             )
         }
         try DFTResultValidator().validate(result, for: request)
-        if result.status == .completed, request.operation != .atpg {
+        if result.status == .completed {
             guard let artifactReader else {
                 throw DFTExternalToolError.artifactReaderUnavailable
             }
-            try await DFTResultSemanticVerifier().validate(
+            try await semanticVerifier.validate(
                 result,
                 for: request,
                 reading: artifactReader
@@ -91,7 +94,8 @@ public struct DFTExternalToolExecutor: Sendable {
         guard let artifactStore else {
             return result
         }
-        let responseReference = try await artifactStore.store(
+        let persistedReferences = try await artifactStore.storeBatch(
+            [
             DFTArtifactContent(
                 artifactID: "dft-external-result",
                 fileName: "external-result-result.json",
@@ -99,9 +103,6 @@ public struct DFTExternalToolExecutor: Sendable {
                 format: .json,
                 data: responseData
             ),
-            runID: request.runID
-        )
-        let stdoutReference = try await artifactStore.store(
             DFTArtifactContent(
                 artifactID: "dft-external-stdout",
                 fileName: "external-stdout.raw",
@@ -109,16 +110,14 @@ public struct DFTExternalToolExecutor: Sendable {
                 format: .raw,
                 data: output.standardOutput
             ),
-            runID: request.runID
-        )
-        let stderrReference = try await artifactStore.store(
             DFTArtifactContent(
                 artifactID: "dft-external-stderr",
                 fileName: "external-stderr.raw",
                 kind: .report,
                 format: .raw,
                 data: output.standardError
-            ),
+            )
+            ],
             runID: request.runID
         )
         let persistedResult = DFTResult(
@@ -126,7 +125,7 @@ public struct DFTExternalToolExecutor: Sendable {
             runID: result.runID,
             status: result.status,
             diagnostics: result.dftDiagnostics,
-            artifacts: result.artifacts + [responseReference, stdoutReference, stderrReference],
+            artifacts: result.artifacts + persistedReferences,
             provenance: result.provenance,
             evidenceID: result.evidence.id,
             payload: result.payload

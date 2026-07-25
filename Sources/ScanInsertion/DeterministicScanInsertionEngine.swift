@@ -213,16 +213,27 @@ public struct DeterministicScanInsertionEngine: ScanInserting {
                 ]
             )
             let transformedData = try LogicDesignSnapshotCodec.encode(transform.snapshot)
-            let transformedReference = try await artifactStore.store(
-                DFTArtifactContent(
-                    artifactID: "dft-transformed-design",
-                    fileName: "transformed-design.json",
-                    kind: .netlist,
-                    format: .json,
-                    data: transformedData
-                ),
-                runID: request.runID
+            let transformedContent = DFTArtifactContent(
+                artifactID: "dft-transformed-design",
+                fileName: "transformed-design.json",
+                kind: .netlist,
+                format: .json,
+                data: transformedData
             )
+            let diffMetadata = DFTArtifactContent(
+                artifactID: "dft-design-diff",
+                fileName: "design-diff.json",
+                kind: .designDiff,
+                format: .json,
+                data: Data()
+            )
+            let provisionalContents = policy.generateDesignDiff
+                ? [transformedContent, diffMetadata]
+                : [transformedContent]
+            let transformedReference = try DFTArtifactBatch.references(
+                for: provisionalContents,
+                runID: request.runID
+            )[0]
             let transformedDesign = LogicDesignReference(
                 artifact: transformedReference,
                 topDesignName: request.design.topDesignName,
@@ -237,7 +248,7 @@ public struct DeterministicScanInsertionEngine: ScanInserting {
                 )
             )
 
-            var artifacts = [transformedReference]
+            var artifactContents = [transformedContent]
             var designDiff: DFTDesignDiff?
             if policy.generateDesignDiff {
                 let changes = transform.transformedCellIDs.map { cellID in
@@ -284,19 +295,21 @@ public struct DeterministicScanInsertionEngine: ScanInserting {
                     createdAt: startedAt
                 )
                 let diffData = try DFTArtifactJSONEncoder().encode(diff)
-                let diffReference = try await artifactStore.store(
+                artifactContents.append(
                     DFTArtifactContent(
                         artifactID: "dft-design-diff",
                         fileName: "design-diff.json",
                         kind: .designDiff,
                         format: .json,
                         data: diffData
-                    ),
-                    runID: request.runID
+                    )
                 )
-                artifacts.append(diffReference)
                 designDiff = diff
             }
+            let artifacts = try await artifactStore.storeBatch(
+                artifactContents,
+                runID: request.runID
+            )
 
             return try DFTExecutionSupport.result(
                 request: request,

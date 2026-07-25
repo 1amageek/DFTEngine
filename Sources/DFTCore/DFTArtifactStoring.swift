@@ -6,4 +6,9 @@ public protocol DFTArtifactStoring: Sendable {
         _ content: DFTArtifactContent,
         runID: String
     ) async throws -> ArtifactReference
+
+    func storeBatch(
+        _ contents: [DFTArtifactContent],
+        runID: String
+    ) async throws -> [ArtifactReference]
 }

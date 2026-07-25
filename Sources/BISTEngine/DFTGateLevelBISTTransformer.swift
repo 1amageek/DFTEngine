@@ -9,7 +9,8 @@ public struct DFTGateLevelBISTTransformer: Sendable {
         snapshot: LogicDesignSnapshot,
         configuration: DFTBISTConfiguration,
         testModeSignal: String,
-        clockSignal: String
+        clockSignal: String,
+        seed: UInt64
     ) throws -> DFTGateLevelBISTTransformResult {
         guard configuration.kind == .logic else {
             throw DFTGateLevelBISTTransformError.unsupportedKind(configuration.kind)
@@ -210,7 +211,17 @@ public struct DFTGateLevelBISTTransformer: Sendable {
             id: compactorID,
             type: cellMapping.responseCompactorCellType,
             instanceName: compactorID,
-            pins: compactorInputPins + [GatePin(id: compactorOutputID, name: "Y", direction: .output, netID: responseNetID)]
+            pins: compactorInputPins + [GatePin(id: compactorOutputID, name: "Y", direction: .output, netID: responseNetID)],
+            parameters: [
+                GateCellParameter(
+                    name: "responseWidth",
+                    value: .unsignedInteger(UInt64(captureNetIDs.count))
+                ),
+                GateCellParameter(
+                    name: "misrPolynomialTaps",
+                    value: .integerList(cellMapping.misrPolynomialTaps.map(Int64.init))
+                ),
+            ]
         ))
         generatedCellIDs.append(compactorID)
         for pin in compactorInputPins {
@@ -234,7 +245,18 @@ public struct DFTGateLevelBISTTransformer: Sendable {
             id: controllerID,
             type: cellMapping.controllerCellType,
             instanceName: controllerID,
-            pins: controllerPins
+            pins: controllerPins,
+            parameters: [
+                GateCellParameter(
+                    name: "patternCount",
+                    value: .unsignedInteger(UInt64(configuration.patternCount))
+                ),
+                GateCellParameter(name: "seed", value: .unsignedInteger(seed)),
+                GateCellParameter(
+                    name: "prpgPolynomialTaps",
+                    value: .integerList(cellMapping.prpgPolynomialTaps.map(Int64.init))
+                ),
+            ]
         ))
         updateNet(testModeNetID, in: &module) { net in net.loadPinIDs.append(controllerPins[0].id) }
         updateNet(clockNet.id, in: &module) { net in net.loadPinIDs.append(controllerPins[1].id) }
@@ -251,7 +273,17 @@ public struct DFTGateLevelBISTTransformer: Sendable {
             id: signatureID,
             type: cellMapping.signatureRegisterCellType,
             instanceName: configuration.signatureRegisterName,
-            pins: signaturePins
+            pins: signaturePins,
+            parameters: [
+                GateCellParameter(
+                    name: "misrPolynomialTaps",
+                    value: .integerList(cellMapping.misrPolynomialTaps.map(Int64.init))
+                ),
+                GateCellParameter(
+                    name: "expectedSignature",
+                    value: .bitVector(cellMapping.expectedSignature)
+                ),
+            ]
         ))
         updateNet(responseNetID, in: &module) { net in net.loadPinIDs.append(signaturePins[0].id) }
         updateNet(clockNet.id, in: &module) { net in net.loadPinIDs.append(signaturePins[1].id) }

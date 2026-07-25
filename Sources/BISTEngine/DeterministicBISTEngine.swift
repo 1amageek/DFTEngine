@@ -201,13 +201,16 @@ public struct DeterministicBISTEngine: BISTExecuting {
                     actions: ["verify_design_artifact_integrity", "repair_gate_level_snapshot"]
                 )
             }
+            let seed = try configuration.randomSeed
+                ?? DFTDeterministicHasher().seed(for: "\(request.design.designDigest):\(configuration.name)")
             let transform: DFTGateLevelBISTTransformResult
             do {
                 transform = try DFTGateLevelBISTTransformer().transform(
                     snapshot: sourceSnapshot,
                     configuration: configuration,
                     testModeSignal: testModeSignal,
-                    clockSignal: clockSignal
+                    clockSignal: clockSignal,
+                    seed: seed
                 )
             } catch {
                 return try blocked(
@@ -220,8 +223,6 @@ public struct DeterministicBISTEngine: BISTExecuting {
                     actions: ["repair_bist_target_bindings", "repair_gate_connectivity", "qualify_bist_helper_cells"]
                 )
             }
-            let seed = try configuration.randomSeed
-                ?? DFTDeterministicHasher().seed(for: "\(request.design.designDigest):\(configuration.name)")
             let structure = DFTBISTStructure(
                 name: configuration.name,
                 kind: configuration.kind,
@@ -247,27 +248,33 @@ public struct DeterministicBISTEngine: BISTExecuting {
                 ]
             )
             let transformedData = try LogicDesignSnapshotCodec.encode(transform.snapshot)
-            let transformedReference = try await artifactStore.store(
-                DFTArtifactContent(
-                    artifactID: "dft-bist-transformed-design",
-                    fileName: "bist-transformed-design.json",
-                    kind: .netlist,
-                    format: .json,
-                    data: transformedData
-                ),
-                runID: request.runID
+            let transformedContent = DFTArtifactContent(
+                artifactID: "dft-bist-transformed-design",
+                fileName: "bist-transformed-design.json",
+                kind: .netlist,
+                format: .json,
+                data: transformedData
             )
             let structureData = try DFTArtifactJSONEncoder().encode(structure)
-            let structureReference = try await artifactStore.store(
-                DFTArtifactContent(
-                    artifactID: "dft-bist-structure",
-                    fileName: "bist-structure.json",
-                    kind: .netlist,
-                    format: .json,
-                    data: structureData
-                ),
+            let structureContent = DFTArtifactContent(
+                artifactID: "dft-bist-structure",
+                fileName: "bist-structure.json",
+                kind: .netlist,
+                format: .json,
+                data: structureData
+            )
+            let diffMetadata = DFTArtifactContent(
+                artifactID: "dft-bist-design-diff",
+                fileName: "bist-design-diff.json",
+                kind: .designDiff,
+                format: .json,
+                data: Data()
+            )
+            let provisionalReferences = try DFTArtifactBatch.references(
+                for: [transformedContent, structureContent, diffMetadata],
                 runID: request.runID
             )
+            let transformedReference = provisionalReferences[0]
             let transformedDesign = LogicDesignReference(
                 artifact: transformedReference,
                 topDesignName: request.design.topDesignName,
@@ -322,14 +329,15 @@ public struct DeterministicBISTEngine: BISTExecuting {
                 createdAt: startedAt
             )
             let diffData = try DFTArtifactJSONEncoder().encode(diff)
-            let diffReference = try await artifactStore.store(
-                DFTArtifactContent(
-                    artifactID: "dft-bist-design-diff",
-                    fileName: "bist-design-diff.json",
-                    kind: .designDiff,
-                    format: .json,
-                    data: diffData
-                ),
+            let diffContent = DFTArtifactContent(
+                artifactID: "dft-bist-design-diff",
+                fileName: "bist-design-diff.json",
+                kind: .designDiff,
+                format: .json,
+                data: diffData
+            )
+            let artifacts = try await artifactStore.storeBatch(
+                [transformedContent, structureContent, diffContent],
                 runID: request.runID
             )
 
@@ -346,7 +354,7 @@ public struct DeterministicBISTEngine: BISTExecuting {
                         entity: configuration.name
                     )
                 ],
-                artifacts: [transformedReference, structureReference, diffReference],
+                artifacts: artifacts,
                 payload: DFTPayload(
                     transformedDesign: transformedDesign,
                     faultCoverage: nil,

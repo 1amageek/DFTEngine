@@ -12,7 +12,10 @@ public struct ExternalATPGEngine: ATPGExecuting {
         self.executor = DFTExternalToolExecutor(
             runner: runner,
             artifactStore: artifactStore,
-            artifactReader: artifactReader
+            artifactReader: artifactReader,
+            semanticVerifier: DFTResultSemanticVerifier(
+                atpgVerifier: GateLevelATPGResultSemanticVerifier()
+            )
         )
     }
 

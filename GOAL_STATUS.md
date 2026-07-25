@@ -11,7 +11,7 @@
 | Canonical Foundation and domain request/result contract | Complete | Versioned request, payload and typed domain result |
 | Contract build | Complete | `swift build` |
 | Contract test | Complete | Timeout-bounded `DFTEngine-Package` Xcode test through the workspace verifier |
-| Domain implementation | M2/M3/M4 partial | Gate-level scan transformation, process-scoped cell binding, Liberty timing/legal validation, combinational and bounded sequential ATPG including explicit reset/set and latch semantics, process-specific model injection boundary, standard pattern codecs and canonical logic-BIST transformation are validated; native memory BIST remains bounded |
+| Domain implementation | M2/M3/M4 partial | Gate-level scan transformation, process-scoped cell binding, Liberty timing/legal validation, independently replayed combinational and bounded sequential ATPG including explicit reset/set and latch semantics, process-specific model injection boundary, JSON pattern IR and canonical logic-BIST transformation are validated; native memory BIST remains bounded |
 | CLI implementation | Complete | `dft-engine capabilities` and `execute` with strict option validation and deterministic JSON output |
 | Fixture corpus | Retained | Positive scan and negative ATPG fixtures |
 | Oracle correlation | Correlation infrastructure available; process qualification not claimed | Retained expectation artifact integrity, native-result correlation and deterministic evidence digest are implemented; no independent process oracle is bundled |
@@ -29,7 +29,7 @@
 | Scan insertion | Implemented | Digest-verified canonical snapshot transformation, explicit clock/reset binding, validator pass and design diff | DFTEngine tests + CLI fixture | Unqualified helper/library mapping |
 | ATPG | Partial implementation | Declared-fault backend plus extracted combinational stuck-at, bounded DFF/SDFF scan-shift/capture, explicit reset/set and level-sensitive latch semantics, bounded sequential/combinational transition backends, and protocol-first process-specific model injection with result validation | Positive/negative gate-level tests, including undeclared-family, missing-model and injected-model paths | Smoke checked; retained oracle correlation is available but no process corpus is bundled |
 | BIST | Partial implementation | Canonical logic gate transformation with test-mode mux/capture/compactor; memory macro path requires an external backend conforming to the published protocol while flow policy supplies qualification | Positive transformed-snapshot and external-contract tests | Smoke checked; helper cells and macro legality unqualified |
-| Pattern formats | M5 partial | JSON, strict STIL and strict WGL codec with lossless fault-ID metadata; timed external process runner | Vector and fault-ID round-trip plus malformed-input tests | Smoke checked |
+| Pattern formats | M5 partial | Native JSON pattern IR; STIL and WGL are rejected with typed unsupported-format errors until a qualified cycle-accurate backend is supplied; timed external process runner | JSON round-trip, typed standard-format rejection and malformed-input tests | Smoke checked |
 | Coverage evidence | Implemented | Universe digest, outcomes and assumptions | ATPG tests and oracle correlation tests | No process qualification |
 
 ## Foundation migration boundary
@@ -82,11 +82,11 @@ equivalence/DRC/LVS/PEX evidence, and final approval.
 
 - The native gate-level ATPG covers exhaustive binary combinational simulation, bounded DFF/SDFF clock-edge/state semantics including SI/SE scan shift and functional capture, explicit reset/set polarity/timing/edge contracts, qualified level-sensitive latch semantics and bounded combinational/sequential transition semantics. Process-specific faults require an injected `DFTProcessFaultModeling` implementation and validated result; unknown primitives and process-qualified timing remain blocked.
 - Native logic BIST requires explicit target pin bindings and transforms a canonical gate snapshot; controller, mux, capture and compactor helper cells still require process qualification.
-- Strict STIL/WGL decoding with lossless fault-ID metadata, a timeout/tree-cleaning external runner, external stdout/stderr artifacts, and retained-oracle correlation are available; concrete flow persistence, independent process evidence, and tool promotion remain integrating-flow responsibilities.
+- Native JSON pattern IR, typed STIL/WGL rejection, a timeout/tree-cleaning external runner, atomic external result/stdout/stderr artifacts, and retained-oracle correlation are available; qualified standard-pattern translation, independent process evidence, and tool promotion remain integrating-flow responsibilities.
 - `DFTOracleCorrelationEngine` can verify normalized retained oracle expectation artifacts, compare native envelopes and emit a deterministic correlation digest; no real process corpus is bundled in this package.
 - The current LogicIR does not encode process-qualified scan-capture/reset semantics; M2 timing/legal bindings and explicit architecture contracts must block ambiguous designs.
 - M2 uses an explicit process-scoped manifest, exact net/pin binding and a Liberty timing/legal replacement validator; process-qualified timing evidence and legal replacement approval remain external.
-- `DFT_SCAN_OUT` is an intermediate structural helper and requires a process-qualified cell mapping before physical signoff.
+- Scan-out is bound directly from the final scan-cell output to a canonical top-level port; no synthetic `DFT_SCAN_OUT` helper is emitted.
 - Full Xcircuite release readiness remains external to this package; real accepted downstream evidence is still required.
 - An external tool runner is injected through `DFTExternalToolRunning`; a concrete vendor command must be selected and qualified by the integrating project.
 - Process-specific fault semantics and memory macro legality require PDK-scoped evidence outside this package.

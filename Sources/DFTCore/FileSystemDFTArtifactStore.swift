@@ -69,6 +69,109 @@ public actor FileSystemDFTArtifactStore: DFTArtifactStoring, DFTArtifactReading 
         )
     }
 
+    public func storeBatch(
+        _ contents: [DFTArtifactContent],
+        runID: String
+    ) async throws -> [ArtifactReference] {
+        guard !contents.isEmpty else { return [] }
+        for content in contents {
+            try Self.validate(runID: runID, content: content)
+        }
+        let fileNames = contents.map(\.fileName)
+        let artifactIDs = contents.map(\.artifactID)
+        guard Set(fileNames).count == fileNames.count,
+              Set(artifactIDs).count == artifactIDs.count else {
+            throw DFTArtifactStoreError.artifactConflict(
+                "dft/runs/\(runID)/<duplicate-batch-identity>"
+            )
+        }
+        let batchID = try DFTArtifactBatch.batchID(for: contents)
+        let runDirectory = rootURL
+            .appending(path: "dft")
+            .appending(path: "runs")
+            .appending(path: runID)
+        let destination = runDirectory.appending(path: batchID)
+        let resolvedRoot = rootURL.resolvingSymlinksInPath()
+        guard Self.isInside(runDirectory.resolvingSymlinksInPath(), root: resolvedRoot),
+              Self.isInside(destination.resolvingSymlinksInPath(), root: resolvedRoot) else {
+            throw DFTArtifactStoreError.pathOutsideRoot(
+                "dft/runs/\(runID)/\(batchID)"
+            )
+        }
+        do {
+            try FileManager.default.createDirectory(
+                at: runDirectory,
+                withIntermediateDirectories: true
+            )
+        } catch {
+            throw DFTArtifactStoreError.directoryCreationFailed(
+                error.localizedDescription
+            )
+        }
+
+        if FileManager.default.fileExists(atPath: destination.path) {
+            guard try Self.batchMatches(contents, at: destination) else {
+                throw DFTArtifactStoreError.artifactConflict(
+                    "dft/runs/\(runID)/\(batchID)"
+                )
+            }
+        } else {
+            let staging = runDirectory.appending(
+                path: ".staging-\(batchID)-\(UUID().uuidString)"
+            )
+            do {
+                try FileManager.default.createDirectory(
+                    at: staging,
+                    withIntermediateDirectories: false
+                )
+                for content in contents {
+                    try content.data.write(
+                        to: staging.appending(path: content.fileName),
+                        options: .atomic
+                    )
+                }
+                try FileManager.default.moveItem(at: staging, to: destination)
+            } catch {
+                let destinationExists = FileManager.default.fileExists(
+                    atPath: destination.path
+                )
+                let publicationWonByAnotherStore: Bool
+                if destinationExists {
+                    publicationWonByAnotherStore = try Self.batchMatches(
+                        contents,
+                        at: destination
+                    )
+                } else {
+                    publicationWonByAnotherStore = false
+                }
+                if FileManager.default.fileExists(atPath: staging.path) {
+                    do {
+                        try FileManager.default.removeItem(at: staging)
+                    } catch {
+                        throw DFTArtifactStoreError.writeFailed(
+                            "batch write failed and staging cleanup failed: \(error.localizedDescription)"
+                        )
+                    }
+                }
+                if publicationWonByAnotherStore {
+                    return try DFTArtifactBatch.references(
+                        for: contents,
+                        runID: runID
+                    )
+                }
+                if destinationExists {
+                    throw DFTArtifactStoreError.artifactConflict(
+                        "dft/runs/\(runID)/\(batchID)"
+                    )
+                }
+                throw DFTArtifactStoreError.writeFailed(
+                    error.localizedDescription
+                )
+            }
+        }
+        return try DFTArtifactBatch.references(for: contents, runID: runID)
+    }
+
     public func data(for reference: ArtifactReference) async throws -> Data {
         let path = reference.path
         guard !path.isEmpty,
@@ -97,6 +200,29 @@ public actor FileSystemDFTArtifactStore: DFTArtifactStoring, DFTArtifactReading 
         return candidate.path == root.path || candidate.path.hasPrefix(rootPath)
     }
 
+    private static func batchMatches(
+        _ contents: [DFTArtifactContent],
+        at directory: URL
+    ) throws -> Bool {
+        for content in contents {
+            let existing: Data
+            do {
+                existing = try Data(
+                    contentsOf: directory.appending(path: content.fileName),
+                    options: .mappedIfSafe
+                )
+            } catch {
+                throw DFTArtifactStoreError.writeFailed(
+                    error.localizedDescription
+                )
+            }
+            guard existing == content.data else {
+                return false
+            }
+        }
+        return true
+    }
+
     private static func validate(
         runID: String,
         content: DFTArtifactContent
@@ -122,4 +248,5 @@ public actor FileSystemDFTArtifactStore: DFTArtifactStoring, DFTArtifactReading 
             && !value.contains("\\")
             && !value.unicodeScalars.contains(where: CharacterSet.controlCharacters.contains)
     }
+
 }

@@ -35,6 +35,56 @@ struct DFTArtifactStoreTests {
         }
     }
 
+    @Test("batch storage validates every artifact before publication")
+    func batchStorageIsAtomic() async throws {
+        let store = InMemoryDFTArtifactStore()
+        let first = DFTArtifactContent(
+            artifactID: "artifact-a",
+            fileName: "a.json",
+            kind: .report,
+            format: .json,
+            data: Data("a".utf8)
+        )
+        let second = DFTArtifactContent(
+            artifactID: "artifact-b",
+            fileName: "b.json",
+            kind: .report,
+            format: .json,
+            data: Data("b".utf8)
+        )
+        let references = try await store.storeBatch(
+            [first, second],
+            runID: "run-batch"
+        )
+        #expect(references.count == 2)
+        #expect(Set(references.map(\.path)).count == 2)
+        #expect(references.allSatisfy { $0.path.contains("/batch-") })
+
+        var conflicting = second
+        conflicting.data = Data("replacement".utf8)
+        await #expect(throws: DFTArtifactStoreError.self) {
+            _ = try await store.storeBatch(
+                [first, conflicting],
+                runID: "run-batch"
+            )
+        }
+        #expect(
+            try await store.data(for: references[0]) == first.data
+        )
+        #expect(
+            try await store.data(for: references[1]) == second.data
+        )
+
+        var duplicateIdentity = second
+        duplicateIdentity.artifactID = first.artifactID
+        await #expect(throws: DFTArtifactStoreError.self) {
+            _ = try await store.storeBatch(
+                [first, duplicateIdentity],
+                runID: "run-duplicate"
+            )
+        }
+    }
+
     @Test("file-system storage rejects replacement bytes")
     func fileSystemStoreIsImmutable() async throws {
         let root = FileManager.default.temporaryDirectory
@@ -70,6 +120,80 @@ struct DFTArtifactStoreTests {
         } catch let error as DFTArtifactStoreError {
             #expect(error == .artifactConflict("dft/runs/run-a/result.json"))
         }
+    }
+
+    @Test("file-system batch storage publishes one immutable directory")
+    func fileSystemBatchStoreIsAtomicAndImmutable() async throws {
+        let root = FileManager.default.temporaryDirectory
+            .appending(path: "dft-artifact-batch-\(UUID().uuidString)")
+        defer {
+            do {
+                try FileManager.default.removeItem(at: root)
+            } catch {
+                Issue.record(
+                    "Could not remove batch-store fixture: \(error.localizedDescription)"
+                )
+            }
+        }
+        let store = FileSystemDFTArtifactStore(rootURL: root)
+        let contents = [
+            DFTArtifactContent(
+                artifactID: "batch-a",
+                fileName: "a.json",
+                kind: .report,
+                format: .json,
+                data: Data("a".utf8)
+            ),
+            DFTArtifactContent(
+                artifactID: "batch-b",
+                fileName: "b.json",
+                kind: .report,
+                format: .json,
+                data: Data("b".utf8)
+            ),
+        ]
+
+        let references = try await store.storeBatch(
+            contents,
+            runID: "run-batch"
+        )
+        #expect(references.count == contents.count)
+        #expect(
+            Set(references.map {
+                URL(filePath: $0.path).deletingLastPathComponent().path
+            }).count == 1
+        )
+        for (content, reference) in zip(contents, references) {
+            #expect(try await store.data(for: reference) == content.data)
+        }
+        #expect(
+            try await store.storeBatch(contents, runID: "run-batch")
+                == references
+        )
+        let concurrentStore = FileSystemDFTArtifactStore(rootURL: root)
+        async let firstPublication = store.storeBatch(
+            contents,
+            runID: "run-concurrent"
+        )
+        async let secondPublication = concurrentStore.storeBatch(
+            contents,
+            runID: "run-concurrent"
+        )
+        let concurrentReferences = try await (
+            firstPublication,
+            secondPublication
+        )
+        #expect(concurrentReferences.0 == concurrentReferences.1)
+
+        var conflicting = contents
+        conflicting[1].data = Data("replacement".utf8)
+        await #expect(throws: DFTArtifactStoreError.self) {
+            _ = try await store.storeBatch(
+                conflicting,
+                runID: "run-batch"
+            )
+        }
+        #expect(try await store.data(for: references[1]) == contents[1].data)
     }
 
     @Test("artifact stores reject invalid artifact identities")

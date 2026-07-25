@@ -11,10 +11,8 @@ public struct DeterministicTestPatternCodec: DFTTestPatternCoding {
         switch format {
         case .json:
             return try DFTArtifactJSONEncoder().encode(patternSet)
-        case .stil:
-            return Data(try stilText(for: patternSet).utf8)
-        case .wgl:
-            return Data(try wglText(for: patternSet).utf8)
+        case .stil, .wgl:
+            throw DFTPatternFormatError.unsupportedFormat(format.rawValue)
         }
     }
 
@@ -37,136 +35,8 @@ public struct DeterministicTestPatternCodec: DFTTestPatternCoding {
                 throw DFTPatternFormatError.malformedPattern(error.localizedDescription)
             }
         case .stil, .wgl:
-            return try parseText(String(decoding: data, as: UTF8.self), format: format)
+            throw DFTPatternFormatError.unsupportedFormat(format.rawValue)
         }
-    }
-
-    private func stilText(for patternSet: DFTTestPatternSet) throws -> String {
-        var lines = [
-            "STIL 1.0;",
-            "// seed=\(patternSet.seed)",
-            "// faultUniverseDigest=\(patternSet.faultUniverseDigest)",
-            try faultMetadataLine(for: patternSet),
-            "PatternBurst \"DFTEngine\" {",
-            "  PatList {"
-        ]
-        for pattern in patternSet.patterns {
-            lines.append("    \(pattern.id) { \(pattern.bits); }")
-        }
-        lines.append(contentsOf: ["  }", "}", ""])
-        return lines.joined(separator: "\n")
-    }
-
-    private func wglText(for patternSet: DFTTestPatternSet) throws -> String {
-        var lines = [
-            "WGL 1.0;",
-            "// seed=\(patternSet.seed)",
-            "// faultUniverseDigest=\(patternSet.faultUniverseDigest)",
-            try faultMetadataLine(for: patternSet),
-            "Patterns {"
-        ]
-        for pattern in patternSet.patterns {
-            lines.append("  Pattern \"\(pattern.id)\" = \(pattern.bits);")
-        }
-        lines.append(contentsOf: ["}", ""])
-        return lines.joined(separator: "\n")
-    }
-
-    private func parseText(
-        _ text: String,
-        format: DFTTestPatternFormat
-    ) throws -> DFTTestPatternSet {
-        let lines = text.split(whereSeparator: \.isNewline).map(String.init)
-        guard let seed = parseSeedMetadata(from: lines) else {
-            throw DFTPatternFormatError.malformedPattern("seed metadata is missing")
-        }
-        guard let digest = parseDigestMetadata(from: lines) else {
-            throw DFTPatternFormatError.malformedPattern("fault-universe digest metadata is missing")
-        }
-        guard digest.count == 64, digest.allSatisfy({ $0.isHexDigit }) else {
-            throw DFTPatternFormatError.malformedPattern("fault-universe digest must be a SHA-256 value")
-        }
-        try validateContainer(lines: lines, format: format)
-        let faultMetadata = try parseFaultMetadata(from: lines)
-
-        var patterns: [DFTTestPattern] = []
-        for line in lines {
-            let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
-            if trimmed.isEmpty || trimmed.hasPrefix("//") {
-                continue
-            }
-            if format == .stil {
-                if trimmed == "STIL 1.0;"
-                    || trimmed.hasPrefix("PatternBurst ")
-                    || trimmed == "PatList {"
-                    || trimmed == "}"
-                {
-                    continue
-                }
-                guard let open = trimmed.firstIndex(of: "{"),
-                      let close = trimmed.lastIndex(of: "}"),
-                      open < close else {
-                    throw DFTPatternFormatError.malformedPattern("STIL pattern declaration is invalid")
-                }
-                let idSlice = trimmed[..<open].trimmingCharacters(in: .whitespaces)
-                let body = trimmed[trimmed.index(after: open)..<close]
-                    .trimmingCharacters(in: .whitespacesAndNewlines)
-                guard body.hasSuffix(";") else {
-                    throw DFTPatternFormatError.malformedPattern("STIL pattern vector must end with ';'")
-                }
-                let bits = String(body.dropLast()).trimmingCharacters(in: .whitespacesAndNewlines)
-                let id = String(idSlice)
-                guard isPatternID(id), isBitString(bits) else {
-                    throw DFTPatternFormatError.malformedPattern("STIL pattern ID or vector is invalid")
-                }
-                patterns.append(DFTTestPattern(id: id, bits: bits, faultIDs: []))
-                continue
-            }
-            if trimmed == "WGL 1.0;" || trimmed == "Patterns {" || trimmed == "}" {
-                continue
-            }
-            guard trimmed.hasPrefix("Pattern ") else {
-                throw DFTPatternFormatError.malformedPattern("unknown WGL line: \(trimmed)")
-            }
-            let body = trimmed.dropFirst("Pattern ".count)
-            guard let quoteStart = body.firstIndex(of: "\""),
-                  let quoteEnd = body[body.index(after: quoteStart)...].firstIndex(of: "\"") else {
-                throw DFTPatternFormatError.malformedPattern("WGL pattern name is incomplete")
-            }
-            let id = String(body[body.index(after: quoteStart)..<quoteEnd])
-            let remainder = body[body.index(after: quoteEnd)...]
-            guard let equals = remainder.firstIndex(of: "=") else {
-                throw DFTPatternFormatError.malformedPattern("WGL pattern \(id) has no vector")
-            }
-            let vectorText = remainder[remainder.index(after: equals)...]
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-            guard vectorText.hasSuffix(";") else {
-                throw DFTPatternFormatError.malformedPattern("WGL pattern \(id) must end with ';'")
-            }
-            let bits = String(vectorText.dropLast()).trimmingCharacters(in: .whitespacesAndNewlines)
-            guard isPatternID(id), isBitString(bits) else {
-                throw DFTPatternFormatError.malformedPattern("WGL pattern ID or vector is invalid")
-            }
-            patterns.append(DFTTestPattern(id: id, bits: bits, faultIDs: []))
-        }
-
-        let faultIDsByPatternID = try faultMetadata.validatedFaultIDs(patternIDs: patterns.map(\.id))
-        patterns = patterns.map { pattern in
-            DFTTestPattern(
-                id: pattern.id,
-                bits: pattern.bits,
-                faultIDs: faultIDsByPatternID[pattern.id] ?? []
-            )
-        }
-
-        let result = DFTTestPatternSet(
-            format: format.rawValue,
-            seed: seed,
-            faultUniverseDigest: digest,
-            patterns: patterns
-        )
-        try validate(result)
-        return result
     }
 
     private func validate(_ patternSet: DFTTestPatternSet) throws {
@@ -194,74 +64,6 @@ public struct DeterministicTestPatternCodec: DFTTestPatternCoding {
                     "fault IDs for pattern \(pattern.id) must be non-empty and unique"
                 )
             }
-        }
-    }
-
-    private func validateContainer(lines: [String], format: DFTTestPatternFormat) throws {
-        let normalized = lines.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-        switch format {
-        case .stil:
-            guard normalized.first == "STIL 1.0;",
-                  normalized.contains("PatList {"),
-                  normalized.last == "}",
-                  Array(normalized.dropLast()).last == "}" else {
-                throw DFTPatternFormatError.malformedPattern("STIL container is incomplete")
-            }
-        case .wgl:
-            guard normalized.first == "WGL 1.0;",
-                  normalized.contains("Patterns {"),
-                  normalized.last == "}" else {
-                throw DFTPatternFormatError.malformedPattern("WGL container is incomplete")
-            }
-        case .json:
-            break
-        }
-    }
-
-    private func parseSeedMetadata(from lines: [String]) -> UInt64? {
-        guard let line = lines.first(where: { $0.contains("// seed=") }) else {
-            return nil
-        }
-        let value = line.components(separatedBy: "=").dropFirst().joined(separator: "=")
-        return UInt64(value.trimmingCharacters(in: .whitespacesAndNewlines))
-    }
-
-    private func parseDigestMetadata(from lines: [String]) -> String? {
-        guard let line = lines.first(where: { $0.contains("// faultUniverseDigest=") }) else {
-            return nil
-        }
-        return line.components(separatedBy: "=").dropFirst().joined(separator: "=")
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-    }
-
-    private func faultMetadataLine(for patternSet: DFTTestPatternSet) throws -> String {
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.sortedKeys]
-        let metadata = DFTTestPatternFaultMetadata(patterns: patternSet.patterns)
-        let data = try encoder.encode(metadata)
-        return "// dftFaultMetadata=\(data.base64EncodedString())"
-    }
-
-    private func parseFaultMetadata(from lines: [String]) throws -> DFTTestPatternFaultMetadata {
-        let prefix = "// dftFaultMetadata="
-        let matches = lines
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { $0.hasPrefix(prefix) }
-        guard matches.count == 1 else {
-            throw DFTPatternFormatError.malformedPattern("exactly one fault metadata record is required")
-        }
-        let encoded = String(matches[0].dropFirst(prefix.count))
-        guard let data = Data(base64Encoded: encoded) else {
-            throw DFTPatternFormatError.malformedPattern("fault metadata is not valid base64")
-        }
-        do {
-            return try JSONDecoder().decode(DFTTestPatternFaultMetadata.self, from: data)
-        } catch let error as DFTPatternFormatError {
-            throw error
-        } catch {
-            throw DFTPatternFormatError.malformedPattern(
-                "fault metadata is not valid JSON: \(error.localizedDescription)"
-            )
         }
     }
 

@@ -76,6 +76,20 @@ public struct DeterministicATPGEngine: ATPGExecuting {
                     message: "Fault universe and ATPG configuration are required."
                 )
             }
+            guard configuration.patternFormat == .json else {
+                return try blocked(
+                    request: request,
+                    engineID: engineID,
+                    startedAt: startedAt,
+                    code: "DFT_PATTERN_FORMAT_UNSUPPORTED",
+                    message: "Native ATPG persists canonical JSON patterns; STIL and WGL require a qualified external codec.",
+                    entity: "atpgConfiguration.patternFormat",
+                    actions: [
+                        "select_json_pattern_format",
+                        "inject_a_qualified_external_pattern_codec",
+                    ]
+                )
+            }
             do {
                 try DFTConstraintValidator().validate(
                     constraintLoader.load(request.constraints),
@@ -697,34 +711,34 @@ public struct DeterministicATPGEngine: ATPGExecuting {
                 patterns: patterns
             )
             let evidenceData = try DFTArtifactJSONEncoder().encode(evidence)
-            let evidenceReference = try await artifactStore.store(
+            var artifactContents = [
                 DFTArtifactContent(
                     artifactID: "dft-coverage-evidence",
                     fileName: "coverage-evidence.json",
                     kind: .report,
                     format: .json,
                     data: evidenceData
-                ),
-                runID: request.runID
-            )
-            var artifacts = [evidenceReference]
+                )
+            ]
             if !patterns.isEmpty {
                 let patternsData = try DeterministicTestPatternCodec().encode(
                     patternSet,
                     format: configuration.patternFormat
                 )
-                let patternReference = try await artifactStore.store(
+                artifactContents.append(
                     DFTArtifactContent(
                         artifactID: "dft-patterns",
                         fileName: "patterns.\(configuration.patternFormat.rawValue.lowercased())",
                         kind: .testPattern,
                         format: fileFormat(for: configuration.patternFormat),
                         data: patternsData
-                    ),
-                    runID: request.runID
+                    )
                 )
-                artifacts.append(patternReference)
             }
+            let artifacts = try await artifactStore.storeBatch(
+                artifactContents,
+                runID: request.runID
+            )
 
             let isBlocked = abortedCount > configuration.abortLimit || untestableCount > 0
             if isBlocked {

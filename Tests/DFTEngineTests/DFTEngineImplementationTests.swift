@@ -51,8 +51,16 @@ struct DFTEngineImplementationTests {
         #expect(result.payload.transformedDesign?.provenance?.transformationID == "dft-scan-insertion")
         #expect(result.payload.designDiff?.changes.count == 5)
         #expect(result.artifacts.count == 2)
-        #expect(await store.data(for: "dft/runs/run-scanInsertion/design-diff.json") != nil)
-        let transformedData = try #require(await store.data(for: "dft/runs/run-scanInsertion/transformed-design.json"))
+        let diffReference = try #require(
+            result.artifacts.first { $0.artifactID == "dft-design-diff" }
+        )
+        #expect(await store.data(for: diffReference.path) != nil)
+        let transformedReference = try #require(
+            result.payload.transformedDesign?.artifact
+        )
+        let transformedData = try #require(
+            await store.data(for: transformedReference.path)
+        )
         let transformedSnapshot = try LogicDesignSnapshotCodec.decode(transformedData)
         let transformedModule = try #require(transformedSnapshot.gate?.modules.first)
         let transformedCells = transformedModule.cells
@@ -282,6 +290,20 @@ struct DFTEngineImplementationTests {
         #expect(result.payload.patterns?.patterns.count == 4)
         #expect(result.payload.patterns?.patterns.allSatisfy { $0.bits.count == 2 } == true)
         #expect(result.dftDiagnostics.contains { $0.code == "DFT_GATE_LEVEL_ATPG_COMPLETED" })
+        try await GateLevelATPGResultSemanticVerifier().validate(
+            result,
+            for: request,
+            design: snapshot
+        )
+        await #expect(throws: DFTResultSemanticValidationError.self) {
+            try await GateLevelATPGResultSemanticVerifier(
+                combinationalSimulator: NonDetectingGateLevelSimulator()
+            ).validate(
+                result,
+                for: request,
+                design: snapshot
+            )
+        }
     }
 
     @Test("completed ATPG rejects aggregate coverage without exact fault outcomes")
@@ -882,7 +904,12 @@ struct DFTEngineImplementationTests {
         #expect(result.artifacts.count == 3)
         #expect(result.payload.transformedDesign?.provenance?.sourceDesignDigest == sourceDigest)
         #expect(result.payload.transformedDesign?.provenance?.transformationID == "dft-bist-insertion")
-        let transformedData = try #require(await store.data(for: "dft/runs/run-bist/bist-transformed-design.json"))
+        let transformedReference = try #require(
+            result.payload.transformedDesign?.artifact
+        )
+        let transformedData = try #require(
+            await store.data(for: transformedReference.path)
+        )
         let transformedSnapshot = try LogicDesignSnapshotCodec.decode(transformedData)
         let transformedCells = try #require(transformedSnapshot.gate?.modules.first?.cells)
         #expect(transformedCells.contains { $0.type == "LBIST_INPUT_MUX" })
@@ -1219,8 +1246,8 @@ struct DFTEngineImplementationTests {
         #expect(result.diagnostics[0].detail == "originalCode:  invalid diagnostic code")
     }
 
-    @Test("STIL and WGL pattern artifacts round-trip")
-    func patternFormatsRoundTrip() throws {
+    @Test("native codec rejects standard formats it cannot serialize faithfully")
+    func nativeCodecRejectsUnqualifiedStandardFormats() throws {
         let patternSet = DFTTestPatternSet(
             format: "JSON",
             seed: 7,
@@ -1230,12 +1257,12 @@ struct DFTEngineImplementationTests {
         let codec = DeterministicTestPatternCodec()
 
         for format in [DFTTestPatternFormat.stil, .wgl] {
-            let data = try codec.encode(patternSet, format: format)
-            let decoded = try codec.decode(data, format: format)
-            #expect(decoded.seed == patternSet.seed)
-            #expect(decoded.faultUniverseDigest == patternSet.faultUniverseDigest)
-            #expect(decoded.patterns.map(\.bits) == patternSet.patterns.map(\.bits))
-            #expect(decoded.patterns.map(\.faultIDs) == patternSet.patterns.map(\.faultIDs))
+            #expect(throws: DFTPatternFormatError.self) {
+                _ = try codec.encode(patternSet, format: format)
+            }
+            #expect(throws: DFTPatternFormatError.self) {
+                _ = try codec.decode(Data(), format: format)
+            }
         }
     }
 
@@ -1314,7 +1341,12 @@ struct DFTEngineImplementationTests {
             "dft-external-stdout",
             "dft-external-stderr",
         ])
-        #expect(await store.data(for: "dft/runs/run-atpg/external-stderr.raw") == Data())
+        let stderrReference = try #require(
+            persisted.artifacts.first {
+                $0.artifactID == "dft-external-stderr"
+            }
+        )
+        #expect(await store.data(for: stderrReference.path) == Data())
 
         do {
             _ = try await DFTExternalToolExecutor(
@@ -1901,5 +1933,15 @@ private struct TamperedDFTArtifactReader: DFTArtifactReading {
             data.append(0)
         }
         return data
+    }
+}
+
+private struct NonDetectingGateLevelSimulator: GateLevelSimulating {
+    func simulate(
+        snapshot: LogicDesignSnapshot,
+        inputs: [String: Bool],
+        fault: DFTFault?
+    ) throws -> GateLevelSimulationResult {
+        GateLevelSimulationResult(observedValues: ["out": false])
     }
 }
