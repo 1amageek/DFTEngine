@@ -77,7 +77,8 @@ public struct IcarusDFTScanPatternReplayProvider: DFTScanPatternReplayProviding 
         )
         let faults = try replayFaults(
             faultUniverse: faultUniverse,
-            selectedFaultIDs: request.faultIDs
+            selectedFaultIDs: request.faultIDs,
+            topModule: request.topModule
         )
         let harness: Data
         do {
@@ -522,7 +523,8 @@ public struct IcarusDFTScanPatternReplayProvider: DFTScanPatternReplayProviding 
 
     private func replayFaults(
         faultUniverse: DFTFaultUniverse,
-        selectedFaultIDs: [String]
+        selectedFaultIDs: [String],
+        topModule: String
     ) throws -> [DFTScanPatternReplayFault] {
         let issues = faultUniverse.validationIssues()
         guard issues.isEmpty else {
@@ -554,7 +556,11 @@ public struct IcarusDFTScanPatternReplayProvider: DFTScanPatternReplayProviding 
             }
             return DFTScanPatternReplayFault(
                 faultID: fault.id,
-                hierarchicalSignalPath: fault.location,
+                hierarchicalSignalPath:
+                    try DFTFaultLocationProjector().dutRelativePath(
+                        for: fault.location,
+                        topModule: topModule
+                    ),
                 stuckAtValue: value == .one
             )
         }

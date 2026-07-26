@@ -70,6 +70,9 @@ The replay provider consumes only retained and digest-verified inputs:
 It decodes STIL, materializes a deterministic Verilog replay harness, compiles
 with the locked Icarus Verilog executable, and simulates shift/capture and fault
 injection. Unknown or high-impedance values at a compare point are failures.
+Gate-level fault locations retain their canonical top-module qualification;
+the replay provider removes that exact prefix when addressing signals below
+the generated `dut` instance.
 Every fault observation is correlated to the producer result by stable fault
 identity. The replay provider does not consume the producer's in-memory
 coverage result.

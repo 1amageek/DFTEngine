@@ -180,10 +180,13 @@ available for the same semantic verification used by native backends.
 The Icarus replay provider is a separate observation producer. It accepts only
 retained SHA-256-addressed STIL, Verilog, realized-scan, fault-universe, and
 cell-model artifacts. Selected fault IDs are resolved from the retained
-universe, never from caller-supplied paths. Golden mismatch, unknown compare,
-invalid result markers, executable substitution, timeout, and cancellation
-fail through typed errors. The returned result contains raw observations and
-semantic input digests; it does not contain a trust or production verdict.
+universe, never from caller-supplied paths. Canonical gate-level fault
+locations qualified by the retained top-module name are projected to paths
+relative to the generated DUT instance before fault injection. Golden
+mismatch, unknown compare, invalid result markers, executable substitution,
+timeout, and cancellation fail through typed errors. The returned result
+contains raw observations and semantic input digests; it does not contain a
+trust or production verdict.
 
 The OpenROAD scan importer is a separate canonicalization boundary. It reopens
 retained pre-scan Verilog, post-scan Verilog, DEF `SCANCHAINS`, the

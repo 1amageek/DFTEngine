@@ -31,6 +31,24 @@ struct IcarusDFTScanPatternReplayProviderTests {
         #expect(text.contains("!== 1'b0"))
     }
 
+    @Test("canonical top-qualified fault locations become DUT-relative")
+    func projectsCanonicalFaultLocation() throws {
+        let projector = DFTFaultLocationProjector()
+
+        #expect(
+            try projector.dutRelativePath(
+                for: "scan_dut.scan_out",
+                topModule: "scan_dut"
+            ) == "scan_out"
+        )
+        #expect(
+            try projector.dutRelativePath(
+                for: "u_scan_0.Q",
+                topModule: "scan_dut"
+            ) == "u_scan_0.Q"
+        )
+    }
+
     @Test("provider retains compile, golden, and fault evidence")
     func replaysAndRetainsEvidence() async throws {
         let workspace = try temporaryDirectory()
@@ -370,7 +388,7 @@ struct IcarusDFTScanPatternReplayProviderTests {
                 DFTFault(
                     id: "scan-out-sa1",
                     family: .stuckAt,
-                    location: "scan_out",
+                    location: "scan_dut.scan_out",
                     stuckAtValue: .one
                 ),
             ],
