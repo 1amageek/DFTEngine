@@ -25,7 +25,7 @@ No package-owned P1 implementation remains.
 
 | Former ID | Owner | Required evidence |
 |---|---|---|
-| DFT-4 | Standard-pattern format provider | Implement the accepted `docs/adr/0001-production-dft-provider.md` boundary: a separate rich STIL exchange model, supported-profile codec, real OpenROAD scan insertion, Yosys functional-mode equivalence, Icarus retained-artifact replay, independent round-trip fixtures, exact retained artifacts, and ToolQualification-ready correlation. The compact native pattern IR remains unchanged. |
+| DFT-4 | Standard-pattern format provider | Complete the accepted `docs/adr/0001-production-dft-provider.md` boundary. The separate rich STIL model, validator, fail-closed codec, and checked-in retained-byte round-trip fixture are implemented. Remaining work is the explicit ATPG/scan/response conversion contract, real OpenROAD scan insertion, Yosys functional-mode equivalence, Icarus retained-artifact replay, exact invocation artifacts, and ToolQualification-ready correlation. The compact native pattern IR remains unchanged. |
 | DFT-5 | DFT evidence workflow | Independent process corpus and oracle observations binding the PDK, cell/macro library, implementation, request digest, raw output, coverage universe, and downstream evidence. |
 
 Tool trust, compressed-pattern semantic replay, downstream

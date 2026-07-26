@@ -1,0 +1,72 @@
+STIL 1.0;
+Header {
+  Title "sky130_scan";
+}
+Signals {
+  "scan_clk" In;
+  "scan_in" In;
+  "scan_out" Out;
+}
+SignalGroups {
+  "drive" = '"scan_clk" + "scan_in"';
+}
+Timing {
+  WaveformTable "shift" {
+    Period '10000ps';
+    Waveforms {
+      "scan_clk" {
+        "0" {
+          '0ps' D;
+        }
+        "1" {
+          '0ps' U;
+        }
+        "Z" {
+          '0ps' Z;
+        }
+      }
+      "scan_in" {
+        "0" {
+          '0ps' D;
+        }
+        "1" {
+          '0ps' U;
+        }
+        "Z" {
+          '0ps' Z;
+        }
+      }
+      "scan_out" {
+        "L" {
+          '9000ps' L;
+        }
+        "H" {
+          '9000ps' H;
+        }
+        "X" {
+          '9000ps' X;
+        }
+      }
+    }
+  }
+}
+Procedures {
+  "pattern_0_shift" {
+    W "shift";
+    V {
+      "drive" = 10;
+      "scan_out" = L;
+    }
+  }
+}
+PatternBurst "sky130_scan_burst" {
+  PatList {
+    "pattern_0";
+  }
+}
+PatternExec {
+  PatternBurst "sky130_scan_burst";
+}
+Pattern "pattern_0" {
+  Call "pattern_0_shift";
+}

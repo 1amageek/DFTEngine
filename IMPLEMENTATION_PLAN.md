@@ -9,7 +9,7 @@ The full platform goal is intentionally decomposed into the gates documented in 
 3. M2 scan clock/reset, cell-library, and compression semantics — native structural scope complete; process qualification remains external
 4. M3 gate-level ATPG and pattern validation — combinational stuck-at, bounded DFF/SDFF state-transition, explicit reset/set controls, qualified level-sensitive latch semantics, bounded combinational/sequential transition slices and an injected process-specific fault-model boundary delivered; unknown primitives and process qualification remain
 5. M4 canonical BIST insertion — native logic and memory target transformations plus the typed external boundary are delivered; process qualification remains flow-owned
-6. M5 standard-pattern and external-tool execution — internal codec, timed/tree-cleaning process runner, stdout/stderr artifacts and validated typed DFT result persistence delivered; the separate rich STIL exchange and independent replay provider selected by ADR 0001 remain
+6. M5 standard-pattern and external-tool execution — internal codec, rich validated STIL subset exchange, timed/tree-cleaning process runner, stdout/stderr artifacts and validated typed DFT result persistence delivered; ATPG-to-exchange conversion and the independent replay provider selected by ADR 0001 remain
 7. M6 retained corpus and oracle correlation — raw correlation and evidence-provenance emission are delivered; independent retained process corpus remains
 8. M7 ToolQualification and flow handoff — direct DFT protocol consumption and raw evidence handoff are delivered; trust, downstream signoff policy, approval, and resume remain responsibilities of ToolQualification and the composing flow
 9. M8 production signoff and tapeout handoff — outside DFTEngine; the composing flow requires accepted tool/process evidence, independent oracle records, real DFT/equivalence/DRC/LVS/PEX artifacts, and human approval
@@ -47,11 +47,11 @@ The full platform goal is intentionally decomposed into the gates documented in 
   checks, single-domain clock validation, explicit mux/controller/compactor/
   signature connectivity, immutable design diff, and structure artifacts.
 - Kept JSON as the only native qualified output, blocked STIL/WGL requests until standards-qualified exporters exist, and moved the `SignoffToolSupport` process adapter into `DFTExternalTools`.
-- Accepted `docs/adr/0001-production-dft-provider.md`: compact ATPG results
-  remain in `DFTCore`; a separate `DFTPatternExchange` target will own rich STIL
-  semantics, OpenROAD will supply the profile scan insertion, Yosys will supply
-  functional-mode equivalence evidence, and Icarus will replay only retained
-  standard-pattern bytes.
+- Implemented the first `docs/adr/0001-production-dft-provider.md` boundary:
+  compact ATPG results remain in `DFTCore`; `DFTPatternExchange` owns the rich
+  validated model and fail-closed STIL subset codec with a checked-in
+  retained-byte fixture. OpenROAD profile scan insertion, Yosys functional-mode
+  equivalence, ATPG conversion, and Icarus replay remain separate gates.
 - Added raw DFT evidence maturity and provenance metadata for smoke, corpus, and
   oracle-correlated observations without embedding a trust or release verdict.
 - Added retained oracle corpus contracts and correlation: normalized oracle expectation artifacts are read, byte-count/digest verified, decoded and compared against native typed results before correlation evidence is emitted.

@@ -51,6 +51,24 @@ artifact-backed semantic evidence. External descriptors identify the resolved
 executable by SHA-256 rather than an engine label.
 It does not import ToolQualification or decide whether a tool is trusted.
 
+### DFTPatternExchange
+
+Rich standard-pattern interchange semantics.
+
+`DFTPatternExchangeProgram` contains ordered signals, signal groups, timing
+sets, waveform symbols and events, procedures, cycles, assignments, and pattern
+calls. `DFTPatternExchangeValidator` requires exact references, complete
+per-cycle signal coverage, legal drive/compare direction, and in-period ordered
+events. `STILPatternCodec` encodes and decodes only the accepted STIL subset.
+Unknown constructs, unsupported time units, invalid text, malformed groups, and
+semantic loss are typed failures.
+`DFTStandardPatternCoding.capability` declares the exact standard version,
+ASCII encoding, picosecond unit, waveform actions, structural sections, and
+escaped-identifier support accepted by a codec.
+
+This product does not change `DFTTestPatternSet`, execute ATPG, invoke a replay
+tool, or make qualification decisions.
+
 ### DFTEngine
 
 Umbrella API.

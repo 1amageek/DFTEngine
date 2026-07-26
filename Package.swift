@@ -47,6 +47,7 @@ let package = Package(
         .library(name: "ScanInsertion", targets: ["ScanInsertion"]),
         .library(name: "ATPGEngine", targets: ["ATPGEngine"]),
         .library(name: "BISTEngine", targets: ["BISTEngine"]),
+        .library(name: "DFTPatternExchange", targets: ["DFTPatternExchange"]),
         .library(name: "DFTExternalTools", targets: ["DFTExternalTools"]),
         .library(name: "DFTEngine", targets: ["DFTEngine"]),
         .executable(name: "dft-engine", targets: ["DFTCLI"]),
@@ -67,6 +68,9 @@ let package = Package(
                 .product(name: "TimingCore", package: "TimingEngine"),
                 .product(name: "PDKCore", package: "PDKKit")
             ]
+        ),
+        .target(
+            name: "DFTPatternExchange"
         ),
         .target(
             name: "DFTExternalTools",
@@ -119,6 +123,7 @@ let package = Package(
                 "ScanInsertion",
                 "ATPGEngine",
                 "BISTEngine",
+                "DFTPatternExchange",
                 "DFTExternalTools",
                 "DFTEngine",
             ],

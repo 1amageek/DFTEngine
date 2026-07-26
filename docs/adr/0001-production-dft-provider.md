@@ -138,6 +138,27 @@ This decision is implemented only when:
 - the package progress document no longer lists the provider as an external
   prerequisite.
 
+## Implementation Status
+
+Completed:
+
+- separate `DFTPatternExchange` product and safe rich value model;
+- exact structural and semantic validation;
+- deterministic encoding and decoding for the accepted STIL subset;
+- streaming decode over retained `Data` without whole-file text or token-array
+  copies, plus a 20,000-cycle five-second debug-test budget;
+- checked-in retained-byte round-trip fixture;
+- typed rejection of malformed input, unknown constructs, unsupported time
+  units, direction violations, missing references, and incomplete cycles.
+
+Pending:
+
+- explicit compact ATPG plus scan/timing/response conversion;
+- real OpenROAD scan insertion and retained mapped netlist;
+- Yosys functional-mode equivalence;
+- Icarus retained-STIL replay and fault correlation;
+- production-profile corpus and ToolQualification evidence.
+
 ## Consequences
 
 The design adds a separate interchange target and an explicit conversion

@@ -23,8 +23,11 @@ evidence.
 
 The accepted production-provider boundary is recorded in
 [`docs/adr/0001-production-dft-provider.md`](docs/adr/0001-production-dft-provider.md).
-It keeps the compact ATPG result separate from the planned rich STIL exchange
-model and independent retained-artifact replay.
+It keeps the compact ATPG result separate from the rich STIL exchange model and
+independent retained-artifact replay. `DFTPatternExchange` now validates and
+round-trips the accepted STIL subset from retained bytes. Native ATPG-to-STIL
+conversion and real Icarus replay remain blocked until their explicit scan,
+response, and execution contracts are implemented.
 
 The CLI and Xcircuite composition load every digest-bound, mode-specific SDC
 artifact and verify declared DFT clocks plus asserted test-mode/scan-enable
@@ -54,6 +57,7 @@ flowchart LR
 | `ScanInsertion` | Scan architecture and insertion |
 | `ATPGEngine` | Pattern generation and fault coverage |
 | `BISTEngine` | Memory and logic BIST |
+| `DFTPatternExchange` | Rich cycle/timing/procedure model and fail-closed STIL subset codec |
 | `DFTExternalTools` | Process execution, timeout, stderr and exit-status capture |
 | `DFTEngine` | Umbrella API |
 
@@ -183,6 +187,11 @@ immutable artifact stores, Foundation evidence identity, oracle correlation,
 native memory-BIST transformation, and scan-compression connectivity. A
 2,048-chain regression also enforces a five-second debug-test budget; the
 2026-07-26 arm64 Xcode run completed that transformation in 0.58 seconds.
+The STIL exchange suite independently round-trips checked-in bytes and enforces
+a five-second debug-test budget for encoding and streaming decode of 20,000
+fully assigned cycles. Decode retains the input `Data`, reads it by byte offset,
+and materializes only semantic values retained by the returned program; it does
+not create whole-file `String`, `[Character]`, or token-array copies.
 
 See `DESIGN.md`, `INTERFACES.md` and `IMPLEMENTATION_PLAN.md` before implementing a backend.
 
