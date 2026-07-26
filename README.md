@@ -220,8 +220,9 @@ not create whole-file `String`, `[Character]`, or token-array copies.
 The independent replay suite covers retained-input integrity, scan/fault
 identity binding, deterministic harness construction, golden and fault output
 parsing, executable identity, timeout, cancellation, and atomic evidence
-persistence. Real Icarus execution is still required in the hosted production
-profile before qualification is claimed.
+persistence. The CLI replay integration covers the filesystem request,
+descriptor, provider, and retained-result path. Real Icarus execution is still
+required in the hosted production profile before qualification is claimed.
 
 See `DESIGN.md`, `INTERFACES.md` and `IMPLEMENTATION_PLAN.md` before implementing a backend.
 
@@ -241,6 +242,15 @@ swift run dft-engine execute \
   --request Tests/DFTEngineTests/Fixtures/scan-request.json \
   --output-dir /tmp/dft-project \
   --result /tmp/dft-result.json
+
+swift run dft-engine replay \
+  --request /tmp/dft-project/replay-request.json \
+  --output-dir /tmp/dft-project \
+  --compiler /opt/lsi/bin/iverilog \
+  --compiler-descriptor /tmp/dft-project/iverilog-descriptor.json \
+  --simulator /opt/lsi/bin/vvp \
+  --simulator-descriptor /tmp/dft-project/vvp-descriptor.json \
+  --result /tmp/dft-replay-result.json
 ```
 
 The CLI preserves the complete DFT result and writes artifacts below
@@ -257,6 +267,13 @@ The CLI preserves the complete DFT result and writes artifacts below
 duplicate and missing options before reading the request. Blocked results
 retain typed diagnostic codes and suggested actions for Agent and human
 review.
+
+`replay` accepts a `DFTScanPatternReplayRequest` plus separately retained
+compiler and simulator descriptors. It passes both executable paths and
+expected SHA-256 identities to `IcarusDFTScanPatternReplayProvider`; the CLI
+does not reconstruct STIL, scan connectivity, fault semantics, or a trust
+verdict. Optional timeout values control process execution, while tool
+qualification remains outside this package.
 
 Artifact stores are immutable: repeating the same artifact write is idempotent, while replacing bytes at an existing run path is rejected.
 

@@ -171,14 +171,19 @@ Completed:
 - compiler and simulator SHA-256 verification before and after every
   invocation, typed timeout/cancellation/process failures, and atomic raw
   harness/image/evidence persistence;
+- a headless `dft-engine replay` command that consumes the typed replay request,
+  explicit executable paths, and retained executable descriptors without
+  moving STIL, scan, fault, or trust semantics into workflow glue;
 - behavior tests for retained-input tampering, golden mismatch, missing fault
-  marker, executable mismatch, timeout, and cancellation.
+  marker, executable mismatch, timeout, cancellation, and CLI-to-provider
+  filesystem execution.
 
 Pending:
 
 - real OpenROAD scan insertion and retained mapped netlist;
 - Yosys functional-mode equivalence;
-- hosted real-Icarus replay/fault correlation and unknown-value fixture;
+- hosted invocation of `dft-engine replay` with real Icarus replay/fault
+  correlation and an unknown-value fixture;
 - production-profile corpus and ToolQualification evidence.
 
 ## Consequences

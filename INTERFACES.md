@@ -92,6 +92,18 @@ field. Malformed input, golden mismatch, unknown compare, missing result
 markers, process failure, executable substitution, timeout, cancellation, and
 persistence failure remain typed failures.
 
+### DFTCLIKit
+
+Headless command composition without DFT semantic duplication.
+
+`DFTCLICommand` decodes the domain request and externally supplied tool
+descriptors, resolves the filesystem artifact store, and invokes the injected
+domain implementation path. The `replay` command delegates directly to
+`IcarusDFTScanPatternReplayProvider`. It does not parse STIL, infer scan
+connectivity, construct faults, or decide tool trust. `DFTCLIOutputWriting`
+keeps process I/O outside command parsing and makes the complete CLI path
+behavior-testable without weakening the executable boundary.
+
 ### Realized scan implementation
 
 `DFTScanPlan` remains an architecture/planning value. Successful scan insertion

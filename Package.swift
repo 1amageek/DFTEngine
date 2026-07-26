@@ -113,9 +113,21 @@ let package = Package(
                 "BISTEngine",
             ]
         ),
+        .target(
+            name: "DFTCLIKit",
+            dependencies: [
+                "DFTCore",
+                "ScanInsertion",
+                "ATPGEngine",
+                "BISTEngine",
+                "DFTPatternExchange",
+                "DFTExternalTools",
+                "DFTEngine",
+            ]
+        ),
         .executableTarget(
             name: "DFTCLI",
-            dependencies: ["DFTCore", "ScanInsertion", "ATPGEngine", "BISTEngine", "DFTEngine"]
+            dependencies: ["DFTCLIKit"]
         ),
         .testTarget(
             name: "DFTEngineTests",
@@ -128,6 +140,7 @@ let package = Package(
                 "DFTPatternExchange",
                 "DFTExternalTools",
                 "DFTEngine",
+                "DFTCLIKit",
             ],
             resources: [.copy("Fixtures")]
         ),
