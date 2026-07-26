@@ -46,11 +46,12 @@ The first production profile uses the following provider composition:
 
 `DFTTestPatternSet` remains unchanged. Scan insertion additionally emits a
 `DFTScanImplementation` artifact with the exact transformed design digest,
-ordered chain cells, and cell pin/net bindings. A dedicated protocol converts a
-compact ATPG result plus this realized scan implementation and explicit capture
-timing into a rich exchange program. Conversion must fail with a typed error
-when the source contract lacks information required by the selected STIL
-profile.
+ordered chain cells, and cell pin/net bindings. ATPG loads that immutable
+artifact and emits a separate `DFTScanPatternExecutionPlan` with exact serial
+load, functional capture, primary-output compare, and serial unload semantics.
+A dedicated `DFTScanPatternExchangeConverting` protocol converts the neutral
+plan into a rich exchange program. Conversion fails with a typed error when the
+source contract lacks information required by the selected STIL profile.
 
 The STIL codec supports only constructs declared by its capability record.
 Unknown keywords, inherited timing not resolved by the supported profile,
@@ -77,7 +78,7 @@ coverage result.
 
 ```text
 DFTEngine
-  compact ATPG result + scan/timing contracts
+  compact ATPG coverage + neutral scan execution plan
         |
         v
 DFTPatternExchange
@@ -94,7 +95,9 @@ ToolQualification
 
 - `ScanInsertion` owns canonical scan intent and native transformations.
 - `ATPGEngine` owns pattern generation and raw coverage evidence.
-- `DFTPatternExchange` owns standard-format syntax and semantic round trips.
+- `DFTCore` owns the standard-neutral realized-scan execution contract.
+- `DFTPatternExchange` owns conversion, standard-format syntax, and semantic
+  round trips.
 - `DFTExternalTools` owns process execution, timeout, cancellation, executable
   identity, and raw output retention.
 - ToolQualification owns trust and production eligibility.
@@ -149,6 +152,12 @@ Completed:
 - exact structural and semantic validation;
 - retained exact scan implementation identity and ordered cell/pin/net
   bindings, separate from the estimated architecture plan;
+- digest-verified realized-scan loading and exact standard-neutral serial load,
+  functional capture, primary-output compare, and serial unload plans;
+- independent native semantic replay of the retained execution plan against
+  the transformed canonical design, including tamper rejection;
+- rich STIL conversion from the standard-neutral plan without coupling ATPG to
+  standard syntax;
 - deterministic encoding and decoding for the accepted STIL subset;
 - streaming decode over retained `Data` without whole-file text or token-array
   copies, plus a 20,000-cycle five-second debug-test budget;
@@ -158,7 +167,6 @@ Completed:
 
 Pending:
 
-- compact ATPG plus realized scan/timing/response conversion;
 - real OpenROAD scan insertion and retained mapped netlist;
 - Yosys functional-mode equivalence;
 - Icarus retained-STIL replay and fault correlation;

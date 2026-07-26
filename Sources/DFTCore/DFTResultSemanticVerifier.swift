@@ -32,13 +32,73 @@ public struct DFTResultSemanticVerifier: Sendable {
                 requireEmbeddedDigest: false,
                 reading: artifacts
             )
+            let scanImplementation: DFTScanImplementation?
+            if let reference = request.scanImplementation {
+                scanImplementation = try await loadScanImplementation(
+                    reference,
+                    reading: artifacts
+                )
+                try await validateScanExecutionPlanArtifact(
+                    result,
+                    reading: artifacts
+                )
+            } else {
+                scanImplementation = nil
+            }
             try await atpgVerifier.validate(
                 result,
                 for: request,
-                design: design
+                design: design,
+                scanImplementation: scanImplementation
             )
         case .bist:
             try await validateBIST(result, request: request, reading: artifacts)
+        }
+    }
+
+    private func loadScanImplementation(
+        _ reference: DFTScanImplementationReference,
+        reading artifacts: any DFTArtifactReading
+    ) async throws -> DFTScanImplementation {
+        do {
+            return try await VerifiedDFTScanImplementationLoader(
+                artifactReader: artifacts
+            ).load(reference)
+        } catch {
+            throw DFTResultSemanticValidationError.artifactDecodeFailed(
+                "scan implementation: \(error.localizedDescription)"
+            )
+        }
+    }
+
+    private func validateScanExecutionPlanArtifact(
+        _ result: DFTResult,
+        reading artifacts: any DFTArtifactReading
+    ) async throws {
+        guard let payloadPlan = result.payload.scanPatternExecutionPlan,
+              let reference = result.artifacts.first(where: {
+                  $0.id.rawValue == "dft-scan-pattern-execution-plan"
+              }) else {
+            throw DFTResultSemanticValidationError.semanticMismatch(
+                "scan execution-plan artifact is missing"
+            )
+        }
+        let data = try await verifiedData(for: reference, reading: artifacts)
+        let retainedPlan: DFTScanPatternExecutionPlan
+        do {
+            retainedPlan = try JSONDecoder().decode(
+                DFTScanPatternExecutionPlan.self,
+                from: data
+            )
+        } catch {
+            throw DFTResultSemanticValidationError.artifactDecodeFailed(
+                "scan execution plan: \(error.localizedDescription)"
+            )
+        }
+        guard retainedPlan == payloadPlan else {
+            throw DFTResultSemanticValidationError.semanticMismatch(
+                "scan execution-plan payload does not match retained bytes"
+            )
         }
     }
 

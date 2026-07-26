@@ -12,4 +12,5 @@ public enum DFTPatternExchangeError: Error, Sendable, Hashable, Equatable {
     case invalidTextEncoding
     case malformedSTIL(offset: Int, reason: String)
     case unsupportedSTILConstruct(keyword: String, offset: Int)
+    case invalidScanExecutionPlan(String)
 }

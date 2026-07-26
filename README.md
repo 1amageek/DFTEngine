@@ -11,31 +11,34 @@ fault-model injection with capture-timing evidence, process-bound logic- and
 memory-BIST transformation, external-tool execution, retained oracle
 correlation, immutable Foundation artifact stores, and a headless JSON CLI.
 
-Native pattern output is JSON only. `DeterministicTestPatternCodec` rejects
-STIL and WGL with a typed unsupported-format error because the native pattern
-IR does not represent their cycle-accurate timing, waveform, procedure, and
-signal semantics; native requests for those formats are blocked during request
-validation. The scan transformer inserts process-mapped decompressor and
-compactor cells with explicit external-channel and internal-chain
-connectivity. Production qualification remains gated by independently
-generated PDK, macro, oracle, equivalence, DRC, LVS, PEX and human-review
-evidence.
+The compact `DFTTestPatternSet` remains JSON-only.
+`DeterministicTestPatternCodec` rejects direct STIL and WGL requests because
+that compact coverage index does not carry cycle-accurate execution semantics.
+For an uncompressed realized scan implementation, ATPG separately emits a
+digest-bound `DFTScanPatternExecutionPlan` containing exact serial load,
+functional capture, primary-output compare, and serial unload semantics.
+`DFTPatternExchange` converts that neutral plan into its rich model and the
+accepted STIL subset. Unsupported compression, multiple clock domains, falling
+edge capture, oversized exhaustive spaces, or incomplete realized mappings
+fail with typed errors; they are not approximated.
 
 The accepted production-provider boundary is recorded in
 [`docs/adr/0001-production-dft-provider.md`](docs/adr/0001-production-dft-provider.md).
-It keeps the compact ATPG result separate from the rich STIL exchange model and
-independent retained-artifact replay. `DFTPatternExchange` now validates and
-round-trips the accepted STIL subset from retained bytes. Native ATPG-to-STIL
-conversion and real Icarus replay remain blocked until their explicit scan,
-response, and execution contracts are implemented.
+It keeps the compact ATPG result, the standard-neutral execution plan, the rich
+STIL exchange model, and independent retained-artifact replay separate.
+`DFTPatternExchange` validates, converts, and round-trips the accepted STIL
+subset from retained bytes. Real Icarus replay remains a separate pending
+provider and production qualification gate.
 
 Scan insertion now retains those scan semantics separately from the estimated
 architecture plan. `DFTScanImplementation` records the source/transformed
 design digests, exact chain order, and every transformed cell's data, output,
 clock, scan-input, scan-enable, and test-mode pin/net binding. The payload and
-retained JSON artifact must match during semantic verification. ATPG
-conversion remains blocked until it consumes this realized mapping and
-produces exact shift/capture/compare cycles.
+retained JSON artifact must match during semantic verification. ATPG loads that
+artifact through `DFTScanImplementationLoading`, verifies its identity, and
+produces an immutable execution-plan artifact. Native semantic verification
+replays the plan against the retained transformed design and rejects mismatched
+primary-output or scan-unload expectations.
 
 The CLI and Xcircuite composition load every digest-bound, mode-specific SDC
 artifact and verify declared DFT clocks plus asserted test-mode/scan-enable
@@ -61,11 +64,11 @@ flowchart LR
 
 | Product | Responsibility |
 |---|---|
-| `DFTCore` | Shared DFT request and result contract |
+| `DFTCore` | Shared DFT request, result, realized-scan reference, and standard-neutral execution contract |
 | `ScanInsertion` | Scan architecture, insertion, and exact realized chain-binding evidence |
 | `ATPGEngine` | Pattern generation and fault coverage |
 | `BISTEngine` | Memory and logic BIST |
-| `DFTPatternExchange` | Rich cycle/timing/procedure model and fail-closed STIL subset codec |
+| `DFTPatternExchange` | Neutral-plan conversion, rich cycle/timing/procedure model, and fail-closed STIL subset codec |
 | `DFTExternalTools` | Process execution, timeout, stderr and exit-status capture |
 | `DFTEngine` | Umbrella API |
 
@@ -74,7 +77,7 @@ The native implementations are:
 | Backend | Output | Explicit limitation |
 |---|---|---|
 | `DeterministicScanInsertionEngine` | digest-verified gate transformation, canonical port/net bindings, Liberty-validated replacement cells, process-mapped compression helpers, scan plan and design diff | Functional equivalence and process qualification remain downstream gates |
-| `DeterministicATPGEngine` | simulated declared/extracted stuck-at and transition ATPG with explicit sequential contracts; injected process-specific models with a distinct pattern verifier and clock-bound capture timing | Independent process corpora and ToolQualification evidence remain external gates |
+| `DeterministicATPGEngine` | simulated declared/extracted stuck-at and transition ATPG with explicit sequential contracts; exact realized-scan shift/capture/compare plan generation; injected process-specific models with a distinct pattern verifier and clock-bound capture timing | Real Icarus replay, independent process corpora, compressed-pattern execution, and ToolQualification evidence remain external gates |
 | `DeterministicBISTEngine` | process-bound logic- and memory-BIST transformations, explicit helper/macro mapping, structure and design diff | Macro/helper-cell process qualification remains an external gate |
 | `DFTResult` | Domain result with direct `ArtifactProducing`, `EvidenceProviding`, and `DiagnosticReporting` conformance | Retains immutable artifacts, provenance, and typed diagnostics without projection |
 | `DefaultDFTEngine` | Direct `DFTEngineExecuting` implementation | Returns the domain-owned `DFTResult` |
@@ -101,6 +104,9 @@ logic-BIST connectivity. ATPG completion additionally requires an injected
 `DFTATPGResultSemanticVerifying` implementation. The native verifier replays
 every detected stuck-at and transition pattern. Flow, external-tool, and release
 integrations use the same verifier before accepting a completed result.
+When ATPG consumes realized scan evidence, the verifier also reopens that
+artifact and the retained execution-plan artifact, checks exact byte identity,
+and replays load, capture, primary-output compare, and unload behavior.
 
 ## Flow integration
 

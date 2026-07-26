@@ -15,6 +15,7 @@ public struct DFTRequest: DFTExecutionRequest {
     public var constraints: DFTConstraintReference
     public var pdk: PDKReference
     public var cellLibrary: DFTCellLibraryReference?
+    public var scanImplementation: DFTScanImplementationReference?
 
     public var operation: DFTOperation
     public var testIntent: DFTTestIntent?
@@ -31,6 +32,7 @@ public struct DFTRequest: DFTExecutionRequest {
         constraints: DFTConstraintReference,
         pdk: PDKReference,
         cellLibrary: DFTCellLibraryReference? = nil,
+        scanImplementation: DFTScanImplementationReference? = nil,
         operation: DFTOperation,
         testIntent: DFTTestIntent? = nil,
         scanArchitecture: DFTScanArchitecture? = nil,
@@ -46,6 +48,7 @@ public struct DFTRequest: DFTExecutionRequest {
         self.constraints = constraints
         self.pdk = pdk
         self.cellLibrary = cellLibrary
+        self.scanImplementation = scanImplementation
         self.operation = operation
         self.testIntent = testIntent
         self.scanArchitecture = scanArchitecture
@@ -62,6 +65,9 @@ public struct DFTRequest: DFTExecutionRequest {
             if let timingLibraryArtifact = cellLibrary.timingLibraryArtifact {
                 references.append(timingLibraryArtifact)
             }
+        }
+        if let scanImplementation {
+            references.append(scanImplementation.artifact)
         }
         if let logicCellMapping = bistConfiguration?.logicCellMapping {
             references.append(logicCellMapping.artifact)

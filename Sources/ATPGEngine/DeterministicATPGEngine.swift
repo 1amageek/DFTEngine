@@ -10,6 +10,8 @@ public struct DeterministicATPGEngine: ATPGExecuting {
     public let cellLibraryLoader: (any DFTCellLibraryLoading)?
     public let timingLibraryLoader: (any DFTTimingLibraryLoading)?
     public let constraintLoader: any DFTConstraintLoading
+    public let scanImplementationLoader: (any DFTScanImplementationLoading)?
+    public let realizedScanSearcher: any RealizedScanATPGSearching
     public let faultExtractor: any DFTFaultExtracting
     public let simulator: any GateLevelSimulating
     public let sequentialSimulator: any GateLevelSequentialSimulating
@@ -24,6 +26,9 @@ public struct DeterministicATPGEngine: ATPGExecuting {
         cellLibraryLoader: (any DFTCellLibraryLoading)? = nil,
         timingLibraryLoader: (any DFTTimingLibraryLoading)? = nil,
         constraintLoader: any DFTConstraintLoading = UnavailableDFTConstraintLoader(),
+        scanImplementationLoader: (any DFTScanImplementationLoading)? = nil,
+        realizedScanSearcher: any RealizedScanATPGSearching =
+            ExhaustiveRealizedScanATPGSearcher(),
         faultExtractor: any DFTFaultExtracting = GateLevelFaultExtractor(),
         simulator: any GateLevelSimulating = GateLevelCombinationalSimulator(),
         sequentialSimulator: any GateLevelSequentialSimulating = GateLevelSequentialSimulator(),
@@ -37,6 +42,16 @@ public struct DeterministicATPGEngine: ATPGExecuting {
         self.cellLibraryLoader = cellLibraryLoader
         self.timingLibraryLoader = timingLibraryLoader
         self.constraintLoader = constraintLoader
+        if let scanImplementationLoader {
+            self.scanImplementationLoader = scanImplementationLoader
+        } else if let artifactReader = artifactStore as? any DFTArtifactReading {
+            self.scanImplementationLoader = VerifiedDFTScanImplementationLoader(
+                artifactReader: artifactReader
+            )
+        } else {
+            self.scanImplementationLoader = nil
+        }
+        self.realizedScanSearcher = realizedScanSearcher
         self.faultExtractor = faultExtractor
         self.simulator = simulator
         self.sequentialSimulator = sequentialSimulator
@@ -238,6 +253,7 @@ public struct DeterministicATPGEngine: ATPGExecuting {
             var outcomes: [DFTFaultOutcome] = []
             var patterns: [DFTTestPattern] = []
             var diagnostics: [DFTDiagnostic] = []
+            var scanPatternExecutionPlan: DFTScanPatternExecutionPlan?
             var declaredGateSnapshot: LogicDesignSnapshot?
             var abortedCount = 0
             var untestableCount = 0
@@ -270,12 +286,63 @@ public struct DeterministicATPGEngine: ATPGExecuting {
                     )
                 }
                 do {
-                    let search = try searchGateLevel(
-                        snapshot: gateSnapshot,
-                        faults: activeFaults,
-                        configuration: configuration,
-                        sequentialSimulator: sequentialSimulator
-                    )
+                    let search: GateLevelATPGSearchResult
+                    if let scanReference = request.scanImplementation {
+                        guard let scanImplementationLoader else {
+                            return try blocked(
+                                request: request,
+                                engineID: engineID,
+                                startedAt: startedAt,
+                                code: "DFT_SCAN_IMPLEMENTATION_LOADER_MISSING",
+                                message: "Scan-pattern ATPG requires a digest-verifying scan implementation loader.",
+                                entity: scanReference.artifact.path,
+                                actions: ["inject_scan_implementation_loader"]
+                            )
+                        }
+                        let implementation: DFTScanImplementation
+                        do {
+                            implementation = try await scanImplementationLoader
+                                .load(scanReference)
+                        } catch {
+                            return try blocked(
+                                request: request,
+                                engineID: engineID,
+                                startedAt: startedAt,
+                                code: "DFT_SCAN_IMPLEMENTATION_LOAD_FAILED",
+                                message: error.localizedDescription,
+                                entity: scanReference.artifact.path,
+                                actions: [
+                                    "verify_scan_implementation_digest",
+                                    "bind_atpg_to_the_transformed_design",
+                                ]
+                            )
+                        }
+                        let scanSearch = try realizedScanSearcher.search(
+                            snapshot: gateSnapshot,
+                            faults: activeFaults,
+                            configuration: configuration,
+                            architecture: request.scanArchitecture,
+                            implementation: implementation,
+                            implementationDigest: scanReference.artifact.digest
+                                .hexadecimalValue,
+                            sequentialSimulator: sequentialSimulator
+                        )
+                        search = GateLevelATPGSearchResult(
+                            outcomes: scanSearch.outcomes,
+                            patterns: scanSearch.patterns,
+                            diagnostics: scanSearch.diagnostics,
+                            abortedCount: scanSearch.abortedCount,
+                            untestableCount: scanSearch.untestableCount
+                        )
+                        scanPatternExecutionPlan = scanSearch.executionPlan
+                    } else {
+                        search = try searchGateLevel(
+                            snapshot: gateSnapshot,
+                            faults: activeFaults,
+                            configuration: configuration,
+                            sequentialSimulator: sequentialSimulator
+                        )
+                    }
                     outcomes = search.outcomes
                     patterns = search.patterns
                     diagnostics.append(contentsOf: search.diagnostics)
@@ -849,6 +916,19 @@ public struct DeterministicATPGEngine: ATPGExecuting {
                     )
                 )
             }
+            if let scanPatternExecutionPlan {
+                artifactContents.append(
+                    DFTArtifactContent(
+                        artifactID: "dft-scan-pattern-execution-plan",
+                        fileName: "scan-pattern-execution-plan.json",
+                        kind: .testPattern,
+                        format: .json,
+                        data: try DFTArtifactJSONEncoder().encode(
+                            scanPatternExecutionPlan
+                        )
+                    )
+                )
+            }
             let artifacts = try await artifactStore.storeBatch(
                 artifactContents,
                 runID: request.runID
@@ -891,6 +971,7 @@ public struct DeterministicATPGEngine: ATPGExecuting {
                     transformedDesign: nil,
                     faultCoverage: coverage,
                     patterns: patternSet,
+                    scanPatternExecutionPlan: scanPatternExecutionPlan,
                     coverageEvidence: evidence,
                     evidenceProvenance: evidenceProvenance,
                     assumptions: evidence.assumptions

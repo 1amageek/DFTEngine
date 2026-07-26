@@ -7,6 +7,8 @@ public enum GateLevelATPGError: Error, LocalizedError, Sendable, Hashable {
     case simulationFailed(faultID: String, message: String)
     case sequentialSemanticsUnavailable
     case sequentialCycleLimitInvalid
+    case scanExecutionUnsupported(String)
+    case scanImplementationMismatch(String)
 
     public var errorDescription: String? {
         switch self {
@@ -22,6 +24,10 @@ public enum GateLevelATPGError: Error, LocalizedError, Sendable, Hashable {
             return "Gate-level ATPG found sequential cells, but bounded sequential semantics were not enabled."
         case .sequentialCycleLimitInvalid:
             return "Bounded sequential ATPG requires a positive sequential cycle limit."
+        case .scanExecutionUnsupported(let reason):
+            return "Native scan-pattern ATPG does not support this execution profile: \(reason)"
+        case .scanImplementationMismatch(let reason):
+            return "Scan implementation does not match the transformed design: \(reason)"
         }
     }
 }

@@ -66,8 +66,11 @@ semantic loss are typed failures.
 ASCII encoding, picosecond unit, waveform actions, structural sections, and
 escaped-identifier support accepted by a codec.
 
-This product does not change `DFTTestPatternSet`, execute ATPG, invoke a replay
-tool, or make qualification decisions.
+`DFTScanPatternExchangeConverting` consumes a validated
+`DFTScanPatternExecutionPlan` and materializes exact load, capture, primary
+output compare, and unload cycles without reading ATPG internals. This product
+does not change `DFTTestPatternSet`, execute ATPG, invoke a replay tool, or make
+qualification decisions.
 
 ### Realized scan implementation
 
@@ -78,6 +81,21 @@ chains and exact cell/pin/net identities. Result validation rejects missing,
 detached, duplicate, discontinuous, or payload/artifact-mismatched bindings.
 Pattern conversion and replay must consume this realized contract rather than
 reconstructing chain order from compact ATPG bits.
+
+### Realized scan pattern execution
+
+`DFTScanPatternExecutionPlan` is a standard-neutral DFTCore value. It binds the
+scan implementation and transformed design digests to the actual clock,
+scan-enable, and test-mode signals; exact chain output-net order; serial load
+bits; functional capture inputs and expected outputs; and serial unload
+compares. `DFTRequest.scanImplementation` makes the immutable realized mapping
+an execution input. `VerifiedDFTScanImplementationLoader` rejects path,
+byte-count, digest, schema, and design-identity mismatches before ATPG.
+
+`RealizedScanATPGSearching` owns the bounded search and plan construction.
+`DeterministicATPGEngine` owns orchestration and immutable artifact persistence.
+`DFTResultSemanticVerifier` owns retained-byte verification and
+`GateLevelATPGResultSemanticVerifier` owns independent semantic replay.
 
 ### DFTEngine
 

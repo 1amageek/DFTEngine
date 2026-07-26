@@ -2,10 +2,11 @@
 
 Updated: 2026-07-26
 
-DFTEngine has complete native structural P1 paths for scan compression and
-memory BIST. The remaining P1 gates require standard-format or independent
-process evidence that must be supplied by the owning provider and qualification
-workflow; they are not hidden native fallbacks.
+DFTEngine has complete native structural P1 paths for scan compression, memory
+BIST, exact uncompressed realized-scan ATPG execution plans, and conversion to
+the accepted STIL subset. The remaining profile gates require real-tool replay,
+equivalence, or independent process evidence supplied by the owning provider
+and qualification workflow; they are not hidden native fallbacks.
 
 ## Remaining tasks
 
@@ -25,7 +26,7 @@ No package-owned P1 implementation remains.
 
 | Former ID | Owner | Required evidence |
 |---|---|---|
-| DFT-4 | Standard-pattern format provider | Complete the accepted `docs/adr/0001-production-dft-provider.md` boundary. The separate rich STIL model, validator, fail-closed codec, checked-in retained-byte round-trip fixture, and exact realized scan chain/cell/pin/net artifact are implemented. Remaining work is ATPG production of shift/capture/compare cycles from the realized mapping, real OpenROAD scan insertion, Yosys functional-mode equivalence, Icarus retained-artifact replay, exact invocation artifacts, and ToolQualification-ready correlation. The compact native pattern IR remains unchanged. |
+| DFT-4 | Production DFT replay workflow | Complete the remaining external portion of `docs/adr/0001-production-dft-provider.md`. Exact realized scan chain/cell/pin/net evidence, digest-verified ATPG loading, standard-neutral shift/capture/primary-output-compare/unload plans, native semantic replay, rich STIL conversion, validation, fail-closed codec, and retained-byte round trips are implemented. Remaining work is real OpenROAD scan insertion, Yosys functional-mode equivalence, Icarus retained-STIL replay/fault correlation, exact invocation artifacts, and ToolQualification-ready evidence. The compact native pattern IR remains unchanged. |
 | DFT-5 | DFT evidence workflow | Independent process corpus and oracle observations binding the PDK, cell/macro library, implementation, request digest, raw output, coverage universe, and downstream evidence. |
 
 Tool trust, compressed-pattern semantic replay, downstream

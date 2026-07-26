@@ -106,6 +106,20 @@ public struct DFTResultValidator: Sendable {
                 evidence: evidence,
                 request: request
             )
+            if let scanImplementation = request.scanImplementation {
+                guard let executionPlan = payload.scanPatternExecutionPlan,
+                      validateScanPatternExecutionPlan(
+                          executionPlan,
+                          scanImplementation: scanImplementation,
+                          patterns: patterns,
+                          artifacts: artifacts,
+                          request: request
+                      ) else {
+                    throw DFTResultValidationError.completedPayloadIncomplete(.atpg)
+                }
+            } else if payload.scanPatternExecutionPlan != nil {
+                throw DFTResultValidationError.completedPayloadIncomplete(.atpg)
+            }
         case .bist:
             guard let transformedDesign = payload.transformedDesign,
                   artifacts.contains(transformedDesign.artifact),
@@ -397,6 +411,78 @@ public struct DFTResultValidator: Sendable {
             throw DFTResultValidationError.coverageInvalid(
                 "completed ATPG coverage must equal the detected-to-active fault ratio"
             )
+        }
+    }
+
+    private func validateScanPatternExecutionPlan(
+        _ plan: DFTScanPatternExecutionPlan,
+        scanImplementation: DFTScanImplementationReference,
+        patterns: DFTTestPatternSet,
+        artifacts: Set<ArtifactReference>,
+        request: DFTRequest
+    ) -> Bool {
+        guard let architecture = request.scanArchitecture,
+              plan.schemaVersion
+                == DFTScanPatternExecutionPlan.currentSchemaVersion,
+              plan.scanImplementationDigest.caseInsensitiveCompare(
+                  scanImplementation.artifact.digest.hexadecimalValue
+              ) == .orderedSame,
+              plan.transformedDesignDigest
+                == scanImplementation.transformedDesignDigest,
+              !plan.clockSignal.isEmpty,
+              plan.clockPeriodPicoseconds > 0,
+              plan.scanEnableSignal == architecture.scanEnableSignal,
+              plan.testModeSignal == architecture.testModeSignal,
+              artifacts.contains(where: {
+                  $0.id.rawValue == "dft-scan-pattern-execution-plan"
+                    && $0.kind == .testPattern
+                    && $0.format == .json
+              }),
+              !plan.patterns.isEmpty,
+              plan.patterns.count == patterns.patterns.count,
+              Set(plan.patterns.map(\.id)).count == plan.patterns.count,
+              Set(plan.patterns.map(\.id))
+                == Set(patterns.patterns.map(\.id)) else {
+            return false
+        }
+        let patternsByID = Dictionary(
+            uniqueKeysWithValues: patterns.patterns.map { ($0.id, $0) }
+        )
+        return plan.patterns.allSatisfy { execution in
+            guard let pattern = patternsByID[execution.id],
+                  !execution.faultIDs.isEmpty,
+                  Set(execution.faultIDs).count == execution.faultIDs.count,
+                  Set(execution.faultIDs) == Set(pattern.faultIDs),
+                  !execution.chains.isEmpty,
+                  Set(execution.chains.map(\.chainID)).count
+                    == execution.chains.count,
+                  execution.capture.primaryInputs[plan.clockSignal] == true,
+                  execution.capture.primaryInputs[plan.scanEnableSignal]
+                    == false,
+                  execution.capture.primaryInputs[plan.testModeSignal]
+                    == true else {
+                return false
+            }
+            var outputNetIDs = Set<String>()
+            return execution.chains.allSatisfy { chain in
+                !chain.chainID.isEmpty
+                    && !chain.scanInSignal.isEmpty
+                    && !chain.scanOutSignal.isEmpty
+                    && !chain.elementOutputNetIDs.isEmpty
+                    && chain.loadBits.count
+                        == chain.elementOutputNetIDs.count
+                    && chain.expectedUnloadBits.count
+                        == chain.elementOutputNetIDs.count
+                    && chain.loadBits.allSatisfy({
+                        $0 == "0" || $0 == "1"
+                    })
+                    && chain.expectedUnloadBits.allSatisfy({
+                        $0 == "0" || $0 == "1"
+                    })
+                    && chain.elementOutputNetIDs.allSatisfy {
+                        !$0.isEmpty && outputNetIDs.insert($0).inserted
+                    }
+            }
         }
     }
 

@@ -65,7 +65,10 @@ public struct GateLevelSequentialSimulator: GateLevelSequentialSimulating {
         var state = Dictionary(uniqueKeysWithValues: sequentialState.map { binding in
             (binding.outputNetID, initialState[binding.outputNetID] ?? false)
         })
-        var previousClocks = Dictionary(uniqueKeysWithValues: sequentialState.map { ($0.clockNetID, false) })
+        var previousClocks: [String: Bool] = [:]
+        for binding in sequentialState {
+            previousClocks[binding.clockNetID] = false
+        }
         var observations: [[String: Bool]] = []
         var netObservations: [[String: Bool]] = []
 

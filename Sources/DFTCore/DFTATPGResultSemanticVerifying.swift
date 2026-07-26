@@ -4,6 +4,7 @@ public protocol DFTATPGResultSemanticVerifying: Sendable {
     func validate(
         _ result: DFTResult,
         for request: DFTRequest,
-        design: LogicDesignSnapshot
+        design: LogicDesignSnapshot,
+        scanImplementation: DFTScanImplementation?
     ) async throws
 }

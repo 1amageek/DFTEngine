@@ -4,6 +4,7 @@ import CircuiteFoundation
 import DFTCore
 import DFTEngine
 import DFTExternalTools
+import DFTPatternExchange
 import Foundation
 import LogicIR
 import PDKCore
@@ -93,6 +94,200 @@ struct DFTEngineImplementationTests {
         #expect(scanOutputPorts.allSatisfy { port in
             transformedModule.portBindings.contains { $0.portID == port.id }
         })
+    }
+
+    @Test("realized scan ATPG emits replayable load capture and unload evidence")
+    func realizedScanATPG() async throws {
+        let store = InMemoryDFTArtifactStore()
+        var sourceSnapshot = makeGateSnapshot(sequentialCellCount: 2)
+        for index in 0..<2 {
+            sourceSnapshot.gate?.modules[0].ports.append(
+                RTLPort(
+                    id: "port-d-\(index)",
+                    name: "d\(index)",
+                    direction: .input
+                )
+            )
+            sourceSnapshot.gate?.modules[0].portBindings.append(
+                GatePortBinding(
+                    portID: "port-d-\(index)",
+                    netID: "d-\(index)"
+                )
+            )
+        }
+        let sourceDigest = try LogicDesignSnapshotCodec.digest(sourceSnapshot)
+        let libraryManifest = makeCellLibraryManifest()
+        let libraryReference = try makeCellLibraryReference(
+            manifest: libraryManifest
+        )
+        let architecture = DFTScanArchitecture(
+            name: "core-scan",
+            clocks: [
+                DFTScanClock(
+                    id: "clk",
+                    signalName: "scan_clk",
+                    periodNanoseconds: 10
+                )
+            ],
+            domains: [
+                DFTScanDomain(
+                    id: "core",
+                    clockID: "clk",
+                    chainCount: 2,
+                    estimatedElementCount: 2
+                )
+            ],
+            scanEnableSignal: "scan_en",
+            testModeSignal: "test_mode"
+        )
+        let scanRequest = makeRequest(
+            operation: .scanInsertion,
+            designDigest: sourceDigest,
+            cellLibrary: libraryReference,
+            scanArchitecture: architecture,
+            insertionPolicy: DFTScanInsertionPolicy(scanCellName: "SDFF")
+        )
+        let scanResult = try await DeterministicScanInsertionEngine(
+            artifactStore: store,
+            designLoader: InMemoryDFTDesignLoader(snapshot: sourceSnapshot),
+            cellLibraryLoader: InMemoryDFTCellLibraryLoader(
+                manifest: libraryManifest
+            ),
+            timingLibraryLoader: InMemoryDFTTimingLibraryLoader(
+                library: try makeTimingLibrary(for: libraryManifest)
+            ),
+            constraintLoader: FixtureConstraintLoader()
+        ).execute(scanRequest)
+        let transformedReference = try #require(
+            scanResult.payload.transformedDesign
+        )
+        let implementation = try #require(
+            scanResult.payload.scanImplementation
+        )
+        let implementationArtifact = try #require(
+            scanResult.artifacts.first {
+                $0.artifactID == "dft-scan-implementation"
+            }
+        )
+        let transformedData = try await store.data(
+            for: transformedReference.artifact
+        )
+        let transformedSnapshot = try LogicDesignSnapshotCodec.decode(
+            transformedData
+        )
+
+        var atpgRequest = makeRequest(
+            operation: .atpg,
+            designDigest: transformedReference.designDigest,
+            scanArchitecture: architecture,
+            atpgConfiguration: DFTATPGConfiguration(
+                patternLength: 16,
+                faultSource: .gateLevel,
+                maximumExhaustiveInputCount: 8
+            )
+        )
+        atpgRequest.design = transformedReference
+        atpgRequest.inputs = [
+            transformedReference.artifact,
+            implementationArtifact,
+        ]
+        atpgRequest.scanImplementation = DFTScanImplementationReference(
+            artifact: implementationArtifact,
+            transformedDesignDigest: transformedReference.designDigest
+        )
+
+        let result = try await DeterministicATPGEngine(
+            artifactStore: store,
+            designLoader: InMemoryDFTDesignLoader(
+                snapshot: transformedSnapshot
+            ),
+            constraintLoader: FixtureConstraintLoader()
+        ).execute(atpgRequest)
+
+        #expect(result.status == .completed)
+        #expect(result.payload.faultCoverage == 1)
+        let plan = try #require(result.payload.scanPatternExecutionPlan)
+        #expect(plan.transformedDesignDigest == transformedReference.designDigest)
+        #expect(plan.patterns.count == result.payload.patterns?.patterns.count)
+        #expect(plan.patterns.allSatisfy {
+            $0.chains.count == implementation.chains.count
+                && $0.chains.allSatisfy {
+                    $0.loadBits.count == $0.elementOutputNetIDs.count
+                        && $0.expectedUnloadBits.count
+                            == $0.elementOutputNetIDs.count
+                }
+        })
+        #expect(result.artifacts.contains {
+            $0.artifactID == "dft-scan-pattern-execution-plan"
+        })
+        let exchangeProgram = try DFTScanPatternExchangeConverter().program(
+            from: plan,
+            name: "realized_scan"
+        )
+        let stilData = try STILPatternCodec().encode(exchangeProgram)
+        #expect(try STILPatternCodec().decode(stilData) == exchangeProgram)
+        var missingScanInputPlan = plan
+        let scanInputSignal = try #require(
+            missingScanInputPlan.patterns.first?.chains.first?.scanInSignal
+        )
+        missingScanInputPlan.patterns[0].capture.primaryInputs.removeValue(
+            forKey: scanInputSignal
+        )
+        #expect(throws: DFTPatternExchangeError.self) {
+            try DFTScanPatternExchangeConverter().program(
+                from: missingScanInputPlan,
+                name: "missing_scan_input"
+            )
+        }
+        try await GateLevelATPGResultSemanticVerifier().validate(
+            result,
+            for: atpgRequest,
+            design: transformedSnapshot,
+            scanImplementation: implementation
+        )
+
+        var tampered = result
+        let retainedUnload = try #require(
+            tampered.payload.scanPatternExecutionPlan?
+                .patterns[0].chains[0].expectedUnloadBits
+        )
+        tampered.payload.scanPatternExecutionPlan?
+            .patterns[0].chains[0].expectedUnloadBits =
+                retainedUnload == "0" ? "1" : "0"
+        await #expect(throws: DFTResultSemanticValidationError.self) {
+            try await GateLevelATPGResultSemanticVerifier().validate(
+                tampered,
+                for: atpgRequest,
+                design: transformedSnapshot,
+                scanImplementation: implementation
+            )
+        }
+
+        var duplicateExecutionResult = result
+        let duplicateExecution = try #require(
+            duplicateExecutionResult.payload.scanPatternExecutionPlan?
+                .patterns.first
+        )
+        duplicateExecutionResult.payload.scanPatternExecutionPlan?
+            .patterns.append(duplicateExecution)
+        #expect(throws: DFTResultValidationError.self) {
+            try DFTResultValidator().validate(
+                duplicateExecutionResult,
+                for: atpgRequest
+            )
+        }
+
+        var incompleteExecutionResult = result
+        incompleteExecutionResult.payload.scanPatternExecutionPlan?
+            .patterns[0].chains.removeAll()
+        await #expect(throws: DFTResultSemanticValidationError.self) {
+            try await GateLevelATPGResultSemanticVerifier().validate(
+                incompleteExecutionResult,
+                for: atpgRequest,
+                design: transformedSnapshot,
+                scanImplementation: implementation
+            )
+        }
     }
 
     @Test("scan compression inserts explicit decompressor and compactor connectivity")
@@ -319,6 +514,21 @@ struct DFTEngineImplementationTests {
 
         #expect(request.validationIssues(for: .scanInsertion).contains {
             $0.code == "DFT_PDK_IDENTITY_MISMATCH"
+        })
+    }
+
+    @Test("request validation rejects non-finite scan timing")
+    func requestRejectsNonFiniteScanTiming() {
+        var architecture = scanArchitecture()
+        architecture.clocks[0].periodNanoseconds = .nan
+        let request = makeRequest(
+            operation: .scanInsertion,
+            scanArchitecture: architecture,
+            insertionPolicy: DFTScanInsertionPolicy(scanCellName: "SDFF")
+        )
+
+        #expect(request.validationIssues(for: .scanInsertion).contains {
+            $0.code == "DFT_SCAN_CLOCK_PARAMETERS_INVALID"
         })
     }
 

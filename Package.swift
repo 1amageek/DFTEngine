@@ -70,7 +70,8 @@ let package = Package(
             ]
         ),
         .target(
-            name: "DFTPatternExchange"
+            name: "DFTPatternExchange",
+            dependencies: ["DFTCore"]
         ),
         .target(
             name: "DFTExternalTools",

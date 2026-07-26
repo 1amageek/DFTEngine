@@ -27,6 +27,20 @@ public struct GateLevelATPGResultSemanticVerifier: DFTATPGResultSemanticVerifyin
         for request: DFTRequest,
         design: LogicDesignSnapshot
     ) async throws {
+        try await validate(
+            result,
+            for: request,
+            design: design,
+            scanImplementation: nil
+        )
+    }
+
+    public func validate(
+        _ result: DFTResult,
+        for request: DFTRequest,
+        design: LogicDesignSnapshot,
+        scanImplementation: DFTScanImplementation?
+    ) async throws {
         guard let configuration = request.atpgConfiguration,
               let patternSet = result.payload.patterns,
               let evidence = result.payload.coverageEvidence else {
@@ -67,6 +81,21 @@ public struct GateLevelATPGResultSemanticVerifier: DFTATPGResultSemanticVerifyin
             throw mismatch("coverage outcomes do not cover the active fault universe exactly")
         }
 
+        let scanExecutionsByID: [String: DFTScanPatternExecution]
+        if request.scanImplementation != nil {
+            guard scanImplementation != nil,
+                  let plan = result.payload.scanPatternExecutionPlan else {
+                throw mismatch(
+                    "realized-scan ATPG replay requires implementation and execution-plan evidence"
+                )
+            }
+            scanExecutionsByID = Dictionary(
+                uniqueKeysWithValues: plan.patterns.map { ($0.id, $0) }
+            )
+        } else {
+            scanExecutionsByID = [:]
+        }
+
         for outcome in evidence.outcomes where outcome.status == .detected {
             try Task.checkCancellation()
             guard let fault = faultsByID[outcome.faultID],
@@ -75,11 +104,105 @@ public struct GateLevelATPGResultSemanticVerifier: DFTATPGResultSemanticVerifyin
                   pattern.faultIDs.contains(fault.id) else {
                 throw mismatch("detected fault \(outcome.faultID) has no matching pattern")
             }
-            try replay(
-                fault: fault,
-                pattern: pattern,
-                design: design,
-                configuration: configuration
+            if let scanImplementation {
+                guard let execution = scanExecutionsByID[pattern.id] else {
+                    throw mismatch(
+                        "detected fault \(fault.id) has no scan execution"
+                    )
+                }
+                try replayScan(
+                    fault: fault,
+                    execution: execution,
+                    implementation: scanImplementation,
+                    design: design,
+                    configuration: configuration
+                )
+            } else {
+                try replay(
+                    fault: fault,
+                    pattern: pattern,
+                    design: design,
+                    configuration: configuration
+                )
+            }
+        }
+    }
+
+    private func replayScan(
+        fault: DFTFault,
+        execution: DFTScanPatternExecution,
+        implementation: DFTScanImplementation,
+        design: LogicDesignSnapshot,
+        configuration: DFTATPGConfiguration
+    ) throws {
+        var realizedByID: [String: DFTRealizedScanChain] = [:]
+        for chain in implementation.chains {
+            guard realizedByID.updateValue(chain, forKey: chain.chainID)
+                    == nil else {
+                throw mismatch(
+                    "scan implementation contains duplicate chain \(chain.chainID)"
+                )
+            }
+        }
+        guard execution.chains.count == implementation.chains.count,
+              Set(execution.chains.map(\.chainID))
+                == Set(implementation.chains.map(\.chainID)) else {
+            throw mismatch(
+                "scan execution \(execution.id) does not cover every realized chain exactly once"
+            )
+        }
+        var initialState: [String: Bool] = [:]
+        for stimulus in execution.chains {
+            guard let realized = realizedByID[stimulus.chainID],
+                  realized.scanInSignal == stimulus.scanInSignal,
+                  realized.scanOutSignal == stimulus.scanOutSignal,
+                  realized.elements.map(\.outputNetID)
+                    == stimulus.elementOutputNetIDs else {
+                throw mismatch(
+                    "scan execution \(execution.id) is detached from chain \(stimulus.chainID)"
+                )
+            }
+            let serialBits = Array(stimulus.loadBits)
+            for (index, outputNetID) in stimulus.elementOutputNetIDs
+                .reversed()
+                .enumerated() {
+                initialState[outputNetID] = serialBits[index] == "1"
+            }
+        }
+        let good = try sequentialSimulator.simulate(
+            snapshot: design,
+            inputCycles: [execution.capture.primaryInputs],
+            initialState: initialState,
+            fault: nil,
+            sequentialContracts: configuration.sequentialCellContracts
+        )
+        let faulty = try sequentialSimulator.simulate(
+            snapshot: design,
+            inputCycles: [execution.capture.primaryInputs],
+            initialState: initialState,
+            fault: fault,
+            sequentialContracts: configuration.sequentialCellContracts
+        )
+        guard good.observedValues.last
+                == execution.capture.expectedPrimaryOutputs else {
+            throw mismatch(
+                "scan execution \(execution.id) retained incorrect primary-output expectations"
+            )
+        }
+        for stimulus in execution.chains {
+            let actualUnload = stimulus.elementOutputNetIDs.reversed().map {
+                good.finalState[$0] == true ? "1" : "0"
+            }.joined()
+            guard actualUnload == stimulus.expectedUnloadBits else {
+                throw mismatch(
+                    "scan execution \(execution.id) retained incorrect unload expectations"
+                )
+            }
+        }
+        guard good.observedValues != faulty.observedValues
+                || good.finalState != faulty.finalState else {
+            throw mismatch(
+                "scan execution \(execution.id) does not detect fault \(fault.id)"
             )
         }
     }

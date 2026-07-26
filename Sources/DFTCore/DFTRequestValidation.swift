@@ -185,6 +185,44 @@ public extension DFTRequest {
                 ))
             }
         }
+        if let scanImplementation {
+            issues.append(contentsOf: validateArtifact(
+                scanImplementation.artifact,
+                entity: "scanImplementation.artifact"
+            ))
+            if scanImplementation.artifact.format != .json {
+                issues.append(DFTRequestValidationIssue(
+                    code: "DFT_SCAN_IMPLEMENTATION_FORMAT_UNSUPPORTED",
+                    message: "Scan implementation evidence must use canonical JSON.",
+                    entity: "scanImplementation.artifact",
+                    suggestedActions: ["attach_canonical_scan_implementation_json"]
+                ))
+            }
+            if !isSHA256(scanImplementation.transformedDesignDigest) {
+                issues.append(DFTRequestValidationIssue(
+                    code: "DFT_SCAN_IMPLEMENTATION_DIGEST_INVALID",
+                    message: "Scan implementation must identify a transformed design by SHA-256.",
+                    entity: "scanImplementation.transformedDesignDigest",
+                    suggestedActions: ["recompute_transformed_design_digest"]
+                ))
+            } else if scanImplementation.transformedDesignDigest
+                        != design.designDigest {
+                issues.append(DFTRequestValidationIssue(
+                    code: "DFT_SCAN_IMPLEMENTATION_DESIGN_MISMATCH",
+                    message: "Scan implementation must identify the exact ATPG input design.",
+                    entity: "scanImplementation.transformedDesignDigest",
+                    suggestedActions: ["bind_atpg_to_the_scan_transformed_design"]
+                ))
+            }
+            if operation != .atpg {
+                issues.append(DFTRequestValidationIssue(
+                    code: "DFT_SCAN_IMPLEMENTATION_OPERATION_INVALID",
+                    message: "Realized scan implementation evidence is an ATPG execution input.",
+                    entity: "scanImplementation",
+                    suggestedActions: ["attach_scan_implementation_to_atpg_only"]
+                ))
+            }
+        }
         issues.append(contentsOf: validateScanArchitectureIfPresent())
 
         switch operation {
@@ -676,7 +714,9 @@ public extension DFTRequest {
         }
         for clock in architecture.clocks {
             if clock.signalName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                || !clock.periodNanoseconds.isFinite
                 || clock.periodNanoseconds <= 0
+                || !clock.dutyCycle.isFinite
                 || !(clock.dutyCycle > 0 && clock.dutyCycle < 1) {
                 issues.append(DFTRequestValidationIssue(
                     code: "DFT_SCAN_CLOCK_PARAMETERS_INVALID",

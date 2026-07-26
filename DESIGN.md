@@ -50,19 +50,21 @@ Memory-BIST orchestration is separate from the logic-BIST transformer. It
 consumes explicit macro port bindings plus a process-bound helper mapping,
 validates the macro set and clock-domain legality, and emits canonical helper
 connectivity. Standard-pattern formatting remains a format-provider
-responsibility because the current compact pattern IR does not carry STIL/WGL
-timing and procedure semantics.
+responsibility. The compact coverage IR does not carry STIL/WGL timing and
+procedure semantics, while `DFTScanPatternExecutionPlan` is the
+standard-neutral contract for exact realized-scan execution.
 
 The accepted production provider keeps that responsibility in
-`DFTPatternExchange`. The target now owns the rich model, exact validation, and
-fail-closed STIL subset codec. A future conversion boundary may consume compact
-ATPG results only when the retained `DFTScanImplementation` and explicit
-capture-timing contracts provide every required semantic. The scan
+`DFTPatternExchange`. The target owns conversion from
+`DFTScanPatternExecutionPlan`, the rich model, exact validation, and the
+fail-closed STIL subset codec. ATPG owns generation of that neutral plan from a
+digest-verified `DFTScanImplementation`; it does not own STIL syntax. The scan
 implementation is distinct from `DFTScanPlan`: the plan owns architecture
 intent and estimated counts, while the implementation owns exact transformed
-design identity, ordered cells, and pin/net bindings. Retained STIL bytes then
-enter an independent Icarus replay
-path. OpenROAD scan insertion, Yosys functional-mode equivalence, replay
+design identity, ordered cells, and pin/net bindings. Native semantic
+verification replays exact load/capture/compare/unload behavior before
+completion. Retained STIL bytes then enter an independent Icarus replay path.
+OpenROAD scan insertion, Yosys functional-mode equivalence, replay
 observations, and ToolQualification remain separate evidence producers. See
 `docs/adr/0001-production-dft-provider.md`.
 

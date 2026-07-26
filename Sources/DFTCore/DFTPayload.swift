@@ -8,6 +8,7 @@ public struct DFTPayload: Sendable, Hashable, Codable {
     public var scanImplementation: DFTScanImplementation?
     public var designDiff: DFTDesignDiff?
     public var patterns: DFTTestPatternSet?
+    public var scanPatternExecutionPlan: DFTScanPatternExecutionPlan?
     public var coverageEvidence: DFTCoverageEvidence?
     public var bistStructure: DFTBISTStructure?
     public var evidenceProvenance: DFTEvidenceProvenance
@@ -20,6 +21,7 @@ public struct DFTPayload: Sendable, Hashable, Codable {
         scanImplementation: DFTScanImplementation? = nil,
         designDiff: DFTDesignDiff? = nil,
         patterns: DFTTestPatternSet? = nil,
+        scanPatternExecutionPlan: DFTScanPatternExecutionPlan? = nil,
         coverageEvidence: DFTCoverageEvidence? = nil,
         bistStructure: DFTBISTStructure? = nil,
         evidenceProvenance: DFTEvidenceProvenance = DFTEvidenceProvenance(status: .unassessed),
@@ -31,6 +33,7 @@ public struct DFTPayload: Sendable, Hashable, Codable {
         self.scanImplementation = scanImplementation
         self.designDiff = designDiff
         self.patterns = patterns
+        self.scanPatternExecutionPlan = scanPatternExecutionPlan
         self.coverageEvidence = coverageEvidence
         self.bistStructure = bistStructure
         self.evidenceProvenance = evidenceProvenance
@@ -44,6 +47,7 @@ public struct DFTPayload: Sendable, Hashable, Codable {
         case scanImplementation
         case designDiff
         case patterns
+        case scanPatternExecutionPlan
         case coverageEvidence
         case bistStructure
         case evidenceProvenance
@@ -61,6 +65,10 @@ public struct DFTPayload: Sendable, Hashable, Codable {
         )
         designDiff = try container.decodeIfPresent(DFTDesignDiff.self, forKey: .designDiff)
         patterns = try container.decodeIfPresent(DFTTestPatternSet.self, forKey: .patterns)
+        scanPatternExecutionPlan = try container.decodeIfPresent(
+            DFTScanPatternExecutionPlan.self,
+            forKey: .scanPatternExecutionPlan
+        )
         coverageEvidence = try container.decodeIfPresent(DFTCoverageEvidence.self, forKey: .coverageEvidence)
         bistStructure = try container.decodeIfPresent(DFTBISTStructure.self, forKey: .bistStructure)
         evidenceProvenance = try container.decode(
