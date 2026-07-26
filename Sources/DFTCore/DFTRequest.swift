@@ -66,6 +66,9 @@ public struct DFTRequest: DFTExecutionRequest {
         if let logicCellMapping = bistConfiguration?.logicCellMapping {
             references.append(logicCellMapping.artifact)
         }
+        if let memoryCellMapping = bistConfiguration?.memoryCellMapping {
+            references.append(memoryCellMapping.artifact)
+        }
         var identities = Set<ArtifactReference>()
         return references.filter { identities.insert($0).inserted }
     }

@@ -8,6 +8,7 @@ public struct DFTCellLibraryManifest: Sendable, Hashable, Codable {
     public var version: String
     public var pdkDigest: String
     public var bindings: [DFTCellLibraryBinding]
+    public var scanCompressionMapping: DFTScanCompressionCellMapping?
     public var evidenceProvenance: DFTEvidenceProvenance
 
     public init(
@@ -15,6 +16,7 @@ public struct DFTCellLibraryManifest: Sendable, Hashable, Codable {
         version: String,
         pdkDigest: String,
         bindings: [DFTCellLibraryBinding],
+        scanCompressionMapping: DFTScanCompressionCellMapping? = nil,
         evidenceProvenance: DFTEvidenceProvenance,
         schemaVersion: Int = DFTCellLibraryManifest.currentSchemaVersion
     ) {
@@ -23,6 +25,7 @@ public struct DFTCellLibraryManifest: Sendable, Hashable, Codable {
         self.version = version
         self.pdkDigest = pdkDigest
         self.bindings = bindings
+        self.scanCompressionMapping = scanCompressionMapping
         self.evidenceProvenance = evidenceProvenance
     }
 }

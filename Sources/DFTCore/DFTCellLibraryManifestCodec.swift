@@ -52,6 +52,42 @@ public enum DFTCellLibraryManifestCodec {
                 )
             }
         }
+        if let mapping = manifest.scanCompressionMapping {
+            let cellTypes = [
+                mapping.decompressorCellType,
+                mapping.compactorCellType,
+            ]
+            let pinLists = [
+                mapping.decompressorInputPinNames,
+                mapping.decompressorOutputPinNames,
+                mapping.compactorInputPinNames,
+                mapping.compactorOutputPinNames,
+            ]
+            guard cellTypes.allSatisfy({
+                !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            }),
+            pinLists.allSatisfy({
+                !$0.isEmpty
+                    && $0.allSatisfy {
+                        !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                    }
+                    && Set($0).count == $0.count
+            }),
+            Set(
+                mapping.decompressorInputPinNames
+                    + mapping.decompressorOutputPinNames
+            ).count == mapping.decompressorInputPinNames.count
+                + mapping.decompressorOutputPinNames.count,
+            Set(
+                mapping.compactorInputPinNames
+                    + mapping.compactorOutputPinNames
+            ).count == mapping.compactorInputPinNames.count
+                + mapping.compactorOutputPinNames.count else {
+                throw DFTCellLibraryError.invalidManifest(
+                    "scan-compression cell and pin mappings must be non-empty and unambiguous"
+                )
+            }
+        }
         guard manifest.evidenceProvenance.processID == nil
                 || manifest.evidenceProvenance.processID == manifest.processID else {
             throw DFTCellLibraryError.invalidManifest(

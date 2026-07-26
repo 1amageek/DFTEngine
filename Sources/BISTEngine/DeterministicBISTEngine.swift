@@ -7,6 +7,7 @@ public struct DeterministicBISTEngine: BISTExecuting {
     public let designLoader: (any DFTDesignLoading)?
     public let constraintLoader: any DFTConstraintLoading
     public let logicBISTCellMappingLoader: any DFTLogicBISTCellMappingLoading
+    public let memoryBISTCellMappingLoader: any DFTMemoryBISTCellMappingLoading
     public let implementationID: String
 
     public init(
@@ -15,12 +16,15 @@ public struct DeterministicBISTEngine: BISTExecuting {
         constraintLoader: any DFTConstraintLoading = UnavailableDFTConstraintLoader(),
         logicBISTCellMappingLoader: any DFTLogicBISTCellMappingLoading =
             UnavailableDFTLogicBISTCellMappingLoader(),
+        memoryBISTCellMappingLoader: any DFTMemoryBISTCellMappingLoading =
+            UnavailableDFTMemoryBISTCellMappingLoader(),
         implementationID: String = "native-deterministic-bist"
     ) {
         self.artifactStore = artifactStore
         self.designLoader = designLoader
         self.constraintLoader = constraintLoader
         self.logicBISTCellMappingLoader = logicBISTCellMappingLoader
+        self.memoryBISTCellMappingLoader = memoryBISTCellMappingLoader
         self.implementationID = implementationID
     }
 
@@ -102,7 +106,7 @@ public struct DeterministicBISTEngine: BISTExecuting {
                     actions: ["provide_complete_bist_configuration"]
                 )
             }
-            guard configuration.kind == .logic else {
+            if configuration.kind == .memory {
                 guard configuration.memoryBindings?.isEmpty == false,
                       configuration.memoryBindings?.allSatisfy(\.isStructurallyComplete) == true else {
                     return try blocked(
@@ -110,58 +114,83 @@ public struct DeterministicBISTEngine: BISTExecuting {
                         engineID: engineID,
                         startedAt: startedAt,
                         code: "DFT_BIST_MEMORY_BINDINGS_MISSING",
-                        message: "Memory BIST requires complete macro port bindings before an external qualified engine can run.",
+                        message: "Memory BIST requires complete macro port bindings.",
                         entity: "bistConfiguration.memoryBindings",
-                        actions: ["declare_memory_macro_bindings", "inject_a_qualified_memory_bist_engine"]
+                        actions: ["declare_memory_macro_bindings"]
                     )
                 }
-                return try blocked(
-                    request: request,
-                    engineID: engineID,
-                    startedAt: startedAt,
-                    code: "DFT_BIST_MEMORY_MACRO_UNSUPPORTED",
-                    message: "Native BIST does not transform memory macros; the declared macro binding must be executed by a qualified external engine.",
-                    entity: "bistConfiguration.kind",
-                    actions: ["inject_memory_bist_engine", "use_a_qualified_external_backend"]
-                )
-            }
-            guard configuration.targetBindings?.isEmpty == false else {
-                return try blocked(
-                    request: request,
-                    engineID: engineID,
-                    startedAt: startedAt,
-                    code: "DFT_BIST_TARGET_BINDINGS_MISSING",
-                    message: "Canonical logic BIST requires target input/output pin bindings.",
-                    entity: "bistConfiguration.targetBindings",
-                    actions: ["declare_bist_target_pin_bindings"]
-                )
-            }
-            guard let declaredMapping = configuration.logicCellMapping else {
-                return try blocked(
-                    request: request,
-                    engineID: engineID,
-                    startedAt: startedAt,
-                    code: "DFT_BIST_CELL_MAPPING_MISSING",
-                    message: "Canonical logic BIST requires a process-bound helper-cell mapping artifact.",
-                    entity: "bistConfiguration.logicCellMapping",
-                    actions: ["attach_logic_bist_cell_mapping"]
-                )
-            }
-            do {
-                let loadedMapping = try logicBISTCellMappingLoader.load(declaredMapping)
-                guard loadedMapping == declaredMapping.manifest else {
-                    throw DFTLogicBISTCellMappingError.contentMismatch
+                guard let mapping = configuration.memoryCellMapping else {
+                    return try blocked(
+                        request: request,
+                        engineID: engineID,
+                        startedAt: startedAt,
+                        code: "DFT_BIST_MEMORY_CELL_MAPPING_MISSING",
+                        message: "Canonical memory BIST requires a process-bound helper-cell and macro mapping artifact.",
+                        entity: "bistConfiguration.memoryCellMapping",
+                        actions: ["attach_memory_bist_cell_mapping"]
+                    )
                 }
-            } catch {
-                return try blocked(
-                    request: request,
-                    engineID: engineID,
-                    startedAt: startedAt,
-                    code: "DFT_BIST_CELL_MAPPING_LOAD_FAILED",
-                    message: error.localizedDescription,
-                    entity: declaredMapping.artifact.path,
-                    actions: ["verify_bist_mapping_artifact", "align_inline_mapping_with_artifact"]
-                )
+                do {
+                    let loadedMapping = try memoryBISTCellMappingLoader.load(mapping)
+                    guard loadedMapping == mapping.manifest else {
+                        throw DFTMemoryBISTCellMappingError.contentMismatch
+                    }
+                    guard mapping.processID == request.pdk.processID,
+                          mapping.pdkDigest == request.pdk.digest else {
+                        throw DFTMemoryBISTCellMappingError.contentMismatch
+                    }
+                } catch {
+                    return try blocked(
+                        request: request,
+                        engineID: engineID,
+                        startedAt: startedAt,
+                        code: "DFT_BIST_MEMORY_CELL_MAPPING_LOAD_FAILED",
+                        message: error.localizedDescription,
+                        entity: mapping.artifact.path,
+                        actions: ["verify_memory_bist_mapping_artifact", "align_mapping_with_request_pdk"]
+                    )
+                }
+            } else {
+                guard configuration.targetBindings?.isEmpty == false else {
+                    return try blocked(
+                        request: request,
+                        engineID: engineID,
+                        startedAt: startedAt,
+                        code: "DFT_BIST_TARGET_BINDINGS_MISSING",
+                        message: "Canonical logic BIST requires target input/output pin bindings.",
+                        entity: "bistConfiguration.targetBindings",
+                        actions: ["declare_bist_target_pin_bindings"]
+                    )
+                }
+                guard let declaredMapping = configuration.logicCellMapping else {
+                    return try blocked(
+                        request: request,
+                        engineID: engineID,
+                        startedAt: startedAt,
+                        code: "DFT_BIST_CELL_MAPPING_MISSING",
+                        message: "Canonical logic BIST requires a process-bound helper-cell mapping artifact.",
+                        entity: "bistConfiguration.logicCellMapping",
+                        actions: ["attach_logic_bist_cell_mapping"]
+                    )
+                }
+                do {
+                    let loadedMapping = try logicBISTCellMappingLoader.load(declaredMapping)
+                    guard loadedMapping == declaredMapping.manifest,
+                          declaredMapping.processID == request.pdk.processID,
+                          declaredMapping.pdkDigest == request.pdk.digest else {
+                        throw DFTLogicBISTCellMappingError.contentMismatch
+                    }
+                } catch {
+                    return try blocked(
+                        request: request,
+                        engineID: engineID,
+                        startedAt: startedAt,
+                        code: "DFT_BIST_CELL_MAPPING_LOAD_FAILED",
+                        message: error.localizedDescription,
+                        entity: declaredMapping.artifact.path,
+                        actions: ["verify_bist_mapping_artifact", "align_inline_mapping_with_artifact"]
+                    )
+                }
             }
             guard let designLoader else {
                 return try blocked(
@@ -172,19 +201,6 @@ public struct DeterministicBISTEngine: BISTExecuting {
                     message: "Canonical BIST requires a digest-verified LogicDesignSnapshot loader.",
                     entity: "design",
                     actions: ["inject_design_loader", "provide_gate_level_design_artifact"]
-                )
-            }
-            let clockSignal = configuration.clockSignal
-                ?? request.scanArchitecture?.clocks.first?.signalName
-            guard let clockSignal, !clockSignal.isEmpty else {
-                return try blocked(
-                    request: request,
-                    engineID: engineID,
-                    startedAt: startedAt,
-                    code: "DFT_BIST_CLOCK_MISSING",
-                    message: "Canonical logic BIST requires an explicit clock signal.",
-                    entity: "bistConfiguration.clockSignal",
-                    actions: ["declare_bist_clock_signal"]
                 )
             }
             let sourceSnapshot: LogicDesignSnapshot
@@ -205,13 +221,38 @@ public struct DeterministicBISTEngine: BISTExecuting {
                 ?? DFTDeterministicHasher().seed(for: "\(request.design.designDigest):\(configuration.name)")
             let transform: DFTGateLevelBISTTransformResult
             do {
-                transform = try DFTGateLevelBISTTransformer().transform(
-                    snapshot: sourceSnapshot,
-                    configuration: configuration,
-                    testModeSignal: testModeSignal,
-                    clockSignal: clockSignal,
-                    seed: seed
-                )
+                if configuration.kind == .memory {
+                    guard let mapping = configuration.memoryCellMapping else {
+                        throw DFTMemoryBISTCellMappingError.loaderUnavailable
+                    }
+                    transform = try DFTGateLevelMemoryBISTTransformer().transform(
+                        snapshot: sourceSnapshot,
+                        configuration: configuration,
+                        mapping: mapping,
+                        testModeSignal: testModeSignal
+                    )
+                } else {
+                    let clockSignal = configuration.clockSignal
+                        ?? request.scanArchitecture?.clocks.first?.signalName
+                    guard let clockSignal, !clockSignal.isEmpty else {
+                        return try blocked(
+                            request: request,
+                            engineID: engineID,
+                            startedAt: startedAt,
+                            code: "DFT_BIST_CLOCK_MISSING",
+                            message: "Canonical logic BIST requires an explicit clock signal.",
+                            entity: "bistConfiguration.clockSignal",
+                            actions: ["declare_bist_clock_signal"]
+                        )
+                    }
+                    transform = try DFTGateLevelBISTTransformer().transform(
+                        snapshot: sourceSnapshot,
+                        configuration: configuration,
+                        testModeSignal: testModeSignal,
+                        clockSignal: clockSignal,
+                        seed: seed
+                    )
+                }
             } catch {
                 return try blocked(
                     request: request,
@@ -233,7 +274,8 @@ public struct DeterministicBISTEngine: BISTExecuting {
                 seed: seed,
                 testModeSignal: testModeSignal,
                 logicCellMapping: configuration.logicCellMapping,
-                memoryBindings: nil
+                memoryBindings: configuration.memoryBindings,
+                memoryCellMapping: configuration.memoryCellMapping
             )
             let transformedArtifact = DFTTransformedDesignArtifact(
                 runID: request.runID,
@@ -397,14 +439,14 @@ public struct DeterministicBISTEngine: BISTExecuting {
             capabilities: [
                 "logic_bist_structure": .available,
                 "canonical_gate_bist_transformation": .available,
-                "memory_bist_structure": .blocked,
+                "memory_bist_structure": .available,
                 "immutable_design_artifact": .available,
                 "design_diff": .available,
-                "memory_macro_legality": .blocked
+                "memory_macro_legality": .available
             ],
             limitations: [
-                "The native logic path transforms a bounded canonical gate contract; helper cells require process evidenceProvenance.",
-                "Memory BIST remains blocked without a qualified macro engine.",
+                "The native logic and memory paths transform bounded canonical gate contracts; helper cells require process evidenceProvenance.",
+                "Memory BIST requires an immutable process-bound helper-cell mapping and rejects unsupported macro or algorithm identities.",
                 "The generated structure does not claim functional equivalence until a downstream gate approves it."
             ],
             evidenceProvenance: evidenceProvenance

@@ -31,15 +31,27 @@ DesignFlowKernel and .xcircuite artifacts
 Backends may depend on lower-level data packages. This package must never import `Xcircuite` or `circuit-studio`.
 
 Native backends load and identity-check canonical design, PDK, cell-library,
-timing, mode-specific constraint and logic-BIST mapping artifacts through
-specialized protocols. Scan and logic-BIST engines transform the canonical
-`LogicDesignSnapshot`, validate the resulting graph and persist a new immutable
-snapshot. `DFTResultSemanticVerifier` independently reopens the source and
-output artifacts before a completed mutation crosses a flow or release
-boundary. Functional equivalence, physical legality, external-oracle
-correlation and process qualification remain separate gates. Unsupported or
-unavailable semantics produce `blocked`; they are never converted into passing
-coverage.
+timing, mode-specific constraint, logic-BIST mapping, and memory-BIST mapping
+artifacts through specialized protocols. Scan, scan-compression, logic-BIST,
+and memory-BIST engines transform the canonical `LogicDesignSnapshot`, validate
+the resulting graph and persist a new immutable snapshot.
+`DFTResultSemanticVerifier` independently reopens the source and output
+artifacts before a completed mutation crosses a flow or release boundary.
+Functional equivalence, physical legality, external-oracle correlation and
+process qualification remain separate gates. Unsupported or unavailable
+semantics produce `blocked`; they are never converted into passing coverage.
+
+Scan-compression architecture owns topology and external channel names.
+Process-specific decompressor/compactor cell and pin identities belong to the
+cell-library manifest. The transformer composes the two contracts without
+embedding process names in the architecture layer.
+
+Memory-BIST orchestration is separate from the logic-BIST transformer. It
+consumes explicit macro port bindings plus a process-bound helper mapping,
+validates the macro set and clock-domain legality, and emits canonical helper
+connectivity. Standard-pattern formatting remains a format-provider
+responsibility because the current compact pattern IR does not carry STIL/WGL
+timing and procedure semantics.
 
 ## Trust model
 

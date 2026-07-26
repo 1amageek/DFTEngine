@@ -6,9 +6,9 @@ The full platform goal is intentionally decomposed into the gates documented in 
 
 1. M0 contract and evidence baseline — complete
 2. M1 canonical gate-level scan transformation — complete for the current LogicIR contract
-3. M2 scan clock/reset and cell-library semantics — in progress; explicit gate connectivity and Liberty timing/legal replacement validation slices delivered
+3. M2 scan clock/reset, cell-library, and compression semantics — native structural scope complete; process qualification remains external
 4. M3 gate-level ATPG and pattern validation — combinational stuck-at, bounded DFF/SDFF state-transition, explicit reset/set controls, qualified level-sensitive latch semantics, bounded combinational/sequential transition slices and an injected process-specific fault-model boundary delivered; unknown primitives and process qualification remain
-5. M4 canonical BIST insertion — logic target transformation and typed memory-macro backend protocol delivered; external result integrity is domain-validated while process qualification remains flow-owned; native qualified memory backend remains
+5. M4 canonical BIST insertion — native logic and memory target transformations plus the typed external boundary are delivered; process qualification remains flow-owned
 6. M5 standard-pattern and external-tool execution — internal codec, timed/tree-cleaning process runner, stdout/stderr artifacts and validated typed DFT result persistence delivered; qualified native STIL/WGL output and process/tool qualification remain
 7. M6 retained corpus and oracle correlation — raw correlation and evidence-provenance emission are delivered; independent retained process corpus remains
 8. M7 ToolQualification and flow handoff — direct DFT protocol consumption and raw evidence handoff are delivered; trust, downstream signoff policy, approval, and resume remain responsibilities of ToolQualification and the composing flow
@@ -26,6 +26,10 @@ The full platform goal is intentionally decomposed into the gates documented in 
   treating the inline process metadata as sufficient.
 - Added canonical `LogicDesignSnapshot` loading with project-root bounds, byte-count and SHA-256 checks, design-digest verification, top-design checks and gate validation.
 - Added a real gate-level scan transformation that updates sequential cells, control ports, scan nets, canonical port/net bindings and stable design diffs without synthetic observability cells.
+- Added scan-compression transformation with architecture-owned channel
+  topology and process-manifest-owned decompressor/compactor cell and pin
+  mappings. Exact internal-chain and external-channel coverage is validated,
+  and the hot path uses indexed net lookup plus linear chain-offset tracking.
 - Added explicit clock/reset connectivity binding and per-domain element-count checks; ambiguous bindings are blocked.
 - Recomputed and validated the transformed snapshot digest before persistence.
 - Added positive/negative fixtures and an explicit regression that scan insertion blocks without a canonical design loader.
@@ -38,12 +42,18 @@ The full platform goal is intentionally decomposed into the gates documented in 
   test-mode input muxing, response capture/compaction, signature output,
   immutable design diff, and a separately loaded process/PDK-bound helper-cell
   mapping artifact.
+- Added canonical memory-BIST transformation with exact target/macro binding,
+  process/PDK-bound helper mapping bytes, algorithm and macro capability
+  checks, single-domain clock validation, explicit mux/controller/compactor/
+  signature connectivity, immutable design diff, and structure artifacts.
 - Kept JSON as the only native qualified output, blocked STIL/WGL requests until standards-qualified exporters exist, and moved the `SignoffToolSupport` process adapter into `DFTExternalTools`.
 - Added raw DFT evidence maturity and provenance metadata for smoke, corpus, and
   oracle-correlated observations without embedding a trust or release verdict.
 - Added retained oracle corpus contracts and correlation: normalized oracle expectation artifacts are read, byte-count/digest verified, decoded and compared against native typed results before correlation evidence is emitted.
 - Connected the Liberty-backed scan-cell timing/legal replacement validator to scan insertion and process-scoped ATPG execution; missing timing artifacts now block execution.
-- Added a typed memory-macro BIST binding and external backend protocol; non-completed or identity-mismatched external results are rejected, ToolQualification remains flow-owned, and native memory transformation remains blocked until a qualified backend is supplied.
+- Retained the typed external memory-macro backend protocol; non-completed,
+  identity-mismatched, or completed-without-transformation results are
+  rejected, while ToolQualification remains flow-owned.
 - Removed flow-owned review state from `DFTDesignDiff`; the current contract
   contains raw structural changes and snapshot references only.
 - Rejected non-zero external exits before response decoding, bound external

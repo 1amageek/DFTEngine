@@ -302,10 +302,13 @@ public extension DFTRequest {
                       bistConfiguration?.memoryBindings == nil {
                 issues.append(DFTRequestValidationIssue(
                     code: "DFT_BIST_MEMORY_BINDINGS_MISSING",
-                    message: "Memory BIST requires explicit macro port bindings for an external qualified engine.",
+                    message: "Memory BIST requires explicit macro port bindings.",
                     entity: "bistConfiguration.memoryBindings",
-                    suggestedActions: ["declare_memory_macro_bindings", "inject_a_qualified_memory_bist_engine"]
+                    suggestedActions: ["declare_memory_macro_bindings"]
                 ))
+            } else if let configuration = bistConfiguration,
+                      configuration.kind == .memory {
+                issues.append(contentsOf: validateMemoryBISTConfiguration(configuration))
             }
         }
 
@@ -378,6 +381,84 @@ public extension DFTRequest {
                 message: "Logic BIST requires unique positive PRPG/MISR taps and a non-empty binary expected signature.",
                 entity: "bistConfiguration.logicCellMapping",
                 suggestedActions: ["repair_bist_polynomials_and_signature"]
+            ))
+        }
+        return issues
+    }
+
+    private func validateMemoryBISTConfiguration(
+        _ configuration: DFTBISTConfiguration
+    ) -> [DFTRequestValidationIssue] {
+        var issues: [DFTRequestValidationIssue] = []
+        guard let bindings = configuration.memoryBindings,
+              !bindings.isEmpty,
+              bindings.allSatisfy(\.isStructurallyComplete) else {
+            return [DFTRequestValidationIssue(
+                code: "DFT_BIST_MEMORY_BINDINGS_INVALID",
+                message: "Native memory BIST requires complete macro port bindings.",
+                entity: "bistConfiguration.memoryBindings",
+                suggestedActions: ["declare_complete_memory_macro_bindings"]
+            )]
+        }
+        guard let mapping = configuration.memoryCellMapping else {
+            return [DFTRequestValidationIssue(
+                code: "DFT_BIST_MEMORY_CELL_MAPPING_MISSING",
+                message: "Native memory BIST requires a process-bound helper-cell and macro mapping.",
+                entity: "bistConfiguration.memoryCellMapping",
+                suggestedActions: ["attach_memory_bist_cell_mapping"]
+            )]
+        }
+        issues.append(contentsOf: validateArtifact(
+            mapping.artifact,
+            entity: "bistConfiguration.memoryCellMapping.artifact"
+        ))
+        if mapping.processID != pdk.processID
+            || mapping.pdkDigest.caseInsensitiveCompare(pdk.digest) != .orderedSame {
+            issues.append(DFTRequestValidationIssue(
+                code: "DFT_BIST_MEMORY_CELL_MAPPING_PDK_MISMATCH",
+                message: "Memory-BIST mapping must identify the exact request PDK.",
+                entity: "bistConfiguration.memoryCellMapping",
+                suggestedActions: ["select_a_pdk_bound_memory_bist_mapping"]
+            ))
+        }
+        let cellTypes = [
+            mapping.controllerCellType,
+            mapping.inputMuxCellType,
+            mapping.responseCompactorCellType,
+            mapping.signatureRegisterCellType,
+        ]
+        if cellTypes.contains(where: {
+            $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        }) || mapping.controllerCellType != configuration.controllerCellName {
+            issues.append(DFTRequestValidationIssue(
+                code: "DFT_BIST_MEMORY_CELL_MAPPING_INVALID",
+                message: "Memory-BIST helper-cell types must be non-empty and the controller mapping must match the request.",
+                entity: "bistConfiguration.memoryCellMapping",
+                suggestedActions: ["repair_memory_bist_cell_mapping"]
+            ))
+        }
+        let targetNames = configuration.targetInstances
+        let bindingNames = bindings.map(\.instanceName)
+        if targetNames.isEmpty
+            || Set(targetNames).count != targetNames.count
+            || Set(bindingNames).count != bindingNames.count
+            || Set(targetNames) != Set(bindingNames) {
+            issues.append(DFTRequestValidationIssue(
+                code: "DFT_BIST_MEMORY_TARGET_SET_MISMATCH",
+                message: "Memory-BIST targets must exactly match unique macro bindings.",
+                entity: "bistConfiguration.targetInstances",
+                suggestedActions: ["align_memory_bist_targets_and_bindings"]
+            ))
+        }
+        let macroTypes = Set(bindings.map(\.macroType))
+        let algorithmIDs = Set(bindings.map(\.algorithmID))
+        if !macroTypes.isSubset(of: Set(mapping.supportedMacroTypes))
+            || !algorithmIDs.isSubset(of: Set(mapping.supportedAlgorithmIDs)) {
+            issues.append(DFTRequestValidationIssue(
+                code: "DFT_BIST_MEMORY_CAPABILITY_UNQUALIFIED",
+                message: "Memory-BIST mapping does not qualify every bound macro type and algorithm.",
+                entity: "bistConfiguration.memoryCellMapping",
+                suggestedActions: ["qualify_memory_macro_and_algorithm_mapping"]
             ))
         }
         return issues
@@ -623,10 +704,11 @@ public extension DFTRequest {
             ))
         }
         if let compression = architecture.compression, compression.enabled {
-            if let ratio = compression.ratio, !(ratio > 0 && ratio <= 1) {
+            let chainCount = architecture.domains.reduce(0) { $0 + $1.chainCount }
+            if let ratio = compression.ratio, ratio < 1 {
                 issues.append(DFTRequestValidationIssue(
                     code: "DFT_COMPRESSION_RATIO_INVALID",
-                    message: "Compression ratio must be greater than zero and no greater than one.",
+                    message: "Compression ratio must be at least one.",
                     entity: "scanArchitecture.compression.ratio"
                 ))
             } else if compression.ratio == nil {
@@ -637,20 +719,58 @@ public extension DFTRequest {
                     suggestedActions: ["declare_compression_ratio"]
                 ))
             }
-            if compression.decompressorCell == nil || compression.compactorCell == nil {
+            let lists = [
+                compression.scanInputSignals,
+                compression.scanOutputSignals,
+            ]
+            if lists.contains(where: {
+                $0.isEmpty
+                    || $0.contains(where: {
+                        $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                    })
+                    || Set($0).count != $0.count
+            }) {
                 issues.append(DFTRequestValidationIssue(
-                    code: "DFT_COMPRESSION_CELLS_MISSING",
-                    message: "Enabled compression requires decompressor and compactor cells.",
+                    code: "DFT_COMPRESSION_CHANNELS_INVALID",
+                    message: "Compression signal and pin lists must be non-empty, unique and contain no empty names.",
                     entity: "scanArchitecture.compression",
-                    suggestedActions: ["declare_compression_cells"]
+                    suggestedActions: ["declare_unambiguous_compression_channels"]
                 ))
             }
-            issues.append(DFTRequestValidationIssue(
-                code: "DFT_SCAN_COMPRESSION_UNSUPPORTED",
-                message: "The native scan transformer does not implement decompressor and compactor insertion.",
-                entity: "scanArchitecture.compression",
-                suggestedActions: ["disable_scan_compression", "select_a_qualified_compression_backend"]
-            ))
+            let externalSignals =
+                compression.scanInputSignals + compression.scanOutputSignals
+            let internalSignals = architecture.domains.flatMap { domain in
+                (0..<domain.chainCount).flatMap { index in
+                    [
+                        "\(architecture.scanInPrefix)_\(domain.id)_\(index)",
+                        "\(architecture.scanOutPrefix)_\(domain.id)_\(index)",
+                    ]
+                }
+            }
+            let reservedSignals =
+                [architecture.scanEnableSignal, architecture.testModeSignal]
+                + internalSignals
+            if Set(externalSignals).count != externalSignals.count
+                || !Set(externalSignals).isDisjoint(with: reservedSignals) {
+                issues.append(DFTRequestValidationIssue(
+                    code: "DFT_COMPRESSION_CHANNEL_CONFLICT",
+                    message: "External compression channels must be mutually distinct and must not reuse control or internal-chain signal names.",
+                    entity: "scanArchitecture.compression",
+                    suggestedActions: ["rename_compression_channels"]
+                ))
+            }
+            if !compression.scanInputSignals.isEmpty,
+               let ratio = compression.ratio {
+                let actualRatio = Double(chainCount) / Double(compression.scanInputSignals.count)
+                if abs(actualRatio - ratio) > 0.000_001 {
+                    issues.append(DFTRequestValidationIssue(
+                        code: "DFT_COMPRESSION_RATIO_MISMATCH",
+                        message: "Declared compression ratio \(ratio) does not match \(chainCount) internal chains over \(compression.scanInputSignals.count) external scan inputs.",
+                        entity: "scanArchitecture.compression.ratio",
+                        suggestedActions: ["align_compression_ratio_with_channels"]
+                    ))
+                }
+            }
         }
         return issues
     }

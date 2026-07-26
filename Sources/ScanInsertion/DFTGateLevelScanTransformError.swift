@@ -16,6 +16,8 @@ public enum DFTGateLevelScanTransformError: Error, LocalizedError, Sendable, Has
     case controlPortConflict(name: String)
     case portNetMissing(String)
     case generatedNetConflict(name: String)
+    case compressionConfigurationInvalid(String)
+    case compressionCellConflict(String)
     case transformedDesignInvalid([LogicDiagnostic])
 
     public var errorDescription: String? {
@@ -50,6 +52,10 @@ public enum DFTGateLevelScanTransformError: Error, LocalizedError, Sendable, Has
             return "Gate module port \(name) has no canonical net binding."
         case .generatedNetConflict(let name):
             return "DFT generated net \(name) collides with an incompatible existing net."
+        case .compressionConfigurationInvalid(let message):
+            return "Scan compression configuration is invalid: \(message)"
+        case .compressionCellConflict(let name):
+            return "Scan compression helper cell \(name) collides with an existing cell."
         case .transformedDesignInvalid(let diagnostics):
             let messages = diagnostics.map(\.message).joined(separator: "; ")
             return "Transformed gate design failed validation: \(messages)"

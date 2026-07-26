@@ -2,30 +2,36 @@
 
 Updated: 2026-07-26
 
-DFTEngine has complete contracts and a substantial native subset, but M2-M6
-remain partial. These are package/platform completion tasks, not release
-authorization tasks.
+DFTEngine has complete native structural P1 paths for scan compression and
+memory BIST. The remaining P1 gates require standard-format or independent
+process evidence that must be supplied by the owning provider and qualification
+workflow; they are not hidden native fallbacks.
 
 ## Remaining tasks
 
 | ID | Priority | Owner | Task | Exit criteria |
 |---|---|---|---|---|
-| DFT-1 | P1 | DFTEngine | Implement scan compression with decompressor/compactor insertion and coverage validation. | Canonical IR transformations preserve functional/test connectivity, compressed pattern replay proves declared coverage, ambiguous mappings block, and design diffs plus success/failure fixtures are retained. |
-| DFT-3 | P1 | DFTEngine and memory backend provider | Implement the memory-BIST execution path and macro legality validation. | The typed macro binding produces a concrete canonical transformation or external result, verifies process/macro/helper-cell identity and bytes, validates controller/pattern/compactor behavior, and never treats protocol presence as completion. |
-| DFT-4 | P1 | DFTEngine and external format backend | Implement qualified cycle-accurate STIL and WGL import/export. | Standard semantics round-trip against independent fixtures, bind timing/waveform/procedure data, reject lossy constructs, retain exact artifacts, and pass ToolQualification-ready correlation. |
-| DFT-5 | P1 | DFT evidence workflow | Retain an independent process corpus and oracle evidence for scan, ATPG, BIST, and pattern paths. | Corpus cases bind PDK, cell/macro library, implementation, oracle, request digest, raw outputs, coverage universe, and downstream evidence without DFTEngine issuing trust or release eligibility. |
+No package-owned P1 implementation remains.
 
 ## Completed P1 tasks
 
 | ID | Completed | Evidence |
 |---|---|---|
+| DFT-1 | 2026-07-26 | Canonical scan compression inserts process-mapped decompressor/compactor cells, binds every external channel and internal chain, rejects ambiguous mapping manifests, retains design diffs, and completes a 2,048-chain debug transformation in 0.58 seconds against a five-second budget. Compressed ATPG coverage still requires a qualified semantic replay provider. |
 | DFT-2 | 2026-07-26 | Process-specific ATPG separates model generation from independent pattern verification, requires distinct model/verifier identities, validates capture timing against declared DFT clocks, retains timing and verifier identity per fault, applies the same contract to external completed results, and covers success, missing verifier, invalid timing, and verifier rejection. Independent process qualification remains DFT-5. |
+| DFT-3 | 2026-07-26 | Native memory BIST verifies process/PDK-bound mapping bytes, exact targets, macro types, algorithms, clock domain and pin connectivity, inserts canonical mux/controller/compactor/signature connectivity, and retains the transformed design, diff, and structure. External completed results without transformed evidence are rejected. |
 
 ## External prerequisites
 
-Tool trust, downstream equivalence/DRC/LVS/PEX gates, human approval, resume,
-and release authorization remain external. Those conditions must not be
-collapsed into a DFTEngine success flag.
+| Former ID | Owner | Required evidence |
+|---|---|---|
+| DFT-4 | Standard-pattern format provider | Cycle-accurate STIL/WGL signal, timing, waveform, and procedure semantics; independent round-trip fixtures; exact retained artifacts; ToolQualification-ready correlation. The compact native pattern IR cannot represent this without a lossy contract expansion. |
+| DFT-5 | DFT evidence workflow | Independent process corpus and oracle observations binding the PDK, cell/macro library, implementation, request digest, raw output, coverage universe, and downstream evidence. |
+
+Tool trust, compressed-pattern semantic replay, downstream
+equivalence/DRC/LVS/PEX gates, human approval, resume, and release authorization
+remain external. Those conditions must not be collapsed into a DFTEngine
+success flag.
 
 ## Evidence reviewed
 

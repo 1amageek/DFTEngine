@@ -2,7 +2,7 @@
 
 ## Current state
 
-**M0 and M1 are complete. M2 has process-scoped binding plus a Liberty timing/legal-cell validator. M3 has combinational stuck-at, bounded DFF/SDFF state-transition, explicit reset/set polarity/timing/edge contracts, level-sensitive latch semantics, bounded sequential transition-fault simulation, and independently verified process-specific outcomes with clock-bound capture timing. M4 has canonical logic-BIST plus a typed memory backend protocol. M5-M6 provide reusable artifacts, oracle correlation, and request-digest-bound evidence provenance. DFTEngine emits observations only; ToolQualification owns implementation trust and the composing flow owns downstream policy, approval, resume, and release.**
+**M0 and M1 are complete. M2 has process-scoped binding, a Liberty timing/legal-cell validator, and canonical scan-compression insertion. M3 has combinational stuck-at, bounded DFF/SDFF state-transition, explicit reset/set polarity/timing/edge contracts, level-sensitive latch semantics, bounded sequential transition-fault simulation, and independently verified process-specific outcomes with clock-bound capture timing. M4 has canonical logic- and memory-BIST transformation plus a typed external memory backend protocol. M5-M6 provide reusable artifacts, oracle correlation, and request-digest-bound evidence provenance. DFTEngine emits observations only; ToolQualification owns implementation trust and the composing flow owns downstream policy, approval, resume, and release.**
 
 | Maturity gate | Status | Evidence |
 |---|---|---|
@@ -11,7 +11,7 @@
 | Canonical Foundation and domain request/result contract | Complete | Versioned request, payload and typed domain result |
 | Contract build | Complete | `swift build` |
 | Contract test | Complete | Timeout-bounded `DFTEngine-Package` Xcode test through the workspace verifier |
-| Domain implementation | M2/M3/M4 partial | Gate-level scan transformation, process-scoped cell binding, Liberty timing/legal validation, independently replayed combinational and bounded sequential ATPG including explicit reset/set and latch semantics, process-specific model injection boundary, JSON pattern IR and canonical logic-BIST transformation are validated; native memory BIST remains bounded |
+| Domain implementation | Native M2/M4 structural scope complete; M3 partial | Gate-level scan and compression transformation, process-scoped cell binding, Liberty timing/legal validation, independently replayed combinational and bounded sequential ATPG including explicit reset/set and latch semantics, process-specific model injection boundary, JSON pattern IR, and canonical logic/memory-BIST transformation are validated |
 | CLI implementation | Complete | `dft-engine capabilities` and `execute` with strict option validation and deterministic JSON output |
 | Fixture corpus | Retained | Positive scan and negative ATPG fixtures |
 | Oracle correlation | Correlation infrastructure available; process qualification not claimed | Retained expectation artifact integrity, native-result correlation and deterministic evidence digest are implemented; no independent process oracle is bundled |
@@ -26,9 +26,9 @@
 |---|---|---|---|---|
 | Fault model | Implemented | Deterministic family and universe validation | Fixture coverage | Smoke checked |
 | Scan architecture | Implemented | Deterministic chain planner | Positive fixture | Smoke checked |
-| Scan insertion | Implemented | Digest-verified canonical snapshot transformation, explicit clock/reset binding, validator pass and design diff | DFTEngine tests + CLI fixture | Unqualified helper/library mapping |
+| Scan insertion | Implemented | Digest-verified canonical snapshot transformation, explicit clock/reset binding, process-mapped compression helpers, validator pass and design diff | DFTEngine tests + CLI fixture + 2,048-chain performance regression | Unqualified helper/library mapping |
 | ATPG | Partial implementation | Declared-fault backend plus extracted combinational stuck-at, bounded DFF/SDFF scan-shift/capture, explicit reset/set and level-sensitive latch semantics, bounded sequential/combinational transition backends, and protocol-first process-specific model injection with result validation | Positive/negative gate-level tests, including undeclared-family, missing-model and injected-model paths | Smoke checked; retained oracle correlation is available but no process corpus is bundled |
-| BIST | Partial implementation | Canonical logic gate transformation with test-mode mux/capture/compactor; memory macro path requires an external backend conforming to the published protocol while flow policy supplies qualification | Positive transformed-snapshot and external-contract tests | Smoke checked; helper cells and macro legality unqualified |
+| BIST | Implemented for declared structural contracts | Canonical logic and memory gate transformations with test-mode mux/controller/capture/compactor/signature networks; external backend remains injectable | Positive transformed-snapshot, macro legality, mapping identity, and external-contract tests | Smoke checked; helper cells and macro legality unqualified |
 | Pattern formats | M5 partial | Native JSON pattern IR; STIL and WGL are rejected with typed unsupported-format errors until a qualified cycle-accurate backend is supplied; timed external process runner | JSON round-trip, typed standard-format rejection and malformed-input tests | Smoke checked |
 | Coverage evidence | Implemented | Universe digest, outcomes and assumptions | ATPG tests and oracle correlation tests | No process qualification |
 
@@ -81,7 +81,10 @@ equivalence/DRC/LVS/PEX evidence, and final approval.
 ## Current blockers
 
 - The native gate-level ATPG covers exhaustive binary combinational simulation, bounded DFF/SDFF clock-edge/state semantics including SI/SE scan shift and functional capture, explicit reset/set polarity/timing/edge contracts, qualified level-sensitive latch semantics and bounded combinational/sequential transition semantics. Process-specific faults require an injected `DFTProcessFaultModeling` implementation, a distinct `DFTProcessFaultPatternVerifying` implementation, and capture timing validated against a declared DFT clock. Unknown primitives without an injected model and independent process qualification remain blocked.
-- Native logic BIST requires explicit target pin bindings and transforms a canonical gate snapshot; controller, mux, capture and compactor helper cells still require process qualification.
+- Native logic and memory BIST require explicit target pin bindings and
+  process/PDK-bound mapping bytes. Controller, mux, capture, compactor,
+  signature, and memory macro legality still require independent process
+  qualification.
 - Native JSON pattern IR, typed STIL/WGL rejection, a timeout/tree-cleaning external runner, atomic external result/stdout/stderr artifacts, and retained-oracle correlation are available; qualified standard-pattern translation, independent process evidence, and tool promotion remain integrating-flow responsibilities.
 - `DFTOracleCorrelationEngine` can verify normalized retained oracle expectation artifacts, compare native envelopes and emit a deterministic correlation digest; no real process corpus is bundled in this package.
 - The current LogicIR does not encode process-qualified scan-capture/reset semantics; M2 timing/legal bindings and explicit architecture contracts must block ambiguous designs.
@@ -89,6 +92,7 @@ equivalence/DRC/LVS/PEX evidence, and final approval.
 - Scan-out is bound directly from the final scan-cell output to a canonical top-level port; no synthetic `DFT_SCAN_OUT` helper is emitted.
 - Full Xcircuite release readiness remains external to this package; real accepted downstream evidence is still required.
 - An external tool runner is injected through `DFTExternalToolRunning`; a concrete vendor command must be selected and qualified by the integrating project.
-- Process-specific fault semantics and memory macro legality require PDK-scoped evidence outside this package.
+- Process-specific fault semantics and memory macro qualification require
+  PDK-scoped evidence outside this package.
 
 This file must be updated by implementation agents whenever a maturity gate changes. A source file or type name alone is never evidence of implementation or qualification.

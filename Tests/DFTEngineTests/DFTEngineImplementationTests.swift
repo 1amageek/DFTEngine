@@ -73,6 +73,141 @@ struct DFTEngineImplementationTests {
         })
     }
 
+    @Test("scan compression inserts explicit decompressor and compactor connectivity")
+    func scanCompressionInsertion() async throws {
+        let store = InMemoryDFTArtifactStore()
+        let sourceSnapshot = makeGateSnapshot(sequentialCellCount: 4)
+        let sourceDigest = try LogicDesignSnapshotCodec.digest(sourceSnapshot)
+        let libraryManifest = makeCellLibraryManifest(
+            scanCompressionMapping: makeScanCompressionCellMapping(chainCount: 4)
+        )
+        let libraryReference = try makeCellLibraryReference(manifest: libraryManifest)
+        let architecture = DFTScanArchitecture(
+            name: "compressed-scan",
+            clocks: [DFTScanClock(
+                id: "clk",
+                signalName: "scan_clk",
+                periodNanoseconds: 10
+            )],
+            domains: [DFTScanDomain(
+                id: "core",
+                clockID: "clk",
+                chainCount: 4,
+                estimatedElementCount: 4
+            )],
+            compression: DFTCompressionConfiguration(
+                enabled: true,
+                ratio: 4,
+                scanInputSignals: ["compressed_scan_in"],
+                scanOutputSignals: ["compressed_scan_out"]
+            ),
+            scanEnableSignal: "scan_en",
+            testModeSignal: "test_mode"
+        )
+        let request = makeRequest(
+            operation: .scanInsertion,
+            designDigest: sourceDigest,
+            cellLibrary: libraryReference,
+            scanArchitecture: architecture,
+            insertionPolicy: DFTScanInsertionPolicy(scanCellName: "SDFF")
+        )
+
+        let result = try await DeterministicScanInsertionEngine(
+            artifactStore: store,
+            designLoader: InMemoryDFTDesignLoader(snapshot: sourceSnapshot),
+            cellLibraryLoader: InMemoryDFTCellLibraryLoader(manifest: libraryManifest),
+            timingLibraryLoader: InMemoryDFTTimingLibraryLoader(
+                library: try makeTimingLibrary(for: libraryManifest)
+            ),
+            constraintLoader: FixtureConstraintLoader()
+        ).execute(request)
+
+        #expect(result.status == .completed)
+        #expect(result.payload.designDiff?.changes.count == 6)
+        let transformedReference = try #require(result.payload.transformedDesign?.artifact)
+        let transformedData = try #require(await store.data(for: transformedReference.path))
+        let transformed = try LogicDesignSnapshotCodec.decode(transformedData)
+        let module = try #require(transformed.gate?.modules.first)
+        let decompressor = try #require(module.cells.first {
+            $0.type == "SCAN_DECOMPRESSOR"
+        })
+        let compactor = try #require(module.cells.first {
+            $0.type == "SCAN_COMPACTOR"
+        })
+        #expect(decompressor.pins.filter { $0.direction == .input }.count == 1)
+        #expect(decompressor.pins.filter { $0.direction == .output }.count == 4)
+        #expect(compactor.pins.filter { $0.direction == .input }.count == 4)
+        #expect(compactor.pins.filter { $0.direction == .output }.count == 1)
+        #expect(module.ports.contains {
+            $0.name == "compressed_scan_in" && $0.direction == .input
+        })
+        #expect(module.ports.contains {
+            $0.name == "compressed_scan_out" && $0.direction == .output
+        })
+        #expect(!module.ports.contains { $0.name.hasPrefix("scan_in_core_") })
+        #expect(!module.ports.contains { $0.name.hasPrefix("scan_out_core_") })
+        for pin in decompressor.pins + compactor.pins {
+            let net = try #require(module.nets.first { $0.id == pin.netID })
+            switch pin.direction {
+            case .input:
+                #expect(net.loadPinIDs.contains(pin.id))
+            case .output:
+                #expect(net.driverPinIDs.contains(pin.id))
+            case .inOut:
+                Issue.record("Compression helpers must not use bidirectional pins.")
+            }
+        }
+    }
+
+    @Test(
+        "compressed scan transformation stays within the large-chain latency budget",
+        .timeLimit(.minutes(1))
+    )
+    func scanCompressionPerformanceBudget() throws {
+        let chainCount = 2_048
+        let source = makeGateSnapshot(sequentialCellCount: chainCount)
+        let architecture = DFTScanArchitecture(
+            name: "large-compressed-scan",
+            clocks: [DFTScanClock(
+                id: "clk",
+                signalName: "scan_clk",
+                periodNanoseconds: 10
+            )],
+            domains: [DFTScanDomain(
+                id: "core",
+                clockID: "clk",
+                chainCount: chainCount,
+                estimatedElementCount: chainCount
+            )],
+            compression: DFTCompressionConfiguration(
+                enabled: true,
+                ratio: Double(chainCount),
+                scanInputSignals: ["compressed_scan_in"],
+                scanOutputSignals: ["compressed_scan_out"]
+            ),
+            scanEnableSignal: "scan_en",
+            testModeSignal: "test_mode"
+        )
+        let plan = try DeterministicScanPlanner().plan(architecture)
+        let clock = ContinuousClock()
+        let startedAt = clock.now
+
+        let result = try DFTGateLevelScanTransformer().transform(
+            snapshot: source,
+            architecture: architecture,
+            plan: plan,
+            policy: DFTScanInsertionPolicy(scanCellName: "SDFF"),
+            cellLibrary: makeCellLibraryManifest(
+                scanCompressionMapping: makeScanCompressionCellMapping(chainCount: chainCount)
+            )
+        )
+
+        let elapsed = startedAt.duration(to: clock.now)
+        #expect(result.transformedCellIDs.count == chainCount)
+        #expect(result.helperCellIDs.count == 2)
+        #expect(elapsed < .seconds(5))
+    }
+
     @Test("scan insertion blocks without a canonical design loader")
     func scanInsertionRequiresCanonicalDesign() async throws {
         let request = makeRequest(
@@ -225,6 +360,18 @@ struct DFTEngineImplementationTests {
         #expect(result.status == .blocked)
         #expect(result.dftDiagnostics.contains { $0.code == "DFT_CELL_LIBRARY_LOAD_FAILED" })
         #expect(result.dftDiagnostics.contains { $0.message.contains("pdkDigest") })
+    }
+
+    @Test("cell-library validation rejects ambiguous scan-compression pin mappings")
+    func scanCompressionMappingMustBeUnambiguous() {
+        var manifest = makeCellLibraryManifest(
+            scanCompressionMapping: makeScanCompressionCellMapping(chainCount: 2)
+        )
+        manifest.scanCompressionMapping?.decompressorOutputPinNames = ["O", "O"]
+
+        #expect(throws: DFTCellLibraryError.self) {
+            try DFTCellLibraryManifestCodec.validate(manifest)
+        }
     }
 
     @Test("ATPG reports declared coverage and is deterministic")
@@ -1071,8 +1218,8 @@ struct DFTEngineImplementationTests {
         })
     }
 
-    @Test("memory BIST requires a complete external engine boundary")
-    func memoryBISTRequiresExternalEngineBoundary() async throws {
+    @Test("memory BIST transforms explicitly bound macros and retains its structure")
+    func memoryBISTTransformsBoundMacros() async throws {
         let base = DFTBISTConfiguration(
             name: "mbist",
             kind: .memory,
@@ -1100,15 +1247,66 @@ struct DFTEngineImplementationTests {
             dataOutputPinNames: ["DO0"],
             algorithmID: "march-c"
         )]
-        let qualifiedBoundary = try await DeterministicBISTEngine(
+        let mappingMissing = try await DeterministicBISTEngine(
             constraintLoader: FixtureConstraintLoader()
         ).execute(
             makeRequest(operation: .bist, bistConfiguration: configured)
         )
-        #expect(qualifiedBoundary.status == .blocked)
-        #expect(qualifiedBoundary.dftDiagnostics.contains { $0.code == "DFT_BIST_MEMORY_MACRO_UNSUPPORTED" })
+        #expect(mappingMissing.status == .blocked)
+        #expect(mappingMissing.dftDiagnostics.contains {
+            $0.code == "DFT_BIST_MEMORY_CELL_MAPPING_MISSING"
+        })
 
-        let memoryRequest = makeRequest(operation: .bist, bistConfiguration: configured)
+        let mapping = DFTMemoryBISTCellMapping(
+            artifact: testArtifact(
+                artifactID: "memory-bist-cell-mapping",
+                path: "memory-bist-cell-mapping.json",
+                kind: .technology,
+                format: .json,
+                sha256: String(repeating: "7", count: 64),
+                byteCount: 1,
+                role: .input
+            ),
+            processID: "test-process",
+            pdkDigest: String(repeating: "e", count: 64),
+            controllerCellType: "MBIST_CONTROLLER",
+            inputMuxCellType: "MBIST_INPUT_MUX",
+            responseCompactorCellType: "MBIST_COMPACTOR",
+            signatureRegisterCellType: "MBIST_SIGNATURE",
+            supportedMacroTypes: ["SRAM"],
+            supportedAlgorithmIDs: ["march-c"]
+        )
+        configured.memoryCellMapping = mapping
+        let sourceSnapshot = makeMemorySnapshot()
+        let request = makeRequest(
+            operation: .bist,
+            designDigest: try LogicDesignSnapshotCodec.digest(sourceSnapshot),
+            bistConfiguration: configured
+        )
+        let store = InMemoryDFTArtifactStore()
+        let completed = try await DeterministicBISTEngine(
+            artifactStore: store,
+            designLoader: InMemoryDFTDesignLoader(snapshot: sourceSnapshot),
+            constraintLoader: FixtureConstraintLoader(),
+            memoryBISTCellMappingLoader: FixtureMemoryBISTCellMappingLoader()
+        ).execute(request)
+
+        #expect(completed.status == .completed)
+        #expect(completed.payload.bistStructure?.memoryBindings == configured.memoryBindings)
+        #expect(completed.payload.bistStructure?.memoryCellMapping == mapping)
+        let transformedReference = try #require(completed.payload.transformedDesign?.artifact)
+        let transformedData = try #require(await store.data(for: transformedReference.path))
+        let transformed = try LogicDesignSnapshotCodec.decode(transformedData)
+        let module = try #require(transformed.gate?.modules.first)
+        #expect(module.cells.contains { $0.type == "MBIST_CONTROLLER" })
+        #expect(module.cells.filter { $0.type == "MBIST_INPUT_MUX" }.count == 4)
+        #expect(module.cells.contains { $0.type == "MBIST_COMPACTOR" })
+        #expect(module.cells.contains { $0.type == "MBIST_SIGNATURE" })
+        let macro = try #require(module.cells.first { $0.instanceName == "u_mem" })
+        #expect(macro.pins.first { $0.name == "CE" }?.netID?.contains("mbist_") == true)
+        #expect(macro.pins.first { $0.name == "WE" }?.netID?.contains("mbist_") == true)
+
+        let memoryRequest = request
         let externalResponse = DFTResult(
             schemaVersion: DFTRequest.currentSchemaVersion,
             runID: "run-bist",
@@ -1153,14 +1351,12 @@ struct DFTEngineImplementationTests {
         #expect(decoded == request)
     }
 
-    @Test("unsupported compression and standard exporters fail closed")
+    @Test("ambiguous compression and standard exporters fail closed")
     func unsupportedCapabilitiesFailClosed() {
         var compressedArchitecture = scanArchitecture()
         compressedArchitecture.compression = DFTCompressionConfiguration(
             enabled: true,
-            ratio: 4,
-            decompressorCell: "DECOMP",
-            compactorCell: "COMPACT"
+            ratio: 4
         )
         let scanRequest = makeRequest(
             operation: .scanInsertion,
@@ -1169,7 +1365,23 @@ struct DFTEngineImplementationTests {
             insertionPolicy: DFTScanInsertionPolicy(scanCellName: "SDFF")
         )
         #expect(scanRequest.validationIssues(for: .scanInsertion).contains {
-            $0.code == "DFT_SCAN_COMPRESSION_UNSUPPORTED"
+            $0.code == "DFT_COMPRESSION_CHANNELS_INVALID"
+        })
+
+        compressedArchitecture.compression = DFTCompressionConfiguration(
+            enabled: true,
+            ratio: 4,
+            scanInputSignals: ["scan_en"],
+            scanOutputSignals: ["compressed_scan_out"]
+        )
+        let conflictingChannelRequest = makeRequest(
+            operation: .scanInsertion,
+            cellLibrary: nil,
+            scanArchitecture: compressedArchitecture,
+            insertionPolicy: DFTScanInsertionPolicy(scanCellName: "SDFF")
+        )
+        #expect(conflictingChannelRequest.validationIssues(for: .scanInsertion).contains {
+            $0.code == "DFT_COMPRESSION_CHANNEL_CONFLICT"
         })
 
         let atpgRequest = makeRequest(
@@ -1629,6 +1841,52 @@ struct DFTEngineImplementationTests {
         )
     }
 
+    private func makeMemorySnapshot() -> LogicDesignSnapshot {
+        let pins = [
+            GatePin(id: "mem-clk", name: "CLK", direction: .input, netID: "clk"),
+            GatePin(id: "mem-ce", name: "CE", direction: .input, netID: "ce"),
+            GatePin(id: "mem-we", name: "WE", direction: .input, netID: "we"),
+            GatePin(id: "mem-a0", name: "A0", direction: .input, netID: "a0"),
+            GatePin(id: "mem-di0", name: "DI0", direction: .input, netID: "di0"),
+            GatePin(id: "mem-do0", name: "DO0", direction: .output, netID: "do0"),
+        ]
+        let ports = [
+            RTLPort(id: "port-clk", name: "scan_clk", direction: .input),
+            RTLPort(id: "port-ce", name: "ce", direction: .input),
+            RTLPort(id: "port-we", name: "we", direction: .input),
+            RTLPort(id: "port-a0", name: "a0", direction: .input),
+            RTLPort(id: "port-di0", name: "di0", direction: .input),
+            RTLPort(id: "port-do0", name: "do0", direction: .output),
+        ]
+        let nets = [
+            GateNet(id: "clk", name: "scan_clk", loadPinIDs: ["mem-clk"]),
+            GateNet(id: "ce", name: "ce", loadPinIDs: ["mem-ce"]),
+            GateNet(id: "we", name: "we", loadPinIDs: ["mem-we"]),
+            GateNet(id: "a0", name: "a0", loadPinIDs: ["mem-a0"]),
+            GateNet(id: "di0", name: "di0", loadPinIDs: ["mem-di0"]),
+            GateNet(id: "do0", name: "do0", driverPinIDs: ["mem-do0"]),
+        ]
+        let module = GateModule(
+            id: "module-top",
+            name: "top",
+            ports: ports,
+            portBindings: zip(ports, nets).map {
+                GatePortBinding(portID: $0.0.id, netID: $0.1.id)
+            },
+            cells: [GateCell(
+                id: "cell-memory",
+                type: "SRAM",
+                instanceName: "u_mem",
+                pins: pins
+            )],
+            nets: nets
+        )
+        return LogicDesignSnapshot(
+            rtl: RTLDesign(topModuleName: "top"),
+            gate: GateDesign(topModuleName: "top", modules: [module])
+        )
+    }
+
     private func makeControlledSequentialSnapshot(cellType: String = "DFFRS") -> LogicDesignSnapshot {
         let module = GateModule(
             id: "module-top",
@@ -1795,7 +2053,9 @@ struct DFTEngineImplementationTests {
         )
     }
 
-    private func makeCellLibraryManifest() -> DFTCellLibraryManifest {
+    private func makeCellLibraryManifest(
+        scanCompressionMapping: DFTScanCompressionCellMapping? = nil
+    ) -> DFTCellLibraryManifest {
         DFTCellLibraryManifest(
             processID: "test-process",
             version: "1",
@@ -1814,11 +2074,25 @@ struct DFTEngineImplementationTests {
                     legalReplacementGroup: "scan-flops"
                 )
             ],
+            scanCompressionMapping: scanCompressionMapping,
             evidenceProvenance: DFTEvidenceProvenance(
                 status: .corpusObserved,
                 corpusRevision: "fixture-m2",
                 notes: ["fixture binding only; no foundry trust decision"]
             )
+        )
+    }
+
+    private func makeScanCompressionCellMapping(
+        chainCount: Int
+    ) -> DFTScanCompressionCellMapping {
+        DFTScanCompressionCellMapping(
+            decompressorCellType: "SCAN_DECOMPRESSOR",
+            compactorCellType: "SCAN_COMPACTOR",
+            decompressorInputPinNames: ["I"],
+            decompressorOutputPinNames: (0..<chainCount).map { "O\($0)" },
+            compactorInputPinNames: (0..<chainCount).map { "I\($0)" },
+            compactorOutputPinNames: ["O"]
         )
     }
 
@@ -2033,6 +2307,14 @@ private struct FixedLogicBISTCellMappingLoader: DFTLogicBISTCellMappingLoading {
     ) throws -> DFTLogicBISTCellMappingManifest {
         _ = mapping
         return manifest
+    }
+}
+
+private struct FixtureMemoryBISTCellMappingLoader: DFTMemoryBISTCellMappingLoading {
+    func load(
+        _ mapping: DFTMemoryBISTCellMapping
+    ) throws -> DFTMemoryBISTCellMappingManifest {
+        mapping.manifest
     }
 }
 

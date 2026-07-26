@@ -124,33 +124,50 @@ public struct DFTGateLevelScanTransformer: Sendable {
             indices.sorted { module.cells[$0].instanceName < module.cells[$1].instanceName }
         }
         var transformedCellIDs: [String] = []
-        let helperCellIDs: [String] = []
+        var helperCellIDs: [String] = []
+        var chainOffsetsByDomain: [String: Int] = [:]
+        var chainInputNetIDs: [String] = []
+        var chainOutputNetIDs: [String] = []
+        let compressionEnabled = architecture.compression?.enabled == true
+        var netIndexByID = Dictionary(
+            uniqueKeysWithValues: module.nets.indices.map { (module.nets[$0].id, $0) }
+        )
+        var netIDByName = Dictionary(
+            uniqueKeysWithValues: module.nets.map { ($0.name, $0.id) }
+        )
 
         for chain in plan.chains {
             let count = chain.estimatedElementCount
             let domainIndices = sortedIndicesByDomain[chain.domainID] ?? []
-            let offset = plan.chains
-                .filter { $0.domainID == chain.domainID && $0.index < chain.index }
-                .reduce(0) { $0 + $1.estimatedElementCount }
+            let offset = chainOffsetsByDomain[chain.domainID, default: 0]
+            chainOffsetsByDomain[chain.domainID] = offset + count
             let chainIndices = Array(domainIndices[offset ..< offset + count])
             let scanInNet = try ensureNet(
                 name: chain.scanInSignal,
                 module: &module,
-                path: "\(module.name).\(chain.scanInSignal)"
+                path: "\(module.name).\(chain.scanInSignal)",
+                netIndexByID: &netIndexByID,
+                netIDByName: &netIDByName
             )
-            try ensurePort(name: chain.scanInSignal, direction: .input, module: &module)
-            try ensurePort(name: chain.scanOutSignal, direction: .output, module: &module)
-            try bindPort(named: chain.scanInSignal, to: scanInNet, module: &module)
+            if !compressionEnabled {
+                try ensurePort(name: chain.scanInSignal, direction: .input, module: &module)
+                try ensurePort(name: chain.scanOutSignal, direction: .output, module: &module)
+                try bindPort(named: chain.scanInSignal, to: scanInNet, module: &module)
+            }
 
             let scanEnableNet = try ensureNet(
                 name: architecture.scanEnableSignal,
                 module: &module,
-                path: "\(module.name).\(architecture.scanEnableSignal)"
+                path: "\(module.name).\(architecture.scanEnableSignal)",
+                netIndexByID: &netIndexByID,
+                netIDByName: &netIDByName
             )
             let testModeNet = try ensureNet(
                 name: architecture.testModeSignal,
                 module: &module,
-                path: "\(module.name).\(architecture.testModeSignal)"
+                path: "\(module.name).\(architecture.testModeSignal)",
+                netIndexByID: &netIndexByID,
+                netIDByName: &netIDByName
             )
             try bindPort(named: architecture.scanEnableSignal, to: scanEnableNet, module: &module)
             try bindPort(named: architecture.testModeSignal, to: testModeNet, module: &module)
@@ -203,17 +220,46 @@ public struct DFTGateLevelScanTransformer: Sendable {
                 } else {
                     testModePinID = nil
                 }
-                appendLoad(scanInPinID, to: previousOutputNetID, module: &module)
-                appendLoad(scanEnablePinID, to: scanEnableNet, module: &module)
+                appendLoad(
+                    scanInPinID,
+                    to: previousOutputNetID,
+                    module: &module,
+                    netIndexByID: netIndexByID
+                )
+                appendLoad(
+                    scanEnablePinID,
+                    to: scanEnableNet,
+                    module: &module,
+                    netIndexByID: netIndexByID
+                )
                 if let testModePinID {
-                    appendLoad(testModePinID, to: testModeNet, module: &module)
+                    appendLoad(
+                        testModePinID,
+                        to: testModeNet,
+                        module: &module,
+                        netIndexByID: netIndexByID
+                    )
                 }
                 module.cells[cellIndex] = cell
                 transformedCellIDs.append(cell.id)
                 previousOutputNetID = outputPin.netID ?? previousOutputNetID
             }
 
-            try bindPort(named: chain.scanOutSignal, to: previousOutputNetID, module: &module)
+            chainInputNetIDs.append(scanInNet)
+            chainOutputNetIDs.append(previousOutputNetID)
+            if !compressionEnabled {
+                try bindPort(named: chain.scanOutSignal, to: previousOutputNetID, module: &module)
+            }
+        }
+
+        if let compression = architecture.compression, compression.enabled {
+            helperCellIDs = try DFTGateLevelScanCompressionTransformer().transform(
+                module: &module,
+                configuration: compression,
+                mapping: cellLibrary.scanCompressionMapping,
+                chainInputNetIDs: chainInputNetIDs,
+                chainOutputNetIDs: chainOutputNetIDs
+            )
         }
 
         gate.modules[topIndex] = module
@@ -236,7 +282,9 @@ public struct DFTGateLevelScanTransformer: Sendable {
             assumptions: [
                 "sequential cell domain assignment follows explicit clock/reset connectivity in the canonical gate IR",
                 "cell type recognition remains limited to the declared structural DFF/FF/LATCH naming contract",
-                "top-level scan ports use canonical port-to-net bindings without synthetic helper cells",
+                compressionEnabled
+                    ? "top-level compressed scan channels are mapped explicitly through decompressor and compactor helper cells"
+                    : "top-level scan ports use canonical port-to-net bindings without synthetic helper cells",
                 "functional ports are preserved"
             ]
         )
@@ -341,21 +389,30 @@ public struct DFTGateLevelScanTransformer: Sendable {
     private func ensureNet(
         name: String,
         module: inout GateModule,
-        path: String
+        path: String,
+        netIndexByID: inout [String: Int],
+        netIDByName: inout [String: String]
     ) throws -> String {
-        if let existing = module.nets.first(where: { $0.name == name }) {
-            return existing.id
+        if let existingID = netIDByName[name] {
+            return existingID
         }
         let id = StableLogicID.make(kind: "dft-net", path: path, name: name)
-        guard !module.nets.contains(where: { $0.id == id }) else {
+        guard netIndexByID[id] == nil else {
             throw DFTGateLevelScanTransformError.generatedNetConflict(name: name)
         }
         module.nets.append(GateNet(id: id, name: name))
+        netIndexByID[id] = module.nets.index(before: module.nets.endIndex)
+        netIDByName[name] = id
         return id
     }
 
-    private func appendLoad(_ pinID: String, to netID: String, module: inout GateModule) {
-        guard let index = module.nets.firstIndex(where: { $0.id == netID }) else { return }
+    private func appendLoad(
+        _ pinID: String,
+        to netID: String,
+        module: inout GateModule,
+        netIndexByID: [String: Int]
+    ) {
+        guard let index = netIndexByID[netID] else { return }
         if !module.nets[index].loadPinIDs.contains(pinID) {
             module.nets[index].loadPinIDs.append(pinID)
         }

@@ -4,9 +4,22 @@ Scan, ATPG and built-in self-test transformation contracts.
 
 ## Status
 
-This repository contains typed DFT contracts, canonical gate-level scan transformation, process-scoped scan-cell and Liberty timing validation, bounded gate-level ATPG, independently verified process-specific fault-model injection with capture-timing evidence, process-bound logic-BIST transformation, a typed memory-macro execution boundary, external-tool execution, retained oracle correlation, immutable Foundation artifact stores, and a headless JSON CLI.
+This repository contains typed DFT contracts, canonical gate-level scan and
+scan-compression transformation, process-scoped scan-cell and Liberty timing
+validation, bounded gate-level ATPG, independently verified process-specific
+fault-model injection with capture-timing evidence, process-bound logic- and
+memory-BIST transformation, external-tool execution, retained oracle
+correlation, immutable Foundation artifact stores, and a headless JSON CLI.
 
-Native output is JSON only. `DeterministicTestPatternCodec` rejects STIL and WGL with a typed unsupported-format error because the native backend does not implement their cycle-accurate standard semantics; native requests for those formats are also blocked during request validation. Scan compression is blocked until decompressor/compactor insertion and coverage validation exist. Production qualification remains gated by independently generated PDK, macro, oracle, equivalence, DRC, LVS, PEX and human-review evidence.
+Native pattern output is JSON only. `DeterministicTestPatternCodec` rejects
+STIL and WGL with a typed unsupported-format error because the native pattern
+IR does not represent their cycle-accurate timing, waveform, procedure, and
+signal semantics; native requests for those formats are blocked during request
+validation. The scan transformer inserts process-mapped decompressor and
+compactor cells with explicit external-channel and internal-chain
+connectivity. Production qualification remains gated by independently
+generated PDK, macro, oracle, equivalence, DRC, LVS, PEX and human-review
+evidence.
 
 The CLI and Xcircuite composition load every digest-bound, mode-specific SDC
 artifact and verify declared DFT clocks plus asserted test-mode/scan-enable
@@ -43,9 +56,9 @@ The native implementations are:
 
 | Backend | Output | Explicit limitation |
 |---|---|---|
-| `DeterministicScanInsertionEngine` | digest-verified gate transformation, canonical port/net bindings, Liberty-validated replacement cells, scan plan and design diff | Compression and functional equivalence remain downstream gates |
+| `DeterministicScanInsertionEngine` | digest-verified gate transformation, canonical port/net bindings, Liberty-validated replacement cells, process-mapped compression helpers, scan plan and design diff | Functional equivalence and process qualification remain downstream gates |
 | `DeterministicATPGEngine` | simulated declared/extracted stuck-at and transition ATPG with explicit sequential contracts; injected process-specific models with a distinct pattern verifier and clock-bound capture timing | Independent process corpora and ToolQualification evidence remain external gates |
-| `DeterministicBISTEngine` | process-bound logic-BIST transformation, explicit PRPG/MISR/seed/signature parameters, structure and design diff | Native memory BIST remains blocked pending a qualified external backend |
+| `DeterministicBISTEngine` | process-bound logic- and memory-BIST transformations, explicit helper/macro mapping, structure and design diff | Macro/helper-cell process qualification remains an external gate |
 | `DFTResult` | Domain result with direct `ArtifactProducing`, `EvidenceProviding`, and `DiagnosticReporting` conformance | Retains immutable artifacts, provenance, and typed diagnostics without projection |
 | `DefaultDFTEngine` | Direct `DFTEngineExecuting` implementation | Returns the domain-owned `DFTResult` |
 
@@ -106,6 +119,24 @@ top-level port/net identity, and checks the exact generated port, pin, mux,
 capture, compactor, control, clock, and signature connectivity. A missing
 loader or mismatch blocks execution.
 
+Memory BIST uses a separate process- and PDK-bound mapping contract for the
+controller, input mux, response compactor, signature register, supported macro
+types, and supported algorithms. `DFTGateLevelMemoryBISTTransformer` verifies
+that target instances and macro bindings match exactly, checks macro pin
+directions and connectivity, rejects cross-clock-domain groups, inserts the
+test-mode mux/control/compaction network, and persists the transformed
+canonical snapshot, design diff, and BIST structure. Mapping bytes are loaded
+and digest-checked independently of the inline request contract. External
+memory backends remain available, but completed results without transformed
+evidence are rejected.
+
+Scan compression keeps architecture and process data separate.
+`DFTCompressionConfiguration` owns only the compression ratio and external
+channel names. `DFTScanCompressionCellMapping`, stored in the process-scoped
+cell-library manifest, owns cell and pin names. The transformer requires exact
+coverage of every external channel and internal chain and rejects missing,
+duplicate, or incomplete mappings.
+
 Multi-artifact output uses `storeBatch`. The filesystem implementation stages a
 complete immutable batch and publishes it with one directory rename; the
 in-memory actor validates the whole batch before mutating storage. Artifact paths
@@ -142,8 +173,11 @@ timeout 240 xcodebuild test -scheme DFTEngine-Package -destination 'platform=mac
 ```
 
 The contract suite covers positive transformations, blocked prerequisites,
-internal pattern-codec round trips, external-tool identity and exit checks, immutable artifact stores,
-Foundation evidence identity, oracle correlation and raw memory-BIST engine validation.
+internal pattern-codec round trips, external-tool identity and exit checks,
+immutable artifact stores, Foundation evidence identity, oracle correlation,
+native memory-BIST transformation, and scan-compression connectivity. A
+2,048-chain regression also enforces a five-second debug-test budget; the
+2026-07-26 arm64 Xcode run completed that transformation in 0.58 seconds.
 
 See `DESIGN.md`, `INTERFACES.md` and `IMPLEMENTATION_PLAN.md` before implementing a backend.
 
