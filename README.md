@@ -21,6 +21,11 @@ connectivity. Production qualification remains gated by independently
 generated PDK, macro, oracle, equivalence, DRC, LVS, PEX and human-review
 evidence.
 
+The accepted production-provider boundary is recorded in
+[`docs/adr/0001-production-dft-provider.md`](docs/adr/0001-production-dft-provider.md).
+It keeps the compact ATPG result separate from the planned rich STIL exchange
+model and independent retained-artifact replay.
+
 The CLI and Xcircuite composition load every digest-bound, mode-specific SDC
 artifact and verify declared DFT clocks plus asserted test-mode/scan-enable
 case analysis before execution. Missing loaders, missing modes, duplicate

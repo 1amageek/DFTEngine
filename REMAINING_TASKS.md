@@ -25,7 +25,7 @@ No package-owned P1 implementation remains.
 
 | Former ID | Owner | Required evidence |
 |---|---|---|
-| DFT-4 | Standard-pattern format provider | Cycle-accurate STIL/WGL signal, timing, waveform, and procedure semantics; independent round-trip fixtures; exact retained artifacts; ToolQualification-ready correlation. The compact native pattern IR cannot represent this without a lossy contract expansion. |
+| DFT-4 | Standard-pattern format provider | Implement the accepted `docs/adr/0001-production-dft-provider.md` boundary: a separate rich STIL exchange model, supported-profile codec, real OpenROAD scan insertion, Yosys functional-mode equivalence, Icarus retained-artifact replay, independent round-trip fixtures, exact retained artifacts, and ToolQualification-ready correlation. The compact native pattern IR remains unchanged. |
 | DFT-5 | DFT evidence workflow | Independent process corpus and oracle observations binding the PDK, cell/macro library, implementation, request digest, raw output, coverage universe, and downstream evidence. |
 
 Tool trust, compressed-pattern semantic replay, downstream

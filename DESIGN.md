@@ -53,6 +53,14 @@ connectivity. Standard-pattern formatting remains a format-provider
 responsibility because the current compact pattern IR does not carry STIL/WGL
 timing and procedure semantics.
 
+The accepted production provider keeps that responsibility in a separate
+`DFTPatternExchange` target. It converts compact ATPG results only when explicit
+scan and capture-timing contracts provide every required semantic, retains STIL
+bytes, and sends those bytes to an independent Icarus replay path. OpenROAD scan
+insertion, Yosys functional-mode equivalence, replay observations, and
+ToolQualification remain separate evidence producers. See
+`docs/adr/0001-production-dft-provider.md`.
+
 ## Trust model
 
 Kernel availability, corpus validation, oracle correlation, process-scoped qualification and release approval are distinct states. The package reports capability and evidence; Xcircuite and ToolQualification apply flow policy.
