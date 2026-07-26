@@ -11,6 +11,7 @@ public struct DFTRealizedScanATPGRequestConfiguration:
     public var runID: String
     public var constraints: DFTConstraintReference
     public var pdk: PDKReference
+    public var cellLibrary: DFTCellLibraryReference
     public var clocks: [DFTScanClock]
     public var domainClockIDs: [String: String]
     public var atpg: DFTATPGConfiguration
@@ -19,6 +20,7 @@ public struct DFTRealizedScanATPGRequestConfiguration:
         runID: String,
         constraints: DFTConstraintReference,
         pdk: PDKReference,
+        cellLibrary: DFTCellLibraryReference,
         clocks: [DFTScanClock],
         domainClockIDs: [String: String],
         atpg: DFTATPGConfiguration
@@ -27,6 +29,7 @@ public struct DFTRealizedScanATPGRequestConfiguration:
         self.runID = runID
         self.constraints = constraints
         self.pdk = pdk
+        self.cellLibrary = cellLibrary
         self.clocks = clocks
         self.domainClockIDs = domainClockIDs
         self.atpg = atpg
@@ -37,6 +40,7 @@ public struct DFTRealizedScanATPGRequestConfiguration:
         case runID
         case constraints
         case pdk
+        case cellLibrary
         case clocks
         case domainClockIDs
         case atpg
@@ -59,6 +63,10 @@ public struct DFTRealizedScanATPGRequestConfiguration:
             forKey: .constraints
         )
         pdk = try container.decode(PDKReference.self, forKey: .pdk)
+        cellLibrary = try container.decode(
+            DFTCellLibraryReference.self,
+            forKey: .cellLibrary
+        )
         clocks = try container.decode([DFTScanClock].self, forKey: .clocks)
         domainClockIDs = try container.decode(
             [String: String].self,

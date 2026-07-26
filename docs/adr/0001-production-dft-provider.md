@@ -77,6 +77,12 @@ Every fault observation is correlated to the producer result by stable fault
 identity. The replay provider does not consume the producer's in-memory
 coverage result.
 
+The realized-scan ATPG request retains the same process-scoped cell-library
+manifest consumed by scan import and a separate timing-library artifact. The
+request builder validates the exact imported manifest identity and propagates
+both references to ATPG; it does not reconstruct sequential-cell semantics
+from transformed cell names.
+
 ## Responsibility Boundary
 
 ```text

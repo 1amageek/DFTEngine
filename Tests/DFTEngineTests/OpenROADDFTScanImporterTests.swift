@@ -289,6 +289,25 @@ struct OpenROADDFTScanImporterTests {
             format: .json,
             digest: importResult.pdkDigest
         )
+        let timingLibrary = try fixtureArtifact(
+            id: "test-timing",
+            path: "timing.lib",
+            kind: .timingLibrary,
+            format: .liberty,
+            digest: String(repeating: "d", count: 64)
+        )
+        let cellLibraryManifest = try DFTCellLibraryManifestCodec.decode(
+            await store.data(for: importRequest.cellLibraryArtifact)
+        )
+        let cellLibrary = DFTCellLibraryReference(
+            artifact: importRequest.cellLibraryArtifact,
+            processID: importResult.processID,
+            version: "test",
+            manifestDigest: try DFTCellLibraryManifestCodec.digest(
+                cellLibraryManifest
+            ),
+            timingLibraryArtifact: timingLibrary
+        )
         let configuration = DFTRealizedScanATPGRequestConfiguration(
             runID: "openroad-atpg-test",
             constraints: DFTConstraintReference(
@@ -301,6 +320,7 @@ struct OpenROADDFTScanImporterTests {
                 version: "test",
                 digest: importResult.pdkDigest
             ),
+            cellLibrary: cellLibrary,
             clocks: [
                 DFTScanClock(
                     id: "scan-clock",
@@ -336,6 +356,7 @@ struct OpenROADDFTScanImporterTests {
         )
         #expect(request.operation == .atpg)
         #expect(request.design == importResult.transformedDesign)
+        #expect(request.cellLibrary == cellLibrary)
         #expect(request.scanImplementation == importResult.scanImplementation)
         #expect(request.scanArchitecture?.domains == [
             DFTScanDomain(
@@ -370,6 +391,25 @@ struct OpenROADDFTScanImporterTests {
             ).build(
                 importResult: importResult,
                 configuration: lossyFaultSource
+            )
+        }
+
+        var detachedCellLibrary = configuration
+        detachedCellLibrary.cellLibrary.artifact = try fixtureArtifact(
+            id: "detached-cell-library",
+            path: "detached-cell-library.json",
+            kind: .technology,
+            format: .json,
+            digest: String(repeating: "e", count: 64)
+        )
+        await #expect(
+            throws: DFTRealizedScanATPGRequestBuilderError.self
+        ) {
+            _ = try await DefaultDFTRealizedScanATPGRequestBuilder(
+                artifactReader: store
+            ).build(
+                importResult: importResult,
+                configuration: detachedCellLibrary
             )
         }
     }

@@ -60,6 +60,9 @@ The full platform goal is intentionally decomposed into the gates documented in 
   failures. Gate-level ATPG now persists the exact extracted fault universe,
   and the protocol-first realized-scan request builder derives scan-domain
   sizing from retained topology while requiring explicit clock mapping.
+  The builder requires and reopens the exact imported process-scoped
+  cell-library manifest, requires one timing-library artifact, and propagates
+  both into the ATPG request so sequential contracts cannot be omitted.
   Replay projects canonical top-qualified gate fault locations to DUT-relative
   hierarchical paths, preventing duplicate top-module qualification in the
   generated fault-injection harness.

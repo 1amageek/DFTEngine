@@ -1,6 +1,7 @@
 import CircuiteFoundation
 import DFTCore
 import Foundation
+import PDKCore
 
 public struct DefaultDFTRealizedScanATPGRequestBuilder:
     DFTRealizedScanATPGRequestBuilding
@@ -29,6 +30,11 @@ public struct DefaultDFTRealizedScanATPGRequestBuilder:
               importResult.pdkDigest == configuration.pdk.digest else {
             throw DFTRealizedScanATPGRequestBuilderError.processMismatch
         }
+        try await validateCellLibrary(
+            configuration.cellLibrary,
+            importResult: importResult,
+            pdk: configuration.pdk
+        )
 
         let reference = importResult.scanImplementation.artifact
         let data = try await artifactReader.data(for: reference)
@@ -111,10 +117,51 @@ public struct DefaultDFTRealizedScanATPGRequestBuilder:
             design: importResult.transformedDesign,
             constraints: configuration.constraints,
             pdk: configuration.pdk,
+            cellLibrary: configuration.cellLibrary,
             scanImplementation: importResult.scanImplementation,
             operation: .atpg,
             scanArchitecture: architecture,
             atpgConfiguration: configuration.atpg
         )
+    }
+
+    private func validateCellLibrary(
+        _ reference: DFTCellLibraryReference,
+        importResult: OpenROADDFTScanImportResult,
+        pdk: PDKReference
+    ) async throws {
+        guard reference.processID == pdk.processID,
+              reference.version == pdk.version,
+              importResult.inputs.contains(reference.artifact),
+              reference.timingLibraryArtifact != nil else {
+            throw DFTRealizedScanATPGRequestBuilderError.cellLibraryMismatch(
+                "the exact imported manifest and one timing library are required"
+            )
+        }
+        let data = try await artifactReader.data(for: reference.artifact)
+        guard UInt64(data.count) == reference.artifact.byteCount,
+              try SHA256ContentDigester().digest(data: data)
+                == reference.artifact.digest else {
+            throw DFTRealizedScanATPGRequestBuilderError
+                .inputIdentityMismatch(reference.artifact.path)
+        }
+        let manifest: DFTCellLibraryManifest
+        do {
+            manifest = try DFTCellLibraryManifestCodec.decode(data)
+            try DFTCellLibraryManifestCodec.validate(manifest)
+        } catch {
+            throw DFTRealizedScanATPGRequestBuilderError.cellLibraryMismatch(
+                error.localizedDescription
+            )
+        }
+        guard manifest.processID == pdk.processID,
+              manifest.version == pdk.version,
+              manifest.pdkDigest == pdk.digest,
+              try DFTCellLibraryManifestCodec.digest(manifest)
+                == reference.manifestDigest else {
+            throw DFTRealizedScanATPGRequestBuilderError.cellLibraryMismatch(
+                "manifest process, version, PDK, or canonical digest differs"
+            )
+        }
     }
 }

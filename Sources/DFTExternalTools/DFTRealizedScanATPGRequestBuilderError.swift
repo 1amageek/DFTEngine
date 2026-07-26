@@ -9,6 +9,7 @@ public enum DFTRealizedScanATPGRequestBuilderError:
     case scanImplementationInvalid([String])
     case transformedDesignMismatch
     case processMismatch
+    case cellLibraryMismatch(String)
     case gateLevelFaultSourceRequired
     case clockIDsInvalid
     case domainClockMappingMismatch
@@ -28,6 +29,8 @@ public enum DFTRealizedScanATPGRequestBuilderError:
             return "The imported transformed design and scan implementation do not match."
         case .processMismatch:
             return "The imported scan evidence and ATPG PDK identify different processes."
+        case .cellLibraryMismatch(let message):
+            return "The imported scan evidence and ATPG cell library do not match: \(message)"
         case .gateLevelFaultSourceRequired:
             return "Realized-scan ATPG requires the gate-level fault source."
         case .clockIDsInvalid:

@@ -196,6 +196,12 @@ cell/pin/net binding, then atomically retains source/transformed canonical
 snapshots, `DFTScanImplementation`, and import evidence. It does not launch
 OpenROAD or qualify the producer.
 
+Realized-scan ATPG composition also requires the exact imported cell-library
+artifact plus a timing-library artifact. The builder reopens and validates the
+cell-library manifest, binds its process/version/PDK identity, and propagates
+the reference into `DFTRequest`; ATPG derives sequential-cell contracts only
+from that retained process-scoped manifest.
+
 ## Build
 
 `Package.swift` resolves every dependency independently. A sibling checkout is
