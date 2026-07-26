@@ -72,6 +72,26 @@ output compare, and unload cycles without reading ATPG internals. This product
 does not change `DFTTestPatternSet`, execute ATPG, invoke a replay tool, or make
 qualification decisions.
 
+### DFTExternalTools
+
+Independent process execution and raw replay observations.
+
+`DFTScanPatternReplayProviding` consumes retained references for STIL, the
+scan-inserted Verilog netlist, `DFTScanImplementation`, `DFTFaultUniverse`, and
+cell simulation models. `IcarusDFTScanPatternReplayProvider` verifies every
+byte count and SHA-256 digest, resolves selected fault IDs from the retained
+universe, checks STIL control and chain signals against the realized scan
+implementation, and verifies the compiler and simulator binaries before and
+after each invocation. The provider compiles one deterministic harness, runs a
+golden replay, then runs one explicit stuck-at injection per selected fault.
+
+`DFTScanPatternReplayResult` contains semantic scan/fault digests, raw
+observations, tool descriptors, verified inputs, and retained harness/image/
+evidence artifacts. It intentionally has no trust or production-readiness
+field. Malformed input, golden mismatch, unknown compare, missing result
+markers, process failure, executable substitution, timeout, cancellation, and
+persistence failure remain typed failures.
+
 ### Realized scan implementation
 
 `DFTScanPlan` remains an architecture/planning value. Successful scan insertion
@@ -79,6 +99,9 @@ also emits `DFTScanImplementation` in the result payload and as retained JSON.
 It binds the exact source and transformed design digests to ordered realized
 chains and exact cell/pin/net identities. Result validation rejects missing,
 detached, duplicate, discontinuous, or payload/artifact-mismatched bindings.
+`DFTScanImplementationValidator` owns the reusable schema, identity, chain
+boundary, element ordering, control binding, and connectivity checks used by
+both domain-result validation and independent replay.
 Pattern conversion and replay must consume this realized contract rather than
 reconstructing chain order from compact ATPG bits.
 

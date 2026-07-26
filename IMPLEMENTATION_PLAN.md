@@ -9,7 +9,7 @@ The full platform goal is intentionally decomposed into the gates documented in 
 3. M2 scan clock/reset, cell-library, and compression semantics — native structural scope complete; process qualification remains external
 4. M3 gate-level ATPG and pattern validation — combinational stuck-at, bounded DFF/SDFF state-transition, explicit reset/set controls, qualified level-sensitive latch semantics, bounded combinational/sequential transition slices and an injected process-specific fault-model boundary delivered; unknown primitives and process qualification remain
 5. M4 canonical BIST insertion — native logic and memory target transformations plus the typed external boundary are delivered; process qualification remains flow-owned
-6. M5 standard-pattern and external-tool execution — internal codec, exact realized-scan execution plan, rich validated STIL subset conversion/exchange, timed/tree-cleaning process runner, stdout/stderr artifacts and validated typed DFT result persistence delivered; the independent replay provider selected by ADR 0001 remains
+6. M5 standard-pattern and external-tool execution — internal codec, exact realized-scan execution plan, rich validated STIL subset conversion/exchange, timed/tree-cleaning process runner, stdout/stderr artifacts, validated typed DFT result persistence, and the independent retained-STIL Icarus replay provider selected by ADR 0001 are delivered; real hosted correlation and qualification remain
 7. M6 retained corpus and oracle correlation — raw correlation and evidence-provenance emission are delivered; independent retained process corpus remains
 8. M7 ToolQualification and flow handoff — direct DFT protocol consumption and raw evidence handoff are delivered; trust, downstream signoff policy, approval, and resume remain responsibilities of ToolQualification and the composing flow
 9. M8 production signoff and tapeout handoff — outside DFTEngine; the composing flow requires accepted tool/process evidence, independent oracle records, real DFT/equivalence/DRC/LVS/PEX artifacts, and human approval
@@ -53,8 +53,13 @@ The full platform goal is intentionally decomposed into the gates documented in 
   compact ATPG results remain in `DFTCore`; `DFTPatternExchange` owns the rich
   validated model and fail-closed STIL subset codec with a checked-in
   retained-byte fixture. A separate standard-neutral execution plan prevents
-  STIL syntax from entering ATPG. OpenROAD profile scan insertion, Yosys
-  functional-mode equivalence, and Icarus replay remain separate gates.
+  STIL syntax from entering ATPG. The independent Icarus provider now consumes
+  digest-verified STIL, scan netlist, realized-scan, fault-universe, and model
+  artifacts, compiles a deterministic harness, and emits raw golden/fault
+  observations with typed timeout, cancellation, identity, and mismatch
+  failures. OpenROAD profile scan insertion, Yosys functional-mode
+  equivalence, real hosted Icarus correlation, and ToolQualification remain
+  separate gates.
 - Split estimated scan planning from realized scan connectivity.
   `DFTScanImplementation` is emitted as both payload and immutable JSON, binds
   source/transformed design digests, and records exact ordered cell/pin/net

@@ -164,12 +164,21 @@ Completed:
 - checked-in retained-byte round-trip fixture;
 - typed rejection of malformed input, unknown constructs, unsupported time
   units, direction violations, missing references, and incomplete cycles.
+- protocol-first Icarus replay over retained STIL, scan-netlist,
+  realized-scan, fault-universe, and cell-model artifacts;
+- deterministic cycle-timed harness generation with explicit golden replay,
+  stuck-at injection, mismatch counting, and unknown-value failure;
+- compiler and simulator SHA-256 verification before and after every
+  invocation, typed timeout/cancellation/process failures, and atomic raw
+  harness/image/evidence persistence;
+- behavior tests for retained-input tampering, golden mismatch, missing fault
+  marker, executable mismatch, timeout, and cancellation.
 
 Pending:
 
 - real OpenROAD scan insertion and retained mapped netlist;
 - Yosys functional-mode equivalence;
-- Icarus retained-STIL replay and fault correlation;
+- hosted real-Icarus replay/fault correlation and unknown-value fixture;
 - production-profile corpus and ToolQualification evidence.
 
 ## Consequences

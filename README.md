@@ -27,8 +27,11 @@ The accepted production-provider boundary is recorded in
 It keeps the compact ATPG result, the standard-neutral execution plan, the rich
 STIL exchange model, and independent retained-artifact replay separate.
 `DFTPatternExchange` validates, converts, and round-trips the accepted STIL
-subset from retained bytes. Real Icarus replay remains a separate pending
-provider and production qualification gate.
+subset from retained bytes. `IcarusDFTScanPatternReplayProvider` independently
+reopens and verifies the STIL, scan netlist, realized scan implementation,
+fault universe, and cell-model artifacts before compiling a deterministic
+replay harness. Real hosted replay and corpus qualification remain external
+gates.
 
 Scan insertion now retains those scan semantics separately from the estimated
 architecture plan. `DFTScanImplementation` records the source/transformed
@@ -69,7 +72,7 @@ flowchart LR
 | `ATPGEngine` | Pattern generation and fault coverage |
 | `BISTEngine` | Memory and logic BIST |
 | `DFTPatternExchange` | Neutral-plan conversion, rich cycle/timing/procedure model, and fail-closed STIL subset codec |
-| `DFTExternalTools` | Process execution, timeout, stderr and exit-status capture |
+| `DFTExternalTools` | Digest-bound process execution and independent retained-STIL replay with raw fault observations |
 | `DFTEngine` | Umbrella API |
 
 The native implementations are:
@@ -77,7 +80,7 @@ The native implementations are:
 | Backend | Output | Explicit limitation |
 |---|---|---|
 | `DeterministicScanInsertionEngine` | digest-verified gate transformation, canonical port/net bindings, Liberty-validated replacement cells, process-mapped compression helpers, scan plan and design diff | Functional equivalence and process qualification remain downstream gates |
-| `DeterministicATPGEngine` | simulated declared/extracted stuck-at and transition ATPG with explicit sequential contracts; exact realized-scan shift/capture/compare plan generation; injected process-specific models with a distinct pattern verifier and clock-bound capture timing | Real Icarus replay, independent process corpora, compressed-pattern execution, and ToolQualification evidence remain external gates |
+| `DeterministicATPGEngine` | simulated declared/extracted stuck-at and transition ATPG with explicit sequential contracts; exact realized-scan shift/capture/compare plan generation; injected process-specific models with a distinct pattern verifier and clock-bound capture timing | Hosted Icarus correlation, independent process corpora, compressed-pattern execution, and ToolQualification evidence remain external gates |
 | `DeterministicBISTEngine` | process-bound logic- and memory-BIST transformations, explicit helper/macro mapping, structure and design diff | Macro/helper-cell process qualification remains an external gate |
 | `DFTResult` | Domain result with direct `ArtifactProducing`, `EvidenceProviding`, and `DiagnosticReporting` conformance | Retains immutable artifacts, provenance, and typed diagnostics without projection |
 | `DefaultDFTEngine` | Direct `DFTEngineExecuting` implementation | Returns the domain-owned `DFTResult` |
@@ -171,6 +174,14 @@ The process runner verifies the executable before and after execution, and a
 completed external mutation is accepted only when an artifact reader is
 available for the same semantic verification used by native backends.
 
+The Icarus replay provider is a separate observation producer. It accepts only
+retained SHA-256-addressed STIL, Verilog, realized-scan, fault-universe, and
+cell-model artifacts. Selected fault IDs are resolved from the retained
+universe, never from caller-supplied paths. Golden mismatch, unknown compare,
+invalid result markers, executable substitution, timeout, and cancellation
+fail through typed errors. The returned result contains raw observations and
+semantic input digests; it does not contain a trust or production verdict.
+
 ## Build
 
 `Package.swift` resolves every dependency independently. A sibling checkout is
@@ -206,6 +217,11 @@ a five-second debug-test budget for encoding and streaming decode of 20,000
 fully assigned cycles. Decode retains the input `Data`, reads it by byte offset,
 and materializes only semantic values retained by the returned program; it does
 not create whole-file `String`, `[Character]`, or token-array copies.
+The independent replay suite covers retained-input integrity, scan/fault
+identity binding, deterministic harness construction, golden and fault output
+parsing, executable identity, timeout, cancellation, and atomic evidence
+persistence. Real Icarus execution is still required in the hosted production
+profile before qualification is claimed.
 
 See `DESIGN.md`, `INTERFACES.md` and `IMPLEMENTATION_PLAN.md` before implementing a backend.
 

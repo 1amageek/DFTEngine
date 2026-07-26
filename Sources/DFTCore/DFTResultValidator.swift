@@ -172,6 +172,8 @@ public struct DFTResultValidator: Sendable {
         request: DFTRequest
     ) -> Bool {
         guard let architecture = request.scanArchitecture,
+              DFTScanImplementationValidator()
+                .validationIssues(in: implementation).isEmpty,
               implementation.schemaVersion
                 == DFTScanImplementation.currentSchemaVersion,
               implementation.architectureName == architecture.name,

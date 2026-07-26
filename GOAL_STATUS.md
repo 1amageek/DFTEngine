@@ -29,7 +29,7 @@
 | Scan insertion | Implemented | Digest-verified canonical snapshot transformation, explicit clock/reset binding, process-mapped compression helpers, validator pass and design diff | DFTEngine tests + CLI fixture + 2,048-chain performance regression | Unqualified helper/library mapping |
 | ATPG | Partial implementation | Declared-fault backend plus extracted combinational stuck-at, bounded DFF/SDFF scan-shift/capture, explicit reset/set and level-sensitive latch semantics, bounded sequential/combinational transition backends, and protocol-first process-specific model injection with result validation | Positive/negative gate-level tests, including undeclared-family, missing-model and injected-model paths | Smoke checked; retained oracle correlation is available but no process corpus is bundled |
 | BIST | Implemented for declared structural contracts | Canonical logic and memory gate transformations with test-mode mux/controller/capture/compactor/signature networks; external backend remains injectable | Positive transformed-snapshot, macro legality, mapping identity, and external-contract tests | Smoke checked; helper cells and macro legality unqualified |
-| Pattern formats | M5 partial | Native JSON pattern IR; STIL and WGL are rejected with typed unsupported-format errors until a qualified cycle-accurate backend is supplied; timed external process runner | JSON round-trip, typed standard-format rejection and malformed-input tests | Smoke checked |
+| Pattern formats and replay | M5 partial | Compact native JSON pattern IR; rich fail-closed STIL subset; digest-bound Icarus retained-artifact replay with golden and explicit stuck-at observations; WGL remains unsupported | STIL retained-byte round trip, malformed/unsupported input, integrity, identity, golden mismatch, result marker, timeout, cancellation, and persistence tests | Implementation verified with fake process fixtures; real hosted Icarus correlation unqualified |
 | Coverage evidence | Implemented | Universe digest, outcomes and assumptions | ATPG tests and oracle correlation tests | No process qualification |
 
 ## Foundation migration boundary
@@ -85,7 +85,11 @@ equivalence/DRC/LVS/PEX evidence, and final approval.
   process/PDK-bound mapping bytes. Controller, mux, capture, compactor,
   signature, and memory macro legality still require independent process
   qualification.
-- Native JSON pattern IR, typed STIL/WGL rejection, a timeout/tree-cleaning external runner, atomic external result/stdout/stderr artifacts, and retained-oracle correlation are available; qualified standard-pattern translation, independent process evidence, and tool promotion remain integrating-flow responsibilities.
+- Compact native JSON pattern IR, rich validated STIL exchange, a
+  timeout/tree-cleaning external runner, independent retained-input Icarus
+  replay, atomic raw evidence, and retained-oracle correlation are available.
+  Real hosted replay correlation, independent process evidence, and tool
+  promotion remain integrating-flow responsibilities.
 - `DFTOracleCorrelationEngine` can verify normalized retained oracle expectation artifacts, compare native envelopes and emit a deterministic correlation digest; no real process corpus is bundled in this package.
 - The current LogicIR does not encode process-qualified scan-capture/reset semantics; M2 timing/legal bindings and explicit architecture contracts must block ambiguous designs.
 - M2 uses an explicit process-scoped manifest, exact net/pin binding and a Liberty timing/legal replacement validator; process-qualified timing evidence and legal replacement approval remain external.

@@ -64,8 +64,11 @@ intent and estimated counts, while the implementation owns exact transformed
 design identity, ordered cells, and pin/net bindings. Native semantic
 verification replays exact load/capture/compare/unload behavior before
 completion. Retained STIL bytes then enter an independent Icarus replay path.
-OpenROAD scan insertion, Yosys functional-mode equivalence, replay
-observations, and ToolQualification remain separate evidence producers. See
+The replay path derives injection locations from a retained fault universe,
+checks them against a retained realized-scan contract, and emits raw
+observations without importing trust policy. OpenROAD scan insertion, Yosys
+functional-mode equivalence, hosted replay qualification, and
+ToolQualification remain separate evidence producers. See
 `docs/adr/0001-production-dft-provider.md`.
 
 ## Trust model

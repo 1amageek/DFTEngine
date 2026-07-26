@@ -11,7 +11,7 @@ DFTEngine is a semiconductor design-platform component, not a pattern generator 
 | M2 | Scan architecture semantics | Infer or explicitly bind clock/reset domains, identify sequential cell semantics, reject ambiguous library mappings, preserve functional/test-mode connectivity | Native structural scope complete: process-scoped manifest, exact pin/net binding, compression helpers, Liberty timing/legal replacement validation and mandatory mode-specific SDC validation delivered; process qualification remains external |
 | M3 | Gate-level ATPG | Generate faults from transformed gate IR, implement sensitization/propagation for a declared supported cell subset, validate patterns by simulation, never claim unsupported coverage | In progress: exhaustive combinational stuck-at, bounded DFF/SDFF SI/SE scan-shift/capture, explicit reset/set control contracts, qualified level-sensitive latch semantics and bounded combinational/sequential transition slices delivered; process-specific faults require distinct model/verifier identities plus clock-bound capture timing; unknown primitives without an injected model and process qualification remain |
 | M4 | BIST insertion | Insert controller, pattern source, response compactor and test-mode isolation into canonical IR; memory macros require explicit bindings and process mapping | Native structural scope complete: canonical logic- and memory-BIST transforms, immutable process/PDK-bound helper-cell mappings, typed memory-macro binding, and external backend protocol delivered; process qualification remains external |
-| M5 | Standard pattern and external execution | Qualified STIL/WGL import/export, process execution timeout/cancellation/tree cleanup, stdout/stderr and tool result artifacts | In progress: native JSON pattern IR, typed rejection of unqualified STIL/WGL, timed process runner, executable SHA-256 verification, atomic stdout/stderr/result batches and artifact-backed semantic validation delivered; qualified STIL/WGL and process/tool qualification remain external |
+| M5 | Standard pattern and external execution | Qualified STIL/WGL import/export, process execution timeout/cancellation/tree cleanup, stdout/stderr and tool result artifacts | In progress: native JSON pattern IR, rich fail-closed STIL subset, retained-input Icarus replay, timed process runner, executable SHA-256 verification, atomic replay evidence, and artifact-backed semantic validation delivered; real hosted correlation, WGL, and process/tool qualification remain external |
 | M6 | Evidence emission and trust handoff | Retained corpus, reference-oracle correlation, PDK-scoped observations and request-digest-bound provenance | In progress: artifact-integrity-checked correlation and `DFTEvidenceProvenance` emission are delivered; independent process corpus remains |
 | M7 | Platform flow composition | Direct protocol consumption, ToolQualification trust evaluation, Xcircuite review/approval/resume, and equivalence/DRC/LVS/PEX handoff | Outside the domain package: DFTEngine supplies typed results and raw evidence; ToolQualification and the composing flow own the policy |
 | M8 | Production signoff and tapeout handoff | Accepted process/tool evidence, independent oracle record, real DFT/equivalence/DRC/LVS/PEX artifacts, human approval and immutable release manifest | Outside DFTEngine and incomplete at the platform level |
@@ -67,10 +67,12 @@ external result without transformed evidence is rejected.
 
 ## M5-M6 current slices
 
-JSON is the native ATPG output. STIL/WGL requests fail closed until a qualified
-format provider with cycle-accurate semantics is supplied.
+JSON is the compact native ATPG output, while `DFTPatternExchange` owns the rich
+cycle-accurate STIL subset. WGL remains unsupported.
 `DFTExternalTools` owns the
-`SignoffToolSupport` timed process adapter and executable-digest checks;
+`SignoffToolSupport` timed process adapter, executable-digest checks, and the
+independent Icarus retained-STIL replay provider. The replay result is raw
+evidence only; real hosted corpus correlation is still required.
 `DFTCore` owns only typed runner/result contracts and artifact-backed semantic
 verification. Every external backend reports stdout, stderr and exit code, and
 all completed mutations pass the same exact-input, payload and semantic

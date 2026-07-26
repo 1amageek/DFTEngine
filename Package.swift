@@ -77,6 +77,7 @@ let package = Package(
             name: "DFTExternalTools",
             dependencies: [
                 "DFTCore",
+                "DFTPatternExchange",
                 .product(name: "CircuiteFoundation", package: "CircuiteFoundation"),
                 .product(name: "SignoffToolSupport", package: "SignoffToolSupport"),
             ]
