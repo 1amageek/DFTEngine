@@ -117,8 +117,26 @@ public struct DFTGateLevelScanTransformer: Sendable {
             }
         }
 
-        try ensurePort(name: architecture.scanEnableSignal, direction: .input, module: &module)
-        try ensurePort(name: architecture.testModeSignal, direction: .input, module: &module)
+        var portIndexByName = Dictionary(
+            uniqueKeysWithValues: module.ports.indices.map { (module.ports[$0].name, $0) }
+        )
+        var bindingIndexByPortID = Dictionary(
+            uniqueKeysWithValues: module.portBindings.indices.map {
+                (module.portBindings[$0].portID, $0)
+            }
+        )
+        try ensurePort(
+            name: architecture.scanEnableSignal,
+            direction: .input,
+            module: &module,
+            portIndexByName: &portIndexByName
+        )
+        try ensurePort(
+            name: architecture.testModeSignal,
+            direction: .input,
+            module: &module,
+            portIndexByName: &portIndexByName
+        )
 
         let sortedIndicesByDomain = cellIndicesByDomain.mapValues { indices in
             indices.sorted { module.cells[$0].instanceName < module.cells[$1].instanceName }
@@ -136,6 +154,34 @@ public struct DFTGateLevelScanTransformer: Sendable {
         var netIDByName = Dictionary(
             uniqueKeysWithValues: module.nets.map { ($0.name, $0.id) }
         )
+        let scanEnableNet = try ensureNet(
+            name: architecture.scanEnableSignal,
+            module: &module,
+            path: "\(module.name).\(architecture.scanEnableSignal)",
+            netIndexByID: &netIndexByID,
+            netIDByName: &netIDByName
+        )
+        let testModeNet = try ensureNet(
+            name: architecture.testModeSignal,
+            module: &module,
+            path: "\(module.name).\(architecture.testModeSignal)",
+            netIndexByID: &netIndexByID,
+            netIDByName: &netIDByName
+        )
+        try bindPort(
+            named: architecture.scanEnableSignal,
+            to: scanEnableNet,
+            module: &module,
+            portIndexByName: portIndexByName,
+            bindingIndexByPortID: &bindingIndexByPortID
+        )
+        try bindPort(
+            named: architecture.testModeSignal,
+            to: testModeNet,
+            module: &module,
+            portIndexByName: portIndexByName,
+            bindingIndexByPortID: &bindingIndexByPortID
+        )
 
         for chain in plan.chains {
             let count = chain.estimatedElementCount
@@ -151,27 +197,26 @@ public struct DFTGateLevelScanTransformer: Sendable {
                 netIDByName: &netIDByName
             )
             if !compressionEnabled {
-                try ensurePort(name: chain.scanInSignal, direction: .input, module: &module)
-                try ensurePort(name: chain.scanOutSignal, direction: .output, module: &module)
-                try bindPort(named: chain.scanInSignal, to: scanInNet, module: &module)
+                try ensurePort(
+                    name: chain.scanInSignal,
+                    direction: .input,
+                    module: &module,
+                    portIndexByName: &portIndexByName
+                )
+                try ensurePort(
+                    name: chain.scanOutSignal,
+                    direction: .output,
+                    module: &module,
+                    portIndexByName: &portIndexByName
+                )
+                try bindPort(
+                    named: chain.scanInSignal,
+                    to: scanInNet,
+                    module: &module,
+                    portIndexByName: portIndexByName,
+                    bindingIndexByPortID: &bindingIndexByPortID
+                )
             }
-
-            let scanEnableNet = try ensureNet(
-                name: architecture.scanEnableSignal,
-                module: &module,
-                path: "\(module.name).\(architecture.scanEnableSignal)",
-                netIndexByID: &netIndexByID,
-                netIDByName: &netIDByName
-            )
-            let testModeNet = try ensureNet(
-                name: architecture.testModeSignal,
-                module: &module,
-                path: "\(module.name).\(architecture.testModeSignal)",
-                netIndexByID: &netIndexByID,
-                netIDByName: &netIDByName
-            )
-            try bindPort(named: architecture.scanEnableSignal, to: scanEnableNet, module: &module)
-            try bindPort(named: architecture.testModeSignal, to: testModeNet, module: &module)
 
             var previousOutputNetID = scanInNet
             var realizedElements: [DFTScanElementBinding] = []
@@ -288,9 +333,16 @@ public struct DFTGateLevelScanTransformer: Sendable {
                 elements: realizedElements
             ))
             if !compressionEnabled {
-                try bindPort(named: chain.scanOutSignal, to: previousOutputNetID, module: &module)
+                try bindPort(
+                    named: chain.scanOutSignal,
+                    to: previousOutputNetID,
+                    module: &module,
+                    portIndexByName: portIndexByName,
+                    bindingIndexByPortID: &bindingIndexByPortID
+                )
             }
         }
+        module.portBindings.sort { $0.portID < $1.portID }
 
         if let compression = architecture.compression, compression.enabled {
             helperCellIDs = try DFTGateLevelScanCompressionTransformer().transform(
@@ -417,9 +469,11 @@ public struct DFTGateLevelScanTransformer: Sendable {
     private func ensurePort(
         name: String,
         direction: LogicDirection,
-        module: inout GateModule
+        module: inout GateModule,
+        portIndexByName: inout [String: Int]
     ) throws {
-        if let port = module.ports.first(where: { $0.name == name }) {
+        if let index = portIndexByName[name] {
+            let port = module.ports[index]
             guard port.direction == direction else {
                 throw DFTGateLevelScanTransformError.controlPortConflict(name: name)
             }
@@ -434,6 +488,7 @@ public struct DFTGateLevelScanTransformer: Sendable {
                 dataType: .logic
             )
         )
+        portIndexByName[name] = module.ports.index(before: module.ports.endIndex)
     }
 
     private func ensureExplicitPortBindings(module: inout GateModule) throws {
@@ -453,15 +508,23 @@ public struct DFTGateLevelScanTransformer: Sendable {
     private func bindPort(
         named name: String,
         to netID: String,
-        module: inout GateModule
+        module: inout GateModule,
+        portIndexByName: [String: Int],
+        bindingIndexByPortID: inout [String: Int]
     ) throws {
-        guard let port = module.ports.first(where: { $0.name == name }) else {
+        guard let portIndex = portIndexByName[name] else {
             throw DFTGateLevelScanTransformError.controlPortConflict(name: name)
         }
-        var bindings = module.portBindings
-        bindings.removeAll { $0.portID == port.id }
-        bindings.append(GatePortBinding(portID: port.id, netID: netID))
-        module.portBindings = bindings.sorted { $0.portID < $1.portID }
+        let portID = module.ports[portIndex].id
+        let binding = GatePortBinding(portID: portID, netID: netID)
+        if let bindingIndex = bindingIndexByPortID[portID] {
+            module.portBindings[bindingIndex] = binding
+        } else {
+            module.portBindings.append(binding)
+            bindingIndexByPortID[portID] = module.portBindings.index(
+                before: module.portBindings.endIndex
+            )
+        }
     }
 
     private func ensureNet(

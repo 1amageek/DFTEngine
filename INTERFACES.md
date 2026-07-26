@@ -76,6 +76,19 @@ qualification decisions.
 
 Independent process execution and raw replay observations.
 
+`OpenROADDFTScanImportProviding` consumes a retained
+`OpenROADDFTScanImportRequest`. `OpenROADDFTScanImporter` verifies every input
+artifact, parses pre/post structural Verilog through `LogicIR`, parses the
+standard DEF `SCANCHAINS` section, and resolves scan cell/pin semantics from a
+retained `DFTCellLibraryManifest`. Chain endpoints, element order, scan-enable,
+test-mode, clock, data, scan-input, and output nets must agree before canonical
+source/transformed snapshots and `DFTScanImplementation` are retained. Endpoint
+signals must be real top-level port bindings, and source scan candidates,
+transformed scan cells, and ScanDEF elements must identify the same instances
+exactly once.
+`OpenROADDFTScanImportResult` carries raw producer/process/input identities and
+has no qualification verdict.
+
 `DFTScanPatternReplayProviding` consumes retained references for STIL, the
 scan-inserted Verilog netlist, `DFTScanImplementation`, `DFTFaultUniverse`, and
 cell simulation models. `IcarusDFTScanPatternReplayProvider` verifies every
@@ -98,9 +111,10 @@ Headless command composition without DFT semantic duplication.
 
 `DFTCLICommand` decodes the domain request and externally supplied tool
 descriptors, resolves the filesystem artifact store, and invokes the injected
-domain implementation path. The `replay` command delegates directly to
-`IcarusDFTScanPatternReplayProvider`. It does not parse STIL, infer scan
-connectivity, construct faults, or decide tool trust. `DFTCLIOutputWriting`
+domain implementation path. `import-openroad-scan` delegates directly to
+`OpenROADDFTScanImporter`; `replay` delegates directly to
+`IcarusDFTScanPatternReplayProvider`. The CLI does not parse ScanDEF/STIL, infer
+scan connectivity, construct faults, or decide tool trust. `DFTCLIOutputWriting`
 keeps process I/O outside command parsing and makes the complete CLI path
 behavior-testable without weakening the executable boundary.
 

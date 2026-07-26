@@ -72,7 +72,7 @@ flowchart LR
 | `ATPGEngine` | Pattern generation and fault coverage |
 | `BISTEngine` | Memory and logic BIST |
 | `DFTPatternExchange` | Neutral-plan conversion, rich cycle/timing/procedure model, and fail-closed STIL subset codec |
-| `DFTExternalTools` | Digest-bound process execution and independent retained-STIL replay with raw fault observations |
+| `DFTExternalTools` | Digest-bound process execution, OpenROAD ScanDEF/Verilog canonical import, and independent retained-STIL replay with raw fault observations |
 | `DFTEngine` | Umbrella API |
 
 The native implementations are:
@@ -182,6 +182,14 @@ invalid result markers, executable substitution, timeout, and cancellation
 fail through typed errors. The returned result contains raw observations and
 semantic input digests; it does not contain a trust or production verdict.
 
+The OpenROAD scan importer is a separate canonicalization boundary. It reopens
+retained pre-scan Verilog, post-scan Verilog, DEF `SCANCHAINS`, the
+process-bound DFT cell-library manifest, and raw execution evidence. It parses
+both netlists through `LogicIR`, validates chain endpoints/order and every
+cell/pin/net binding, then atomically retains source/transformed canonical
+snapshots, `DFTScanImplementation`, and import evidence. It does not launch
+OpenROAD or qualify the producer.
+
 ## Build
 
 `Package.swift` resolves every dependency independently. A sibling checkout is
@@ -211,7 +219,8 @@ internal pattern-codec round trips, external-tool identity and exit checks,
 immutable artifact stores, Foundation evidence identity, oracle correlation,
 native memory-BIST transformation, and scan-compression connectivity. A
 2,048-chain regression also enforces a five-second debug-test budget; the
-2026-07-26 arm64 Xcode run completed that transformation in 0.58 seconds.
+2026-07-26 arm64 Xcode run completed that regression in 1.36 seconds after
+replacing repeated port-binding scans and per-chain sorts with indexed updates.
 The STIL exchange suite independently round-trips checked-in bytes and enforces
 a five-second debug-test budget for encoding and streaming decode of 20,000
 fully assigned cycles. Decode retains the input `Data`, reads it by byte offset,
@@ -242,6 +251,11 @@ swift run dft-engine execute \
   --request Tests/DFTEngineTests/Fixtures/scan-request.json \
   --output-dir /tmp/dft-project \
   --result /tmp/dft-result.json
+
+swift run dft-engine import-openroad-scan \
+  --request /tmp/dft-project/openroad-import-request.json \
+  --output-dir /tmp/dft-project \
+  --result /tmp/dft-openroad-import-result.json
 
 swift run dft-engine replay \
   --request /tmp/dft-project/replay-request.json \
@@ -274,6 +288,11 @@ expected SHA-256 identities to `IcarusDFTScanPatternReplayProvider`; the CLI
 does not reconstruct STIL, scan connectivity, fault semantics, or a trust
 verdict. Optional timeout values control process execution, while tool
 qualification remains outside this package.
+
+`import-openroad-scan` accepts `OpenROADDFTScanImportRequest` and delegates to
+`OpenROADDFTScanImporter`. The workflow supplies retained tool outputs and a
+digest-bound producer descriptor; the importer owns standard-data parsing and
+canonical connectivity validation, while ToolQualification owns producer trust.
 
 Artifact stores are immutable: repeating the same artifact write is idempotent, while replacing bytes at an existing run path is rejected.
 

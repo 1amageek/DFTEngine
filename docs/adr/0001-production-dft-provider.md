@@ -174,13 +174,18 @@ Completed:
 - a headless `dft-engine replay` command that consumes the typed replay request,
   explicit executable paths, and retained executable descriptors without
   moving STIL, scan, fault, or trust semantics into workflow glue;
+- a protocol-first OpenROAD importer and `import-openroad-scan` CLI path that
+  convert retained pre/post Verilog plus standard DEF `SCANCHAINS` into
+  canonical snapshots and `DFTScanImplementation` using the retained
+  process-cell manifest;
 - behavior tests for retained-input tampering, golden mismatch, missing fault
   marker, executable mismatch, timeout, cancellation, and CLI-to-provider
   filesystem execution.
 
 Pending:
 
-- real OpenROAD scan insertion and retained mapped netlist;
+- hosted real OpenROAD scan insertion producing the retained pre/post Verilog,
+  DEF `SCANCHAINS`, and raw execution evidence consumed by the importer;
 - Yosys functional-mode equivalence;
 - hosted invocation of `dft-engine replay` with real Icarus replay/fault
   correlation and an unknown-value fixture;

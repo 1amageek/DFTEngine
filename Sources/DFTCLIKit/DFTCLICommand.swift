@@ -34,11 +34,39 @@ public struct DFTCLICommand: Sendable {
             return 0
         case "execute":
             return try await execute(arguments: Array(arguments.dropFirst()))
+        case "import-openroad-scan":
+            return try await importOpenROADScan(
+                arguments: Array(arguments.dropFirst())
+            )
         case "replay":
             return try await replay(arguments: Array(arguments.dropFirst()))
         default:
             throw DFTCLIError.unknownCommand(command)
         }
+    }
+
+    private func importOpenROADScan(arguments: [String]) async throws -> Int {
+        try validateOptions(
+            arguments,
+            allowed: ["--request", "--output-dir", "--result"]
+        )
+        let requestPath = try requiredOption("--request", in: arguments)
+        let outputDirectory = try requiredOption("--output-dir", in: arguments)
+        let request: OpenROADDFTScanImportRequest = try decodeRequest(
+            at: requestPath
+        )
+        let store = FileSystemDFTArtifactStore(
+            rootURL: URL(fileURLWithPath: outputDirectory)
+        )
+        let result = try await OpenROADDFTScanImporter(
+            artifactReader: store,
+            artifactStore: store
+        ).importScan(request)
+        try writeResult(
+            try DFTArtifactJSONEncoder().encode(result),
+            to: option("--result", in: arguments)
+        )
+        return 0
     }
 
     private func execute(arguments: [String]) async throws -> Int {
@@ -267,6 +295,8 @@ public struct DFTCLICommand: Sendable {
     Commands:
       dft-engine capabilities
       dft-engine execute --request <request.json> --output-dir <project-root> [--result <result.json>]
+      dft-engine import-openroad-scan --request <request.json>
+        --output-dir <project-root> [--result <result.json>]
       dft-engine replay --request <request.json> --output-dir <project-root>
         --compiler <iverilog> --compiler-descriptor <descriptor.json>
         --simulator <vvp> --simulator-descriptor <descriptor.json>
