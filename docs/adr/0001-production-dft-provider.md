@@ -44,10 +44,13 @@ The first production profile uses the following provider composition:
 - pattern bursts and procedure references;
 - exact source locations and unsupported construct diagnostics during decode.
 
-`DFTTestPatternSet` remains unchanged. A dedicated protocol converts a compact
-ATPG result plus explicit scan architecture and capture timing into a rich
-exchange program. Conversion must fail with a typed error when the source
-contract lacks information required by the selected STIL profile.
+`DFTTestPatternSet` remains unchanged. Scan insertion additionally emits a
+`DFTScanImplementation` artifact with the exact transformed design digest,
+ordered chain cells, and cell pin/net bindings. A dedicated protocol converts a
+compact ATPG result plus this realized scan implementation and explicit capture
+timing into a rich exchange program. Conversion must fail with a typed error
+when the source contract lacks information required by the selected STIL
+profile.
 
 The STIL codec supports only constructs declared by its capability record.
 Unknown keywords, inherited timing not resolved by the supported profile,
@@ -144,6 +147,8 @@ Completed:
 
 - separate `DFTPatternExchange` product and safe rich value model;
 - exact structural and semantic validation;
+- retained exact scan implementation identity and ordered cell/pin/net
+  bindings, separate from the estimated architecture plan;
 - deterministic encoding and decoding for the accepted STIL subset;
 - streaming decode over retained `Data` without whole-file text or token-array
   copies, plus a 20,000-cycle five-second debug-test budget;
@@ -153,7 +158,7 @@ Completed:
 
 Pending:
 
-- explicit compact ATPG plus scan/timing/response conversion;
+- compact ATPG plus realized scan/timing/response conversion;
 - real OpenROAD scan insertion and retained mapped netlist;
 - Yosys functional-mode equivalence;
 - Icarus retained-STIL replay and fault correlation;

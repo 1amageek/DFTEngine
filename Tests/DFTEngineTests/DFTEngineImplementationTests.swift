@@ -46,11 +46,33 @@ struct DFTEngineImplementationTests {
 
         #expect(result.status == .completed)
         #expect(result.payload.scanPlan?.chains.map(\.estimatedElementCount) == [3, 2])
+        let implementation = try #require(result.payload.scanImplementation)
+        #expect(implementation.chains.map(\.elements.count) == [3, 2])
+        #expect(implementation.chains.flatMap(\.elements).map(\.position) == [0, 1, 2, 0, 1])
+        #expect(implementation.sourceDesignDigest == sourceDigest)
+        #expect(
+            implementation.transformedDesignDigest
+                == result.payload.transformedDesign?.designDigest
+        )
         #expect(result.artifacts.contains { $0 == result.payload.transformedDesign?.artifact })
         #expect(result.payload.transformedDesign?.provenance?.sourceDesignDigest == sourceDigest)
         #expect(result.payload.transformedDesign?.provenance?.transformationID == "dft-scan-insertion")
         #expect(result.payload.designDiff?.changes.count == 5)
-        #expect(result.artifacts.count == 2)
+        #expect(result.artifacts.count == 3)
+        let implementationReference = try #require(
+            result.artifacts.first {
+                $0.artifactID == "dft-scan-implementation"
+            }
+        )
+        let implementationData = try #require(
+            await store.data(for: implementationReference.path)
+        )
+        #expect(
+            try JSONDecoder().decode(
+                DFTScanImplementation.self,
+                from: implementationData
+            ) == implementation
+        )
         let diffReference = try #require(
             result.artifacts.first { $0.artifactID == "dft-design-diff" }
         )
@@ -1424,7 +1446,7 @@ struct DFTEngineImplementationTests {
         ).execute(request)
 
         #expect(result.status == .completed)
-        #expect(result.artifacts.count == 2)
+        #expect(result.artifacts.count == 3)
         #expect(result.payload.designDiff != nil)
 
         let reader = FixtureDFTArtifactReader(
@@ -1447,6 +1469,26 @@ struct DFTEngineImplementationTests {
                     )
                 )
             )
+        }
+        await #expect(throws: DFTResultSemanticValidationError.self) {
+            try await DFTResultSemanticVerifier().validate(
+                result,
+                for: request,
+                reading: TamperedDFTArtifactReader(
+                    base: reader,
+                    tamperedPath: try #require(
+                        result.artifacts.first {
+                            $0.artifactID == "dft-scan-implementation"
+                        }?.path
+                    )
+                )
+            )
+        }
+        var detachedResult = result
+        detachedResult.payload.scanImplementation?
+            .chains[0].elements[0].scanInNetID = "detached-net"
+        #expect(throws: DFTResultValidationError.self) {
+            try DFTResultValidator().validate(detachedResult, for: request)
         }
 
         var mismatchedReference = request.design

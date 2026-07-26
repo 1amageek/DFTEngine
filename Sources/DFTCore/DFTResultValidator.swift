@@ -77,6 +77,14 @@ public struct DFTResultValidator: Sendable {
                   artifacts.contains(transformedDesign.artifact),
                   let scanPlan = payload.scanPlan,
                   validateScanPlan(scanPlan, request: request),
+                  let scanImplementation = payload.scanImplementation,
+                  validateScanImplementation(
+                    scanImplementation,
+                    transformedDesign: transformedDesign,
+                    plan: scanPlan,
+                    artifacts: artifacts,
+                    request: request
+                  ),
                   request.insertionPolicy?.generateDesignDiff != true
                     || validateDesignDiff(
                         payload.designDiff,
@@ -139,6 +147,76 @@ public struct DFTResultValidator: Sendable {
                     throw DFTResultValidationError.completedPayloadIncomplete(.bist)
                 }
             }
+        }
+    }
+
+    private func validateScanImplementation(
+        _ implementation: DFTScanImplementation,
+        transformedDesign: LogicDesignReference,
+        plan: DFTScanPlan,
+        artifacts: Set<ArtifactReference>,
+        request: DFTRequest
+    ) -> Bool {
+        guard let architecture = request.scanArchitecture,
+              implementation.schemaVersion
+                == DFTScanImplementation.currentSchemaVersion,
+              implementation.architectureName == architecture.name,
+              implementation.sourceDesignDigest == request.design.designDigest,
+              implementation.transformedDesignDigest
+                == transformedDesign.designDigest,
+              implementation.scanEnableSignal == architecture.scanEnableSignal,
+              implementation.testModeSignal == architecture.testModeSignal,
+              !implementation.scanEnableNetID.isEmpty,
+              !implementation.testModeNetID.isEmpty,
+              implementation.chains.count == plan.chains.count,
+              artifacts.contains(where: {
+                  $0.id.rawValue == "dft-scan-implementation"
+                    && $0.kind == .report
+                    && $0.format == .json
+              }) else {
+            return false
+        }
+        let plannedByID = Dictionary(
+            uniqueKeysWithValues: plan.chains.map { ($0.id, $0) }
+        )
+        var cellIDs = Set<String>()
+        return implementation.chains.allSatisfy { chain in
+            guard let planned = plannedByID[chain.chainID],
+                  chain.domainID == planned.domainID,
+                  chain.scanInSignal == planned.scanInSignal,
+                  chain.scanOutSignal == planned.scanOutSignal,
+                  chain.elements.count == planned.estimatedElementCount,
+                  !chain.scanInNetID.isEmpty,
+                  !chain.scanOutNetID.isEmpty,
+                  chain.elements.indices.allSatisfy({
+                      chain.elements[$0].position == $0
+                  }),
+                  chain.elements.first?.scanInNetID == chain.scanInNetID,
+                  chain.elements.last?.outputNetID == chain.scanOutNetID else {
+                return false
+            }
+            for (index, element) in chain.elements.enumerated() {
+                guard cellIDs.insert(element.cellID).inserted,
+                      !element.instanceName.isEmpty,
+                      !element.cellType.isEmpty,
+                      !element.dataNetID.isEmpty,
+                      !element.outputNetID.isEmpty,
+                      !element.clockNetID.isEmpty,
+                      element.scanEnableNetID
+                        == implementation.scanEnableNetID,
+                      element.testModePinName == nil
+                        ? element.testModeNetID == nil
+                        : element.testModeNetID
+                            == implementation.testModeNetID else {
+                    return false
+                }
+                if index > 0,
+                   chain.elements[index - 1].outputNetID
+                    != element.scanInNetID {
+                    return false
+                }
+            }
+            return true
         }
     }
 

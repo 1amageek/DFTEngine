@@ -29,6 +29,14 @@ round-trips the accepted STIL subset from retained bytes. Native ATPG-to-STIL
 conversion and real Icarus replay remain blocked until their explicit scan,
 response, and execution contracts are implemented.
 
+Scan insertion now retains those scan semantics separately from the estimated
+architecture plan. `DFTScanImplementation` records the source/transformed
+design digests, exact chain order, and every transformed cell's data, output,
+clock, scan-input, scan-enable, and test-mode pin/net binding. The payload and
+retained JSON artifact must match during semantic verification. ATPG
+conversion remains blocked until it consumes this realized mapping and
+produces exact shift/capture/compare cycles.
+
 The CLI and Xcircuite composition load every digest-bound, mode-specific SDC
 artifact and verify declared DFT clocks plus asserted test-mode/scan-enable
 case analysis before execution. Missing loaders, missing modes, duplicate
@@ -54,7 +62,7 @@ flowchart LR
 | Product | Responsibility |
 |---|---|
 | `DFTCore` | Shared DFT request and result contract |
-| `ScanInsertion` | Scan architecture and insertion |
+| `ScanInsertion` | Scan architecture, insertion, and exact realized chain-binding evidence |
 | `ATPGEngine` | Pattern generation and fault coverage |
 | `BISTEngine` | Memory and logic BIST |
 | `DFTPatternExchange` | Rich cycle/timing/procedure model and fail-closed STIL subset codec |

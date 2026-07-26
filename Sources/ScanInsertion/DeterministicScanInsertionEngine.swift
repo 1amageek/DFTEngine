@@ -220,6 +220,15 @@ public struct DeterministicScanInsertionEngine: ScanInserting {
                 format: .json,
                 data: transformedData
             )
+            let scanImplementationContent = DFTArtifactContent(
+                artifactID: "dft-scan-implementation",
+                fileName: "scan-implementation.json",
+                kind: .report,
+                format: .json,
+                data: try DFTArtifactJSONEncoder().encode(
+                    transform.scanImplementation
+                )
+            )
             let diffMetadata = DFTArtifactContent(
                 artifactID: "dft-design-diff",
                 fileName: "design-diff.json",
@@ -228,8 +237,8 @@ public struct DeterministicScanInsertionEngine: ScanInserting {
                 data: Data()
             )
             let provisionalContents = policy.generateDesignDiff
-                ? [transformedContent, diffMetadata]
-                : [transformedContent]
+                ? [transformedContent, scanImplementationContent, diffMetadata]
+                : [transformedContent, scanImplementationContent]
             let transformedReference = try DFTArtifactBatch.references(
                 for: provisionalContents,
                 runID: request.runID
@@ -248,7 +257,10 @@ public struct DeterministicScanInsertionEngine: ScanInserting {
                 )
             )
 
-            var artifactContents = [transformedContent]
+            var artifactContents = [
+                transformedContent,
+                scanImplementationContent,
+            ]
             var designDiff: DFTDesignDiff?
             if policy.generateDesignDiff {
                 let changes = transform.transformedCellIDs.map { cellID in
@@ -329,6 +341,7 @@ public struct DeterministicScanInsertionEngine: ScanInserting {
                     transformedDesign: transformedDesign,
                     faultCoverage: nil,
                     scanPlan: plan,
+                    scanImplementation: transform.scanImplementation,
                     designDiff: designDiff,
                     evidenceProvenance: evidenceProvenance(for: cellLibrary),
                     assumptions: transformedArtifact.assumptions + transform.assumptions

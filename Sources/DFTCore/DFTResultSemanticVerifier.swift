@@ -81,6 +81,7 @@ public struct DFTResultSemanticVerifier: Sendable {
     ) async throws {
         guard let transformedDesign = result.payload.transformedDesign,
               let plan = result.payload.scanPlan,
+              let implementation = result.payload.scanImplementation,
               let architecture = request.scanArchitecture,
               let policy = request.insertionPolicy,
               let libraryReference = request.cellLibrary else {
@@ -98,6 +99,33 @@ public struct DFTResultSemanticVerifier: Sendable {
             requireEmbeddedDigest: true,
             reading: artifacts
         )
+        guard let implementationReference = result.artifacts.first(where: {
+            $0.id.rawValue == "dft-scan-implementation"
+        }) else {
+            throw DFTResultSemanticValidationError.semanticMismatch(
+                "scan implementation artifact is missing"
+            )
+        }
+        let implementationData = try await verifiedData(
+            for: implementationReference,
+            reading: artifacts
+        )
+        let retainedImplementation: DFTScanImplementation
+        do {
+            retainedImplementation = try JSONDecoder().decode(
+                DFTScanImplementation.self,
+                from: implementationData
+            )
+        } catch {
+            throw DFTResultSemanticValidationError.artifactDecodeFailed(
+                "scan implementation: \(error.localizedDescription)"
+            )
+        }
+        guard retainedImplementation == implementation else {
+            throw DFTResultSemanticValidationError.semanticMismatch(
+                "scan implementation payload does not match retained bytes"
+            )
+        }
         try validatePreservedDesignEnvelope(
             source: source,
             transformed: transformed
@@ -180,6 +208,48 @@ public struct DFTResultSemanticVerifier: Sendable {
             policy: policy,
             library: library
         )
+        try validateScanImplementation(
+            implementation,
+            transformed: module
+        )
+    }
+
+    private func validateScanImplementation(
+        _ implementation: DFTScanImplementation,
+        transformed: GateModule
+    ) throws {
+        let cellsByID = Dictionary(
+            uniqueKeysWithValues: transformed.cells.map { ($0.id, $0) }
+        )
+        let netIDs = Set(transformed.nets.map(\.id))
+        for chain in implementation.chains {
+            for element in chain.elements {
+                guard let cell = cellsByID[element.cellID],
+                      cell.instanceName == element.instanceName,
+                      cell.type == element.cellType,
+                      pinNet(element.dataPinName, in: cell)
+                        == element.dataNetID,
+                      pinNet(element.outputPinName, in: cell)
+                        == element.outputNetID,
+                      pinNet(element.clockPinName, in: cell)
+                        == element.clockNetID,
+                      pinNet(element.scanInPinName, in: cell)
+                        == element.scanInNetID,
+                      pinNet(element.scanEnablePinName, in: cell)
+                        == element.scanEnableNetID,
+                      element.testModePinName == nil
+                        || pinNet(element.testModePinName!, in: cell)
+                            == element.testModeNetID,
+                      netIDs.contains(element.dataNetID),
+                      netIDs.contains(element.outputNetID),
+                      netIDs.contains(element.clockNetID),
+                      netIDs.contains(element.scanInNetID) else {
+                    throw DFTResultSemanticValidationError.semanticMismatch(
+                        "scan implementation is detached from transformed cell \(element.cellID)"
+                    )
+                }
+            }
+        }
     }
 
     private func validateScanConnectivity(

@@ -56,8 +56,12 @@ timing and procedure semantics.
 The accepted production provider keeps that responsibility in
 `DFTPatternExchange`. The target now owns the rich model, exact validation, and
 fail-closed STIL subset codec. A future conversion boundary may consume compact
-ATPG results only when explicit scan and capture-timing contracts provide every
-required semantic. Retained STIL bytes then enter an independent Icarus replay
+ATPG results only when the retained `DFTScanImplementation` and explicit
+capture-timing contracts provide every required semantic. The scan
+implementation is distinct from `DFTScanPlan`: the plan owns architecture
+intent and estimated counts, while the implementation owns exact transformed
+design identity, ordered cells, and pin/net bindings. Retained STIL bytes then
+enter an independent Icarus replay
 path. OpenROAD scan insertion, Yosys functional-mode equivalence, replay
 observations, and ToolQualification remain separate evidence producers. See
 `docs/adr/0001-production-dft-provider.md`.

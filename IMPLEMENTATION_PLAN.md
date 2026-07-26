@@ -52,6 +52,12 @@ The full platform goal is intentionally decomposed into the gates documented in 
   validated model and fail-closed STIL subset codec with a checked-in
   retained-byte fixture. OpenROAD profile scan insertion, Yosys functional-mode
   equivalence, ATPG conversion, and Icarus replay remain separate gates.
+- Split estimated scan planning from realized scan connectivity.
+  `DFTScanImplementation` is emitted as both payload and immutable JSON, binds
+  source/transformed design digests, and records exact ordered cell/pin/net
+  connectivity. Structural and retained-byte semantic validation reject
+  detached or discontinuous mappings. ATPG still must produce exact
+  shift/capture/compare execution cycles from this contract.
 - Added raw DFT evidence maturity and provenance metadata for smoke, corpus, and
   oracle-correlated observations without embedding a trust or release verdict.
 - Added retained oracle corpus contracts and correlation: normalized oracle expectation artifacts are read, byte-count/digest verified, decoded and compared against native typed results before correlation evidence is emitted.

@@ -69,6 +69,16 @@ escaped-identifier support accepted by a codec.
 This product does not change `DFTTestPatternSet`, execute ATPG, invoke a replay
 tool, or make qualification decisions.
 
+### Realized scan implementation
+
+`DFTScanPlan` remains an architecture/planning value. Successful scan insertion
+also emits `DFTScanImplementation` in the result payload and as retained JSON.
+It binds the exact source and transformed design digests to ordered realized
+chains and exact cell/pin/net identities. Result validation rejects missing,
+detached, duplicate, discontinuous, or payload/artifact-mismatched bindings.
+Pattern conversion and replay must consume this realized contract rather than
+reconstructing chain order from compact ATPG bits.
+
 ### DFTEngine
 
 Umbrella API.

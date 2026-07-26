@@ -5,6 +5,7 @@ public struct DFTPayload: Sendable, Hashable, Codable {
     public var transformedDesign: LogicDesignReference?
     public var faultCoverage: Double?
     public var scanPlan: DFTScanPlan?
+    public var scanImplementation: DFTScanImplementation?
     public var designDiff: DFTDesignDiff?
     public var patterns: DFTTestPatternSet?
     public var coverageEvidence: DFTCoverageEvidence?
@@ -16,6 +17,7 @@ public struct DFTPayload: Sendable, Hashable, Codable {
         transformedDesign: LogicDesignReference?,
         faultCoverage: Double?,
         scanPlan: DFTScanPlan? = nil,
+        scanImplementation: DFTScanImplementation? = nil,
         designDiff: DFTDesignDiff? = nil,
         patterns: DFTTestPatternSet? = nil,
         coverageEvidence: DFTCoverageEvidence? = nil,
@@ -26,6 +28,7 @@ public struct DFTPayload: Sendable, Hashable, Codable {
         self.transformedDesign = transformedDesign
         self.faultCoverage = faultCoverage
         self.scanPlan = scanPlan
+        self.scanImplementation = scanImplementation
         self.designDiff = designDiff
         self.patterns = patterns
         self.coverageEvidence = coverageEvidence
@@ -38,6 +41,7 @@ public struct DFTPayload: Sendable, Hashable, Codable {
         case transformedDesign
         case faultCoverage
         case scanPlan
+        case scanImplementation
         case designDiff
         case patterns
         case coverageEvidence
@@ -51,6 +55,10 @@ public struct DFTPayload: Sendable, Hashable, Codable {
         transformedDesign = try container.decodeIfPresent(LogicDesignReference.self, forKey: .transformedDesign)
         faultCoverage = try container.decodeIfPresent(Double.self, forKey: .faultCoverage)
         scanPlan = try container.decodeIfPresent(DFTScanPlan.self, forKey: .scanPlan)
+        scanImplementation = try container.decodeIfPresent(
+            DFTScanImplementation.self,
+            forKey: .scanImplementation
+        )
         designDiff = try container.decodeIfPresent(DFTDesignDiff.self, forKey: .designDiff)
         patterns = try container.decodeIfPresent(DFTTestPatternSet.self, forKey: .patterns)
         coverageEvidence = try container.decodeIfPresent(DFTCoverageEvidence.self, forKey: .coverageEvidence)

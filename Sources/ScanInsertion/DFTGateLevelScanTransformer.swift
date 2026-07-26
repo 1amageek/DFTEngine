@@ -128,6 +128,7 @@ public struct DFTGateLevelScanTransformer: Sendable {
         var chainOffsetsByDomain: [String: Int] = [:]
         var chainInputNetIDs: [String] = []
         var chainOutputNetIDs: [String] = []
+        var realizedChains: [DFTRealizedScanChain] = []
         let compressionEnabled = architecture.compression?.enabled == true
         var netIndexByID = Dictionary(
             uniqueKeysWithValues: module.nets.indices.map { (module.nets[$0].id, $0) }
@@ -173,7 +174,8 @@ public struct DFTGateLevelScanTransformer: Sendable {
             try bindPort(named: architecture.testModeSignal, to: testModeNet, module: &module)
 
             var previousOutputNetID = scanInNet
-            for cellIndex in chainIndices {
+            var realizedElements: [DFTScanElementBinding] = []
+            for (position, cellIndex) in chainIndices.enumerated() {
                 var cell = module.cells[cellIndex]
                 guard let binding = bindingsByFunctionalType[cell.type] else {
                     throw DFTGateLevelScanTransformError.cellLibraryBindingMissing(
@@ -183,10 +185,21 @@ public struct DFTGateLevelScanTransformer: Sendable {
                 }
                 guard let outputPin = cell.pins.first(where: {
                     $0.name.caseInsensitiveCompare(binding.outputPinName) == .orderedSame
-                }) else {
+                }),
+                      let outputNetID = outputPin.netID,
+                      let dataPin = cell.pins.first(where: {
+                          $0.name.caseInsensitiveCompare(binding.dataPinName) == .orderedSame
+                      }),
+                      let dataNetID = dataPin.netID,
+                      let clockPin = cell.pins.first(where: { pin in
+                          binding.clockPinNames.contains {
+                              $0.caseInsensitiveCompare(pin.name) == .orderedSame
+                          }
+                      }),
+                      let clockNetID = clockPin.netID else {
                     throw DFTGateLevelScanTransformError.cellPinContractMissing(
                         instance: cell.instanceName,
-                        pin: binding.outputPinName
+                        pin: "data/output/clock"
                     )
                 }
                 guard binding.scanCellType == policy.scanCellName else {
@@ -242,11 +255,38 @@ public struct DFTGateLevelScanTransformer: Sendable {
                 }
                 module.cells[cellIndex] = cell
                 transformedCellIDs.append(cell.id)
-                previousOutputNetID = outputPin.netID ?? previousOutputNetID
+                realizedElements.append(DFTScanElementBinding(
+                    position: position,
+                    cellID: cell.id,
+                    instanceName: cell.instanceName,
+                    cellType: cell.type,
+                    dataPinName: binding.dataPinName,
+                    dataNetID: dataNetID,
+                    outputPinName: binding.outputPinName,
+                    outputNetID: outputNetID,
+                    clockPinName: clockPin.name,
+                    clockNetID: clockNetID,
+                    scanInPinName: binding.scanInPinName,
+                    scanInNetID: previousOutputNetID,
+                    scanEnablePinName: binding.scanEnablePinName,
+                    scanEnableNetID: scanEnableNet,
+                    testModePinName: binding.testModePinName,
+                    testModeNetID: binding.testModePinName == nil ? nil : testModeNet
+                ))
+                previousOutputNetID = outputNetID
             }
 
             chainInputNetIDs.append(scanInNet)
             chainOutputNetIDs.append(previousOutputNetID)
+            realizedChains.append(DFTRealizedScanChain(
+                chainID: chain.id,
+                domainID: chain.domainID,
+                scanInSignal: chain.scanInSignal,
+                scanInNetID: scanInNet,
+                scanOutSignal: chain.scanOutSignal,
+                scanOutNetID: previousOutputNetID,
+                elements: realizedElements
+            ))
             if !compressionEnabled {
                 try bindPort(named: chain.scanOutSignal, to: previousOutputNetID, module: &module)
             }
@@ -274,11 +314,38 @@ public struct DFTGateLevelScanTransformer: Sendable {
         guard validation.isValid else {
             throw DFTGateLevelScanTransformError.transformedDesignInvalid(validation.diagnostics)
         }
+        guard let transformedDesignDigest = finalizedSnapshot.designDigest else {
+            throw DFTGateLevelScanTransformError.transformedDesignInvalid([
+                LogicDiagnostic(
+                    severity: .error,
+                    code: "DFT_TRANSFORMED_DIGEST_MISSING",
+                    message: "The finalized scan design has no canonical digest."
+                )
+            ])
+        }
+        let sourceDesignDigest = try LogicDesignSnapshotCodec.digest(snapshot)
+        let scanImplementation = DFTScanImplementation(
+            architectureName: architecture.name,
+            sourceDesignDigest: sourceDesignDigest,
+            transformedDesignDigest: transformedDesignDigest,
+            scanEnableSignal: architecture.scanEnableSignal,
+            scanEnableNetID: try scanEnableNetID(
+                named: architecture.scanEnableSignal,
+                in: transformedGate.modules[topIndex]
+            ),
+            testModeSignal: architecture.testModeSignal,
+            testModeNetID: try scanEnableNetID(
+                named: architecture.testModeSignal,
+                in: transformedGate.modules[topIndex]
+            ),
+            chains: realizedChains
+        )
 
         return DFTGateLevelScanTransformResult(
             snapshot: finalizedSnapshot,
             transformedCellIDs: transformedCellIDs,
             helperCellIDs: helperCellIDs,
+            scanImplementation: scanImplementation,
             assumptions: [
                 "sequential cell domain assignment follows explicit clock/reset connectivity in the canonical gate IR",
                 "cell type recognition remains limited to the declared structural DFF/FF/LATCH naming contract",
@@ -288,6 +355,17 @@ public struct DFTGateLevelScanTransformer: Sendable {
                 "functional ports are preserved"
             ]
         )
+    }
+
+    private func scanEnableNetID(
+        named signalName: String,
+        in module: GateModule
+    ) throws -> String {
+        guard let port = module.ports.first(where: { $0.name == signalName }),
+              let binding = module.portBindings.first(where: { $0.portID == port.id }) else {
+            throw DFTGateLevelScanTransformError.controlPortConflict(name: signalName)
+        }
+        return binding.netID
     }
 
     private func isSequential(_ type: String) -> Bool {
