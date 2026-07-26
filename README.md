@@ -17,6 +17,9 @@ that compact coverage index does not carry cycle-accurate execution semantics.
 For an uncompressed realized scan implementation, ATPG separately emits a
 digest-bound `DFTScanPatternExecutionPlan` containing exact serial load,
 functional capture, primary-output compare, and serial unload semantics.
+ATPG also retains the exact extracted or declared `DFTFaultUniverse` as an
+immutable input-kind artifact so independent replay never reconstructs the
+coverage denominator from a summary.
 `DFTPatternExchange` converts that neutral plan into its rich model and the
 accepted STIL subset. Unsupported compression, multiple clock domains, falling
 edge capture, oversized exhaustive spaces, or incomplete realized mappings
@@ -263,6 +266,12 @@ swift run dft-engine convert-scan-pattern \
   --format stil \
   --result /tmp/dft-project/production-scan.stil
 
+swift run dft-engine compose-atpg-request \
+  --import-result /tmp/dft-openroad-import-result.json \
+  --configuration /tmp/dft-project/atpg-configuration.json \
+  --output-dir /tmp/dft-project \
+  --result /tmp/dft-project/atpg-request.json
+
 swift run dft-engine replay \
   --request /tmp/dft-project/replay-request.json \
   --output-dir /tmp/dft-project \
@@ -305,6 +314,13 @@ canonical connectivity validation, while ToolQualification owns producer trust.
 through `DFTScanPatternExchangeConverter`, and serializes the accepted STIL
 subset through `STILPatternCodec`. The CLI does not reconstruct cycles or
 waveform semantics.
+
+`compose-atpg-request` delegates to the protocol-first
+`DFTRealizedScanATPGRequestBuilding` boundary. The default builder reopens the
+digest-bound realized scan implementation, derives domain sizes from its
+canonical chain topology, and requires an explicit domain-to-clock mapping.
+It does not parse ScanDEF again, infer PDK identity, or weaken gate-level ATPG
+into a declared-fault fallback.
 
 Artifact stores are immutable: repeating the same artifact write is idempotent, while replacing bytes at an existing run path is rejected.
 

@@ -43,11 +43,52 @@ public struct DFTCLICommand: Sendable {
             return try convertScanPattern(
                 arguments: Array(arguments.dropFirst())
             )
+        case "compose-atpg-request":
+            return try await composeATPGRequest(
+                arguments: Array(arguments.dropFirst())
+            )
         case "replay":
             return try await replay(arguments: Array(arguments.dropFirst()))
         default:
             throw DFTCLIError.unknownCommand(command)
         }
+    }
+
+    private func composeATPGRequest(arguments: [String]) async throws -> Int {
+        try validateOptions(
+            arguments,
+            allowed: [
+                "--import-result",
+                "--configuration",
+                "--output-dir",
+                "--result",
+            ]
+        )
+        let importResult: OpenROADDFTScanImportResult = try decodeRequest(
+            at: requiredOption("--import-result", in: arguments)
+        )
+        let configuration: DFTRealizedScanATPGRequestConfiguration =
+            try decodeRequest(
+                at: requiredOption("--configuration", in: arguments)
+            )
+        let outputDirectory = try requiredOption(
+            "--output-dir",
+            in: arguments
+        )
+        let store = FileSystemDFTArtifactStore(
+            rootURL: URL(fileURLWithPath: outputDirectory)
+        )
+        let request = try await DefaultDFTRealizedScanATPGRequestBuilder(
+            artifactReader: store
+        ).build(
+            importResult: importResult,
+            configuration: configuration
+        )
+        try writeResult(
+            try DFTArtifactJSONEncoder().encode(request),
+            to: option("--result", in: arguments)
+        )
+        return 0
     }
 
     private func convertScanPattern(arguments: [String]) throws -> Int {
@@ -329,6 +370,9 @@ public struct DFTCLICommand: Sendable {
         --output-dir <project-root> [--result <result.json>]
       dft-engine convert-scan-pattern --plan <execution-plan.json>
         --name <pattern-set-name> --format stil [--result <patterns.stil>]
+      dft-engine compose-atpg-request --import-result <scan-import.json>
+        --configuration <atpg-configuration.json> --output-dir <project-root>
+        [--result <request.json>]
       dft-engine replay --request <request.json> --output-dir <project-root>
         --compiler <iverilog> --compiler-descriptor <descriptor.json>
         --simulator <vvp> --simulator-descriptor <descriptor.json>

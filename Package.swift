@@ -80,6 +80,7 @@ let package = Package(
                 "DFTPatternExchange",
                 .product(name: "CircuiteFoundation", package: "CircuiteFoundation"),
                 .product(name: "LogicIR", package: "LogicDesign"),
+                .product(name: "PDKCore", package: "PDKKit"),
                 .product(name: "SignoffToolSupport", package: "SignoffToolSupport"),
             ]
         ),

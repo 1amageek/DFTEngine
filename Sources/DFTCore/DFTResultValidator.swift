@@ -97,7 +97,12 @@ public struct DFTResultValidator: Sendable {
             guard let coverage = payload.faultCoverage,
                   let patterns = payload.patterns,
                   let evidence = payload.coverageEvidence,
-                  !patterns.patterns.isEmpty else {
+                  !patterns.patterns.isEmpty,
+                  artifacts.contains(where: {
+                      $0.id.rawValue == "dft-fault-universe"
+                        && $0.kind == .input
+                        && $0.format == .json
+                  }) else {
                 throw DFTResultValidationError.completedPayloadIncomplete(.atpg)
             }
             try validateCoverage(

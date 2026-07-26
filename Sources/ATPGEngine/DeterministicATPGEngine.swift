@@ -894,6 +894,13 @@ public struct DeterministicATPGEngine: ATPGExecuting {
             let evidenceData = try DFTArtifactJSONEncoder().encode(evidence)
             var artifactContents = [
                 DFTArtifactContent(
+                    artifactID: "dft-fault-universe",
+                    fileName: "fault-universe.json",
+                    kind: .input,
+                    format: .json,
+                    data: try DFTArtifactJSONEncoder().encode(universe)
+                ),
+                DFTArtifactContent(
                     artifactID: "dft-coverage-evidence",
                     fileName: "coverage-evidence.json",
                     kind: .report,

@@ -177,6 +177,13 @@ Completed:
 - a headless `convert-scan-pattern` command that validates the neutral
   execution plan through the package converter and emits the accepted STIL
   subset without workflow-owned waveform semantics;
+- immutable persistence of the exact extracted or declared fault universe used
+  by ATPG, allowing replay to consume the same fault identities and
+  denominator instead of reconstructing them from coverage evidence;
+- a protocol-first realized-scan ATPG request builder and
+  `compose-atpg-request` CLI command that reopen the imported implementation,
+  derive domain sizes from canonical chain topology, and require explicit
+  domain-to-clock mapping;
 - a protocol-first OpenROAD importer and `import-openroad-scan` CLI path that
   convert retained pre/post Verilog plus standard DEF `SCANCHAINS` into
   canonical snapshots and `DFTScanImplementation` using the retained

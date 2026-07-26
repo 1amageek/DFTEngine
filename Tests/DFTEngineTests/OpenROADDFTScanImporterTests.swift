@@ -3,6 +3,7 @@ import CircuiteFoundation
 import DFTCore
 @testable import DFTExternalTools
 import Foundation
+import PDKCore
 import Testing
 
 @Suite("OpenROAD DFT scan importer")
@@ -257,6 +258,122 @@ struct OpenROADDFTScanImporterTests {
         #expect(result.artifacts.count == 4)
     }
 
+    @Test("CLI composes realized scan ATPG without reinterpreting ScanDEF")
+    func composesRealizedScanATPGThroughCLI() async throws {
+        let root = try temporaryDirectory()
+        defer { removeTemporaryDirectory(root) }
+        let store = FileSystemDFTArtifactStore(rootURL: root)
+        let importRequest = try await makeRequest(store: store)
+        let importResult = try await OpenROADDFTScanImporter(
+            artifactReader: store,
+            artifactStore: store
+        ).importScan(importRequest)
+        let importResultURL = root.appending(path: "openroad-import-result.json")
+        let configurationURL = root.appending(path: "atpg-configuration.json")
+        let requestURL = root.appending(path: "atpg-request.json")
+        try DFTArtifactJSONEncoder().encode(importResult).write(
+            to: importResultURL,
+            options: .atomic
+        )
+        let constraint = try fixtureArtifact(
+            id: "test-constraint",
+            path: "constraints.sdc",
+            kind: .constraint,
+            format: .sdc,
+            digest: String(repeating: "c", count: 64)
+        )
+        let pdkManifest = try fixtureArtifact(
+            id: "test-pdk",
+            path: "pdk.json",
+            kind: .technology,
+            format: .json,
+            digest: importResult.pdkDigest
+        )
+        let configuration = DFTRealizedScanATPGRequestConfiguration(
+            runID: "openroad-atpg-test",
+            constraints: DFTConstraintReference(
+                artifact: constraint,
+                modeIDs: ["scan"]
+            ),
+            pdk: PDKReference(
+                manifest: pdkManifest,
+                processID: importResult.processID,
+                version: "test",
+                digest: importResult.pdkDigest
+            ),
+            clocks: [
+                DFTScanClock(
+                    id: "scan-clock",
+                    signalName: "clk",
+                    periodNanoseconds: 10
+                ),
+            ],
+            domainClockIDs: ["clk": "scan-clock"],
+            atpg: DFTATPGConfiguration(
+                maximumPatternCount: 64,
+                patternLength: 16,
+                faultSource: .gateLevel,
+                maximumExhaustiveInputCount: 8
+            )
+        )
+        try DFTArtifactJSONEncoder().encode(configuration).write(
+            to: configurationURL,
+            options: .atomic
+        )
+
+        let exitCode = try await DFTCLICommand().run(arguments: [
+            "compose-atpg-request",
+            "--import-result", importResultURL.path,
+            "--configuration", configurationURL.path,
+            "--output-dir", root.path,
+            "--result", requestURL.path,
+        ])
+
+        #expect(exitCode == 0)
+        let request = try JSONDecoder().decode(
+            DFTRequest.self,
+            from: Data(contentsOf: requestURL)
+        )
+        #expect(request.operation == .atpg)
+        #expect(request.design == importResult.transformedDesign)
+        #expect(request.scanImplementation == importResult.scanImplementation)
+        #expect(request.scanArchitecture?.domains == [
+            DFTScanDomain(
+                id: "clk",
+                clockID: "scan-clock",
+                chainCount: 1,
+                estimatedElementCount: 2,
+                maximumChainLength: 2
+            ),
+        ])
+
+        var incompleteMapping = configuration
+        incompleteMapping.domainClockIDs = [:]
+        await #expect(
+            throws: DFTRealizedScanATPGRequestBuilderError.self
+        ) {
+            _ = try await DefaultDFTRealizedScanATPGRequestBuilder(
+                artifactReader: store
+            ).build(
+                importResult: importResult,
+                configuration: incompleteMapping
+            )
+        }
+
+        var lossyFaultSource = configuration
+        lossyFaultSource.atpg.faultSource = .declaredUniverse
+        await #expect(
+            throws: DFTRealizedScanATPGRequestBuilderError.self
+        ) {
+            _ = try await DefaultDFTRealizedScanATPGRequestBuilder(
+                artifactReader: store
+            ).build(
+                importResult: importResult,
+                configuration: lossyFaultSource
+            )
+        }
+    }
+
     private func makeRequest(
         store: any DFTArtifactStoring
     ) async throws -> OpenROADDFTScanImportRequest {
@@ -393,6 +510,31 @@ struct OpenROADDFTScanImporterTests {
             withIntermediateDirectories: false
         )
         return url
+    }
+
+    private func fixtureArtifact(
+        id: String,
+        path: String,
+        kind: ArtifactKind,
+        format: ArtifactFormat,
+        digest: String
+    ) throws -> ArtifactReference {
+        ArtifactReference(
+            id: try ArtifactID(rawValue: id),
+            locator: ArtifactLocator(
+                location: try ArtifactLocation(
+                    workspaceRelativePath: path
+                ),
+                role: .input,
+                kind: kind,
+                format: format
+            ),
+            digest: try ContentDigest(
+                algorithm: .sha256,
+                hexadecimalValue: digest
+            ),
+            byteCount: 1
+        )
     }
 
     private func removeTemporaryDirectory(_ url: URL) {

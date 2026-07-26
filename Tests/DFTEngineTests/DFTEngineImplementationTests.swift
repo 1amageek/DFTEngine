@@ -220,6 +220,29 @@ struct DFTEngineImplementationTests {
         #expect(result.artifacts.contains {
             $0.artifactID == "dft-scan-pattern-execution-plan"
         })
+        let faultUniverseArtifact = try #require(
+            result.artifacts.first {
+                $0.artifactID == "dft-fault-universe"
+            }
+        )
+        let retainedFaultUniverse = try JSONDecoder().decode(
+            DFTFaultUniverse.self,
+            from: try await store.data(for: faultUniverseArtifact)
+        )
+        #expect(
+            retainedFaultUniverse.faults.map(\.id)
+                == result.payload.coverageEvidence?.outcomes.map(\.faultID)
+        )
+        var missingFaultUniverseResult = result
+        missingFaultUniverseResult.artifacts.removeAll {
+            $0.artifactID == "dft-fault-universe"
+        }
+        #expect(throws: DFTResultValidationError.self) {
+            try DFTResultValidator().validate(
+                missingFaultUniverseResult,
+                for: atpgRequest
+            )
+        }
         let exchangeProgram = try DFTScanPatternExchangeConverter().program(
             from: plan,
             name: "realized_scan"

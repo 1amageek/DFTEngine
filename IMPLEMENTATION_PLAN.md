@@ -57,7 +57,10 @@ The full platform goal is intentionally decomposed into the gates documented in 
   digest-verified STIL, scan netlist, realized-scan, fault-universe, and model
   artifacts, compiles a deterministic harness, and emits raw golden/fault
   observations with typed timeout, cancellation, identity, and mismatch
-  failures. OpenROAD profile scan insertion, Yosys functional-mode
+  failures. Gate-level ATPG now persists the exact extracted fault universe,
+  and the protocol-first realized-scan request builder derives scan-domain
+  sizing from retained topology while requiring explicit clock mapping.
+  OpenROAD profile scan insertion, Yosys functional-mode
   equivalence, real hosted Icarus correlation, and ToolQualification remain
   separate gates.
 - Split estimated scan planning from realized scan connectivity.
