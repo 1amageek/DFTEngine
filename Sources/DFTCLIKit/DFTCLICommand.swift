@@ -4,6 +4,7 @@ import CircuiteFoundation
 import DFTCore
 import DFTEngine
 import DFTExternalTools
+import DFTPatternExchange
 import Foundation
 import ScanInsertion
 
@@ -38,11 +39,40 @@ public struct DFTCLICommand: Sendable {
             return try await importOpenROADScan(
                 arguments: Array(arguments.dropFirst())
             )
+        case "convert-scan-pattern":
+            return try convertScanPattern(
+                arguments: Array(arguments.dropFirst())
+            )
         case "replay":
             return try await replay(arguments: Array(arguments.dropFirst()))
         default:
             throw DFTCLIError.unknownCommand(command)
         }
+    }
+
+    private func convertScanPattern(arguments: [String]) throws -> Int {
+        try validateOptions(
+            arguments,
+            allowed: ["--plan", "--name", "--format", "--result"]
+        )
+        let plan: DFTScanPatternExecutionPlan = try decodeRequest(
+            at: requiredOption("--plan", in: arguments)
+        )
+        let name = try requiredOption("--name", in: arguments)
+        let format = try requiredOption("--format", in: arguments)
+        guard format == "stil" else {
+            throw DFTCLIError.unsupportedPatternFormat(format)
+        }
+        let program = try DFTScanPatternExchangeConverter().program(
+            from: plan,
+            name: name
+        )
+        let data = try STILPatternCodec().encode(program)
+        try writeResult(
+            data,
+            to: option("--result", in: arguments)
+        )
+        return 0
     }
 
     private func importOpenROADScan(arguments: [String]) async throws -> Int {
@@ -297,6 +327,8 @@ public struct DFTCLICommand: Sendable {
       dft-engine execute --request <request.json> --output-dir <project-root> [--result <result.json>]
       dft-engine import-openroad-scan --request <request.json>
         --output-dir <project-root> [--result <result.json>]
+      dft-engine convert-scan-pattern --plan <execution-plan.json>
+        --name <pattern-set-name> --format stil [--result <patterns.stil>]
       dft-engine replay --request <request.json> --output-dir <project-root>
         --compiler <iverilog> --compiler-descriptor <descriptor.json>
         --simulator <vvp> --simulator-descriptor <descriptor.json>
@@ -304,6 +336,7 @@ public struct DFTCLICommand: Sendable {
         [--result <result.json>]
 
     Execute emits a DFT result and uses exit code 2 for blocked execution.
+    Pattern conversion validates the neutral execution plan before serialization.
     Replay verifies retained input and executable identities before execution.
     """
 }

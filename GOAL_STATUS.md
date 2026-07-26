@@ -12,7 +12,7 @@
 | Contract build | Complete | `swift build` |
 | Contract test | Complete | Timeout-bounded `DFTEngine-Package` Xcode test through the workspace verifier |
 | Domain implementation | Native M2/M4 structural scope complete; M3 partial | Gate-level scan and compression transformation, process-scoped cell binding, Liberty timing/legal validation, independently replayed combinational and bounded sequential ATPG including explicit reset/set and latch semantics, process-specific model injection boundary, JSON pattern IR, and canonical logic/memory-BIST transformation are validated |
-| CLI implementation | Complete | `dft-engine capabilities`, `execute`, typed OpenROAD scan import, and retained-artifact `replay` with strict option validation, explicit digest-bound tool descriptors, deterministic JSON output, and behavior-tested filesystem execution |
+| CLI implementation | Complete | `dft-engine capabilities`, `execute`, typed OpenROAD scan import, neutral-plan-to-STIL conversion, and retained-artifact `replay` with strict option validation, explicit digest-bound tool descriptors, deterministic output, and behavior-tested filesystem execution |
 | Fixture corpus | Retained | Positive scan and negative ATPG fixtures |
 | Oracle correlation | Correlation infrastructure available; process qualification not claimed | Retained expectation artifact integrity, native-result correlation and deterministic evidence digest are implemented; no independent process oracle is bundled |
 | Process qualification | Not claimed | PDK/macro-specific evidence is external policy |

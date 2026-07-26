@@ -174,6 +174,9 @@ Completed:
 - a headless `dft-engine replay` command that consumes the typed replay request,
   explicit executable paths, and retained executable descriptors without
   moving STIL, scan, fault, or trust semantics into workflow glue;
+- a headless `convert-scan-pattern` command that validates the neutral
+  execution plan through the package converter and emits the accepted STIL
+  subset without workflow-owned waveform semantics;
 - a protocol-first OpenROAD importer and `import-openroad-scan` CLI path that
   convert retained pre/post Verilog plus standard DEF `SCANCHAINS` into
   canonical snapshots and `DFTScanImplementation` using the retained

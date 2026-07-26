@@ -112,7 +112,8 @@ Headless command composition without DFT semantic duplication.
 `DFTCLICommand` decodes the domain request and externally supplied tool
 descriptors, resolves the filesystem artifact store, and invokes the injected
 domain implementation path. `import-openroad-scan` delegates directly to
-`OpenROADDFTScanImporter`; `replay` delegates directly to
+`OpenROADDFTScanImporter`; `convert-scan-pattern` delegates to
+`DFTScanPatternExchangeConverter` and `STILPatternCodec`; `replay` delegates directly to
 `IcarusDFTScanPatternReplayProvider`. The CLI does not parse ScanDEF/STIL, infer
 scan connectivity, construct faults, or decide tool trust. `DFTCLIOutputWriting`
 keeps process I/O outside command parsing and makes the complete CLI path

@@ -12,6 +12,7 @@ enum DFTCLIError: Error, LocalizedError {
     case requestDecodeFailed(String)
     case descriptorDecodeFailed(role: String, message: String)
     case invalidNumericOption(name: String, value: String)
+    case unsupportedPatternFormat(String)
     case resultWriteFailed(String, String)
 
     var errorDescription: String? {
@@ -38,6 +39,8 @@ enum DFTCLIError: Error, LocalizedError {
             return "Could not decode \(role) descriptor: \(message)."
         case .invalidNumericOption(let name, let value):
             return "Option \(name) requires a finite numeric value, not '\(value)'."
+        case .unsupportedPatternFormat(let format):
+            return "Pattern format '\(format)' is not supported by the CLI."
         case .resultWriteFailed(let path, let message):
             return "Could not write result \(path): \(message)."
         }

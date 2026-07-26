@@ -257,6 +257,12 @@ swift run dft-engine import-openroad-scan \
   --output-dir /tmp/dft-project \
   --result /tmp/dft-openroad-import-result.json
 
+swift run dft-engine convert-scan-pattern \
+  --plan /tmp/dft-project/execution-plan.json \
+  --name production_scan \
+  --format stil \
+  --result /tmp/dft-project/production-scan.stil
+
 swift run dft-engine replay \
   --request /tmp/dft-project/replay-request.json \
   --output-dir /tmp/dft-project \
@@ -293,6 +299,12 @@ qualification remains outside this package.
 `OpenROADDFTScanImporter`. The workflow supplies retained tool outputs and a
 digest-bound producer descriptor; the importer owns standard-data parsing and
 canonical connectivity validation, while ToolQualification owns producer trust.
+
+`convert-scan-pattern` accepts the neutral
+`DFTScanPatternExecutionPlan`, validates its complete scan/capture topology
+through `DFTScanPatternExchangeConverter`, and serializes the accepted STIL
+subset through `STILPatternCodec`. The CLI does not reconstruct cycles or
+waveform semantics.
 
 Artifact stores are immutable: repeating the same artifact write is idempotent, while replacing bytes at an existing run path is rejected.
 
