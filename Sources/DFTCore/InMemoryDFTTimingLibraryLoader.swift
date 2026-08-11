@@ -8,8 +8,13 @@ public struct InMemoryDFTTimingLibraryLoader: DFTTimingLibraryLoading {
         self.library = library
     }
 
-    public func load(_ reference: ArtifactReference) throws -> TimingLibrary {
-        _ = reference
+    public func load(
+        _ reference: ArtifactReference,
+        binding: DFTArtifactBinding
+    ) async throws -> TimingLibrary {
+        guard binding.reference == reference else {
+            throw DFTArtifactBindingError.availabilityIdentityMismatch
+        }
         return library
     }
 }

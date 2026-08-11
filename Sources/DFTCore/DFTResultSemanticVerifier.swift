@@ -1,4 +1,5 @@
 import CircuiteFoundation
+import CircuiteFoundationCrypto
 import Foundation
 import LogicIR
 import PDKCore
@@ -22,24 +23,33 @@ public struct DFTResultSemanticVerifier: Sendable {
         guard result.status == .completed else {
             throw DFTResultSemanticValidationError.resultNotCompleted
         }
-        try await validatePDK(request.pdk, reading: artifacts)
+        let bindings = request.inputBindings + result.artifactBindings
+        try await validatePDK(request.pdk, bindings: bindings, reading: artifacts)
         switch request.operation {
         case .scanInsertion:
-            try await validateScanInsertion(result, request: request, reading: artifacts)
+            try await validateScanInsertion(
+                result,
+                request: request,
+                bindings: bindings,
+                reading: artifacts
+            )
         case .atpg:
             let design = try await loadSnapshot(
                 request.design,
                 requireEmbeddedDigest: false,
+                bindings: bindings,
                 reading: artifacts
             )
             let scanImplementation: DFTScanImplementation?
             if let reference = request.scanImplementation {
                 scanImplementation = try await loadScanImplementation(
                     reference,
+                    bindings: bindings,
                     reading: artifacts
                 )
                 try await validateScanExecutionPlanArtifact(
                     result,
+                    bindings: bindings,
                     reading: artifacts
                 )
             } else {
@@ -52,18 +62,30 @@ public struct DFTResultSemanticVerifier: Sendable {
                 scanImplementation: scanImplementation
             )
         case .bist:
-            try await validateBIST(result, request: request, reading: artifacts)
+            try await validateBIST(
+                result,
+                request: request,
+                bindings: bindings,
+                reading: artifacts
+            )
         }
     }
 
     private func loadScanImplementation(
         _ reference: DFTScanImplementationReference,
+        bindings: [DFTArtifactBinding],
         reading artifacts: any DFTArtifactReading
     ) async throws -> DFTScanImplementation {
         do {
             return try await VerifiedDFTScanImplementationLoader(
                 artifactReader: artifacts
-            ).load(reference)
+            ).load(
+                reference,
+                binding: try DFTArtifactBinding.require(
+                    reference.artifact,
+                    in: bindings
+                )
+            )
         } catch {
             throw DFTResultSemanticValidationError.artifactDecodeFailed(
                 "scan implementation: \(error.localizedDescription)"
@@ -73,17 +95,18 @@ public struct DFTResultSemanticVerifier: Sendable {
 
     private func validateScanExecutionPlanArtifact(
         _ result: DFTResult,
+        bindings: [DFTArtifactBinding],
         reading artifacts: any DFTArtifactReading
     ) async throws {
         guard let payloadPlan = result.payload.scanPatternExecutionPlan,
-              let reference = result.artifacts.first(where: {
-                  $0.id.rawValue == "dft-scan-pattern-execution-plan"
+              let binding = result.artifactBindings.first(where: {
+                  $0.logicalID == "dft-scan-pattern-execution-plan"
               }) else {
             throw DFTResultSemanticValidationError.semanticMismatch(
                 "scan execution-plan artifact is missing"
             )
         }
-        let data = try await verifiedData(for: reference, reading: artifacts)
+        let data = try await verifiedData(for: binding, reading: artifacts)
         let retainedPlan: DFTScanPatternExecutionPlan
         do {
             retainedPlan = try JSONDecoder().decode(
@@ -104,9 +127,13 @@ public struct DFTResultSemanticVerifier: Sendable {
 
     private func validatePDK(
         _ reference: PDKReference,
+        bindings: [DFTArtifactBinding],
         reading artifacts: any DFTArtifactReading
     ) async throws {
-        let data = try await verifiedData(for: reference.manifest, reading: artifacts)
+        let data = try await verifiedData(
+            for: try DFTArtifactBinding.require(reference.manifest, in: bindings),
+            reading: artifacts
+        )
         let manifest: PDKManifest
         do {
             manifest = try PDKManifestCodec.decode(data: data)
@@ -137,6 +164,7 @@ public struct DFTResultSemanticVerifier: Sendable {
     private func validateScanInsertion(
         _ result: DFTResult,
         request: DFTRequest,
+        bindings: [DFTArtifactBinding],
         reading artifacts: any DFTArtifactReading
     ) async throws {
         guard let transformedDesign = result.payload.transformedDesign,
@@ -152,22 +180,24 @@ public struct DFTResultSemanticVerifier: Sendable {
         let source = try await loadSnapshot(
             request.design,
             requireEmbeddedDigest: false,
+            bindings: bindings,
             reading: artifacts
         )
         let transformed = try await loadSnapshot(
             transformedDesign,
             requireEmbeddedDigest: true,
+            bindings: bindings,
             reading: artifacts
         )
-        guard let implementationReference = result.artifacts.first(where: {
-            $0.id.rawValue == "dft-scan-implementation"
+        guard let implementationBinding = result.artifactBindings.first(where: {
+            $0.logicalID == "dft-scan-implementation"
         }) else {
             throw DFTResultSemanticValidationError.semanticMismatch(
                 "scan implementation artifact is missing"
             )
         }
         let implementationData = try await verifiedData(
-            for: implementationReference,
+            for: implementationBinding,
             reading: artifacts
         )
         let retainedImplementation: DFTScanImplementation
@@ -191,7 +221,10 @@ public struct DFTResultSemanticVerifier: Sendable {
             transformed: transformed
         )
         let libraryData = try await verifiedData(
-            for: libraryReference.artifact,
+            for: try DFTArtifactBinding.require(
+                libraryReference.artifact,
+                in: bindings
+            ),
             reading: artifacts
         )
         let library: DFTCellLibraryManifest
@@ -479,6 +512,7 @@ public struct DFTResultSemanticVerifier: Sendable {
     private func validateBIST(
         _ result: DFTResult,
         request: DFTRequest,
+        bindings: [DFTArtifactBinding],
         reading artifacts: any DFTArtifactReading
     ) async throws {
         guard let transformedDesign = result.payload.transformedDesign,
@@ -491,11 +525,13 @@ public struct DFTResultSemanticVerifier: Sendable {
         let source = try await loadSnapshot(
             request.design,
             requireEmbeddedDigest: false,
+            bindings: bindings,
             reading: artifacts
         )
         let transformed = try await loadSnapshot(
             transformedDesign,
             requireEmbeddedDigest: true,
+            bindings: bindings,
             reading: artifacts
         )
         try validatePreservedDesignEnvelope(
@@ -538,7 +574,10 @@ public struct DFTResultSemanticVerifier: Sendable {
             )
         }
         let mappingData = try await verifiedData(
-            for: declaredMapping.artifact,
+            for: try DFTArtifactBinding.require(
+                declaredMapping.artifact,
+                in: bindings
+            ),
             reading: artifacts
         )
         let loadedMapping: DFTLogicBISTCellMappingManifest
@@ -1011,9 +1050,13 @@ public struct DFTResultSemanticVerifier: Sendable {
     private func loadSnapshot(
         _ reference: LogicDesignReference,
         requireEmbeddedDigest: Bool,
+        bindings: [DFTArtifactBinding],
         reading artifacts: any DFTArtifactReading
     ) async throws -> LogicDesignSnapshot {
-        let data = try await verifiedData(for: reference.artifact, reading: artifacts)
+        let data = try await verifiedData(
+            for: try DFTArtifactBinding.require(reference.artifact, in: bindings),
+            reading: artifacts
+        )
         let snapshot: LogicDesignSnapshot
         do {
             snapshot = try LogicDesignSnapshotCodec.decode(data)
@@ -1053,14 +1096,15 @@ public struct DFTResultSemanticVerifier: Sendable {
     }
 
     private func verifiedData(
-        for reference: ArtifactReference,
+        for binding: DFTArtifactBinding,
         reading artifacts: any DFTArtifactReading
     ) async throws -> Data {
-        let data = try await artifacts.data(for: reference)
+        let reference = binding.reference
+        let data = try await artifacts.data(for: binding)
         guard UInt64(data.count) == reference.byteCount,
               try SHA256ContentDigester().digest(data: data) == reference.digest else {
             throw DFTResultSemanticValidationError.artifactIdentityMismatch(
-                reference.path
+                binding.materializationDescription
             )
         }
         return data

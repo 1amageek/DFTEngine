@@ -2,7 +2,7 @@ import CircuiteFoundation
 import DFTCore
 
 public struct DFTScanPatternReplayRequest: Sendable, Hashable, Codable {
-    public static let currentSchemaVersion = 1
+    public static let currentSchemaVersion = 2
 
     public var schemaVersion: Int
     public var runID: String
@@ -14,6 +14,7 @@ public struct DFTScanPatternReplayRequest: Sendable, Hashable, Codable {
     public var cellModelArtifacts: [ArtifactReference]
     public var preprocessorDefines: [String]
     public var faultIDs: [String]
+    public var inputBindings: [DFTArtifactBinding]
 
     public init(
         runID: String,
@@ -23,6 +24,7 @@ public struct DFTScanPatternReplayRequest: Sendable, Hashable, Codable {
         scanImplementation: DFTScanImplementationReference,
         faultUniverseArtifact: ArtifactReference,
         cellModelArtifacts: [ArtifactReference],
+        inputBindings: [DFTArtifactBinding],
         preprocessorDefines: [String] = [],
         faultIDs: [String]
     ) {
@@ -34,7 +36,14 @@ public struct DFTScanPatternReplayRequest: Sendable, Hashable, Codable {
         self.scanImplementation = scanImplementation
         self.faultUniverseArtifact = faultUniverseArtifact
         self.cellModelArtifacts = cellModelArtifacts
+        self.inputBindings = inputBindings
         self.preprocessorDefines = preprocessorDefines
         self.faultIDs = faultIDs
+    }
+
+    public func requireBinding(
+        for reference: ArtifactReference
+    ) throws -> DFTArtifactBinding {
+        try DFTArtifactBinding.require(reference, in: inputBindings)
     }
 }

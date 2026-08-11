@@ -5,7 +5,13 @@ public struct InMemoryDFTCellLibraryLoader: DFTCellLibraryLoading {
         self.manifest = manifest
     }
 
-    public func load(_ reference: DFTCellLibraryReference) throws -> DFTCellLibraryManifest {
+    public func load(
+        _ reference: DFTCellLibraryReference,
+        binding: DFTArtifactBinding
+    ) async throws -> DFTCellLibraryManifest {
+        guard binding.reference == reference.artifact else {
+            throw DFTArtifactBindingError.availabilityIdentityMismatch
+        }
         try DFTCellLibraryManifestCodec.validate(manifest)
         let actualDigest = try DFTCellLibraryManifestCodec.digest(manifest)
         guard actualDigest == reference.manifestDigest else {

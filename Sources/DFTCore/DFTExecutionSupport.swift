@@ -52,17 +52,17 @@ public struct DFTExecutionSupport: Sendable {
         implementationID: String,
         status: DFTExecutionStatus,
         diagnostics: [DFTDiagnostic],
-        artifacts: [ArtifactReference] = [],
+        artifactBindings: [DFTArtifactBinding] = [],
         payload: DFTPayload,
         startedAt: Date,
         seed: UInt64? = nil
     ) throws -> DFTResult {
-        let result = DFTResult(
+        let result = try DFTResult(
             schemaVersion: DFTRequest.currentSchemaVersion,
             runID: request.runID,
             status: status,
             diagnostics: diagnostics,
-            artifacts: artifacts,
+            artifactBindings: artifactBindings,
             provenance: try provenance(
                 engineID: engineID,
                 implementationID: implementationID,

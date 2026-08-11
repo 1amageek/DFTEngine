@@ -1,4 +1,5 @@
 import CircuiteFoundation
+import CircuiteFoundationCrypto
 import Foundation
 
 public struct DFTOracleCorrelationEngine: DFTOracleCorrelating {
@@ -105,7 +106,7 @@ public struct DFTOracleCorrelationEngine: DFTOracleCorrelating {
                     "case " + corpusCase.caseID + " request digest must be a SHA-256 value"
                 )
             }
-            try validate(artifact: corpusCase.oracleArtifact, caseID: corpusCase.caseID)
+            try validate(binding: corpusCase.oracleArtifact, caseID: corpusCase.caseID)
             if let coverage = corpusCase.expectation.expectedCoverage,
                !coverage.isFinite || coverage < 0 || coverage > 1 {
                 throw DFTOracleCorrelationError.invalidCorpus(
@@ -115,11 +116,9 @@ public struct DFTOracleCorrelationEngine: DFTOracleCorrelating {
         }
     }
 
-    private func validate(artifact: ArtifactReference, caseID: String) throws {
-        guard !artifact.artifactID.isEmpty,
-              !artifact.path.isEmpty,
-              !artifact.path.hasPrefix("/"),
-              !artifact.path.split(separator: "/").contains(".."),
+    private func validate(binding: DFTArtifactBinding, caseID: String) throws {
+        let artifact = binding.reference
+        guard !binding.logicalID.isEmpty,
               artifact.digest.algorithm == .sha256,
               isSHA256(artifact.digest.hexadecimalValue),
               artifact.byteCount > 0 else {

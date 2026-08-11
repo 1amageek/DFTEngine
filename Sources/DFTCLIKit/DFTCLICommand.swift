@@ -75,7 +75,7 @@ public struct DFTCLICommand: Sendable {
             "--output-dir",
             in: arguments
         )
-        let store = FileSystemDFTArtifactStore(
+        let store = try FileSystemDFTArtifactStore(
             rootURL: URL(fileURLWithPath: outputDirectory)
         )
         let request = try await DefaultDFTRealizedScanATPGRequestBuilder(
@@ -126,7 +126,7 @@ public struct DFTCLICommand: Sendable {
         let request: OpenROADDFTScanImportRequest = try decodeRequest(
             at: requestPath
         )
-        let store = FileSystemDFTArtifactStore(
+        let store = try FileSystemDFTArtifactStore(
             rootURL: URL(fileURLWithPath: outputDirectory)
         )
         let result = try await OpenROADDFTScanImporter(
@@ -149,23 +149,27 @@ public struct DFTCLICommand: Sendable {
         let outputDirectory = try requiredOption("--output-dir", in: arguments)
         let request: DFTRequest = try decodeRequest(at: requestPath)
         let projectRoot = URL(fileURLWithPath: outputDirectory)
-        let store = FileSystemDFTArtifactStore(rootURL: projectRoot)
+        let store = try FileSystemDFTArtifactStore(rootURL: projectRoot)
         for artifact in request.executionInputArtifacts {
-            let input = try await store.data(for: artifact)
-            guard UInt64(input.count) == artifact.byteCount,
-                  try SHA256ContentDigester().digest(data: input)
-                    == artifact.digest else {
-                throw DFTCLIError.inputIdentityMismatch(artifact.path)
+            let binding = try request.requireBinding(for: artifact)
+            do {
+                _ = try await DFTArtifactDataLoader.load(
+                    reference: artifact,
+                    binding: binding,
+                    reader: store
+                )
+            } catch {
+                throw DFTCLIError.inputIdentityMismatch(binding.logicalID)
             }
         }
         let result = try await DefaultDFTEngine(
             artifactStore: store,
-            designLoader: FileSystemDFTDesignLoader(rootURL: projectRoot),
-            cellLibraryLoader: FileSystemDFTCellLibraryLoader(rootURL: projectRoot),
-            timingLibraryLoader: FileSystemDFTTimingLibraryLoader(rootURL: projectRoot),
-            constraintLoader: FileSystemDFTConstraintLoader(rootURL: projectRoot),
+            designLoader: FileSystemDFTDesignLoader(artifactReader: store),
+            cellLibraryLoader: FileSystemDFTCellLibraryLoader(artifactReader: store),
+            timingLibraryLoader: FileSystemDFTTimingLibraryLoader(artifactReader: store),
+            constraintLoader: FileSystemDFTConstraintLoader(artifactReader: store),
             logicBISTCellMappingLoader: FileSystemDFTLogicBISTCellMappingLoader(
-                rootURL: projectRoot
+                artifactReader: store
             )
         ).execute(request)
         try writeResult(
@@ -215,7 +219,7 @@ public struct DFTCLICommand: Sendable {
             at: requestPath
         )
         let projectRoot = URL(fileURLWithPath: outputDirectory)
-        let store = FileSystemDFTArtifactStore(rootURL: projectRoot)
+        let store = try FileSystemDFTArtifactStore(rootURL: projectRoot)
         let result = try await IcarusDFTScanPatternReplayProvider(
             compilerDescriptor: compilerDescriptor,
             compilerURL: URL(fileURLWithPath: compilerPath),

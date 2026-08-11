@@ -6,14 +6,14 @@ public struct DFTOracleCorpusCase: Sendable, Hashable, Codable {
     public var operation: DFTOperation
     public var requestDigest: String
     public var expectation: DFTOracleCaseExpectation
-    public var oracleArtifact: ArtifactReference
+    public var oracleArtifact: DFTArtifactBinding
 
     public init(
         caseID: String,
         operation: DFTOperation,
         requestDigest: String,
         expectation: DFTOracleCaseExpectation,
-        oracleArtifact: ArtifactReference
+        oracleArtifact: DFTArtifactBinding
     ) {
         self.caseID = caseID
         self.operation = operation

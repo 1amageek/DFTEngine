@@ -1,35 +1,31 @@
 import CircuiteFoundation
+import CircuiteFoundationCrypto
 import Foundation
 
 public struct FileSystemDFTLogicBISTCellMappingLoader: DFTLogicBISTCellMappingLoading {
-    public let rootURL: URL
+    public let artifactReader: any DFTArtifactReading
 
-    public init(rootURL: URL) {
-        self.rootURL = rootURL.standardizedFileURL
+    public init(artifactReader: any DFTArtifactReading) {
+        self.artifactReader = artifactReader
     }
 
     public func load(
-        _ mapping: DFTLogicBISTCellMapping
-    ) throws -> DFTLogicBISTCellMappingManifest {
-        let path = mapping.artifact.path
-        guard mapping.artifact.format == .json else {
-            throw DFTLogicBISTCellMappingError.invalidPath(path)
-        }
-        let url: URL
-        do {
-            url = try DFTProjectArtifactResolver(rootURL: rootURL).resolve(path)
-        } catch {
+        _ mapping: DFTLogicBISTCellMapping,
+        binding: DFTArtifactBinding
+    ) async throws -> DFTLogicBISTCellMappingManifest {
+        let path = binding.materializationDescription
+        guard mapping.artifact.descriptor.format == .json else {
             throw DFTLogicBISTCellMappingError.invalidPath(path)
         }
         let data: Data
         do {
-            data = try Data(contentsOf: url, options: .mappedIfSafe)
+            data = try await DFTArtifactDataLoader.load(
+                reference: mapping.artifact,
+                binding: binding,
+                reader: artifactReader
+            )
         } catch {
             throw DFTLogicBISTCellMappingError.readFailed(error.localizedDescription)
-        }
-        guard UInt64(data.count) == mapping.artifact.byteCount,
-              try SHA256ContentDigester().digest(data: data) == mapping.artifact.digest else {
-            throw DFTLogicBISTCellMappingError.identityMismatch(path)
         }
         do {
             return try JSONDecoder().decode(

@@ -2,9 +2,11 @@ public struct UnavailableDFTMemoryBISTCellMappingLoader: DFTMemoryBISTCellMappin
     public init() {}
 
     public func load(
-        _ mapping: DFTMemoryBISTCellMapping
-    ) throws -> DFTMemoryBISTCellMappingManifest {
+        _ mapping: DFTMemoryBISTCellMapping,
+        binding: DFTArtifactBinding
+    ) async throws -> DFTMemoryBISTCellMappingManifest {
         _ = mapping
+        _ = binding
         throw DFTMemoryBISTCellMappingError.loaderUnavailable
     }
 }

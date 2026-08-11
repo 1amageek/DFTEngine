@@ -1,6 +1,8 @@
 import ATPGEngine
 import BISTEngine
 import CircuiteFoundation
+import CircuiteFoundationCrypto
+import CircuiteFoundationFoundation
 import DFTCore
 import DFTEngine
 import DFTExternalTools
@@ -60,29 +62,30 @@ struct DFTEngineImplementationTests {
         #expect(result.payload.transformedDesign?.provenance?.transformationID == "dft-scan-insertion")
         #expect(result.payload.designDiff?.changes.count == 5)
         #expect(result.artifacts.count == 3)
-        let implementationReference = try #require(
-            result.artifacts.first {
-                $0.artifactID == "dft-scan-implementation"
+        let implementationBinding = try #require(
+            result.artifactBindings.first {
+                $0.logicalID == "dft-scan-implementation"
             }
         )
-        let implementationData = try #require(
-            await store.data(for: implementationReference.path)
-        )
+        let implementationData = try await store.data(for: implementationBinding)
         #expect(
             try JSONDecoder().decode(
                 DFTScanImplementation.self,
                 from: implementationData
             ) == implementation
         )
-        let diffReference = try #require(
-            result.artifacts.first { $0.artifactID == "dft-design-diff" }
+        let diffBinding = try #require(
+            result.artifactBindings.first { $0.logicalID == "dft-design-diff" }
         )
-        #expect(await store.data(for: diffReference.path) != nil)
+        #expect(try await !store.data(for: diffBinding).isEmpty)
         let transformedReference = try #require(
             result.payload.transformedDesign?.artifact
         )
-        let transformedData = try #require(
-            await store.data(for: transformedReference.path)
+        let transformedData = try await store.data(
+            for: DFTArtifactBinding.require(
+                transformedReference,
+                in: result.artifactBindings
+            )
         )
         let transformedSnapshot = try LogicDesignSnapshotCodec.decode(transformedData)
         let transformedModule = try #require(transformedSnapshot.gate?.modules.first)
@@ -164,13 +167,16 @@ struct DFTEngineImplementationTests {
         let implementation = try #require(
             scanResult.payload.scanImplementation
         )
-        let implementationArtifact = try #require(
-            scanResult.artifacts.first {
-                $0.artifactID == "dft-scan-implementation"
+        let implementationBinding = try #require(
+            scanResult.artifactBindings.first {
+                $0.logicalID == "dft-scan-implementation"
             }
         )
         let transformedData = try await store.data(
-            for: transformedReference.artifact
+            for: DFTArtifactBinding.require(
+                transformedReference.artifact,
+                in: scanResult.artifactBindings
+            )
         )
         let transformedSnapshot = try LogicDesignSnapshotCodec.decode(
             transformedData
@@ -187,12 +193,12 @@ struct DFTEngineImplementationTests {
             )
         )
         atpgRequest.design = transformedReference
-        atpgRequest.inputs = [
-            transformedReference.artifact,
-            implementationArtifact,
-        ]
+        atpgRequest.inputBindings = deduplicatedBindings(
+            atpgRequest.inputBindings + scanResult.artifactBindings
+        )
+        atpgRequest.inputs = atpgRequest.executionInputArtifacts
         atpgRequest.scanImplementation = DFTScanImplementationReference(
-            artifact: implementationArtifact,
+            artifact: implementationBinding.reference,
             transformedDesignDigest: transformedReference.designDigest
         )
 
@@ -217,26 +223,28 @@ struct DFTEngineImplementationTests {
                             == $0.elementOutputNetIDs.count
                 }
         })
-        #expect(result.artifacts.contains {
-            $0.artifactID == "dft-scan-pattern-execution-plan"
+        #expect(result.artifactBindings.contains {
+            $0.logicalID == "dft-scan-pattern-execution-plan"
         })
-        let faultUniverseArtifact = try #require(
-            result.artifacts.first {
-                $0.artifactID == "dft-fault-universe"
+        let faultUniverseBinding = try #require(
+            result.artifactBindings.first {
+                $0.logicalID == "dft-fault-universe"
             }
         )
         let retainedFaultUniverse = try JSONDecoder().decode(
             DFTFaultUniverse.self,
-            from: try await store.data(for: faultUniverseArtifact)
+            from: try await store.data(for: faultUniverseBinding)
         )
         #expect(
             retainedFaultUniverse.faults.map(\.id)
                 == result.payload.coverageEvidence?.outcomes.map(\.faultID)
         )
-        var missingFaultUniverseResult = result
-        missingFaultUniverseResult.artifacts.removeAll {
-            $0.artifactID == "dft-fault-universe"
-        }
+        let missingFaultUniverseResult = try replacing(
+            result,
+            artifactBindings: result.artifactBindings.filter {
+                $0.logicalID != "dft-fault-universe"
+            }
+        )
         #expect(throws: DFTResultValidationError.self) {
             try DFTResultValidator().validate(
                 missingFaultUniverseResult,
@@ -269,14 +277,15 @@ struct DFTEngineImplementationTests {
             scanImplementation: implementation
         )
 
-        var tampered = result
+        var tamperedPayload = result.payload
         let retainedUnload = try #require(
-            tampered.payload.scanPatternExecutionPlan?
+            tamperedPayload.scanPatternExecutionPlan?
                 .patterns[0].chains[0].expectedUnloadBits
         )
-        tampered.payload.scanPatternExecutionPlan?
+        tamperedPayload.scanPatternExecutionPlan?
             .patterns[0].chains[0].expectedUnloadBits =
                 retainedUnload == "0" ? "1" : "0"
+        let tampered = try replacing(result, payload: tamperedPayload)
         await #expect(throws: DFTResultSemanticValidationError.self) {
             try await GateLevelATPGResultSemanticVerifier().validate(
                 tampered,
@@ -286,13 +295,17 @@ struct DFTEngineImplementationTests {
             )
         }
 
-        var duplicateExecutionResult = result
+        var duplicateExecutionPayload = result.payload
         let duplicateExecution = try #require(
-            duplicateExecutionResult.payload.scanPatternExecutionPlan?
+            duplicateExecutionPayload.scanPatternExecutionPlan?
                 .patterns.first
         )
-        duplicateExecutionResult.payload.scanPatternExecutionPlan?
+        duplicateExecutionPayload.scanPatternExecutionPlan?
             .patterns.append(duplicateExecution)
+        let duplicateExecutionResult = try replacing(
+            result,
+            payload: duplicateExecutionPayload
+        )
         #expect(throws: DFTResultValidationError.self) {
             try DFTResultValidator().validate(
                 duplicateExecutionResult,
@@ -300,9 +313,13 @@ struct DFTEngineImplementationTests {
             )
         }
 
-        var incompleteExecutionResult = result
-        incompleteExecutionResult.payload.scanPatternExecutionPlan?
+        var incompleteExecutionPayload = result.payload
+        incompleteExecutionPayload.scanPatternExecutionPlan?
             .patterns[0].chains.removeAll()
+        let incompleteExecutionResult = try replacing(
+            result,
+            payload: incompleteExecutionPayload
+        )
         await #expect(throws: DFTResultSemanticValidationError.self) {
             try await GateLevelATPGResultSemanticVerifier().validate(
                 incompleteExecutionResult,
@@ -365,7 +382,12 @@ struct DFTEngineImplementationTests {
         #expect(result.status == .completed)
         #expect(result.payload.designDiff?.changes.count == 6)
         let transformedReference = try #require(result.payload.transformedDesign?.artifact)
-        let transformedData = try #require(await store.data(for: transformedReference.path))
+        let transformedData = try await store.data(
+            for: DFTArtifactBinding.require(
+                transformedReference,
+                in: result.artifactBindings
+            )
+        )
         let transformed = try LogicDesignSnapshotCodec.decode(transformedData)
         let module = try #require(transformed.gate?.modules.first)
         let decompressor = try #require(module.cells.first {
@@ -720,14 +742,16 @@ struct DFTEngineImplementationTests {
                 faultSource: .gateLevel
             )
         )
-        var result = try await DeterministicATPGEngine(
+        let result = try await DeterministicATPGEngine(
             designLoader: InMemoryDFTDesignLoader(snapshot: snapshot),
             constraintLoader: FixtureConstraintLoader()
         ).execute(request)
-        result.payload.coverageEvidence?.outcomes.removeLast()
+        var incompletePayload = result.payload
+        incompletePayload.coverageEvidence?.outcomes.removeLast()
+        let incompleteResult = try replacing(result, payload: incompletePayload)
 
         do {
-            try DFTResultValidator().validate(result, for: request)
+            try DFTResultValidator().validate(incompleteResult, for: request)
             Issue.record("Aggregate coverage must not replace exact per-fault evidence.")
         } catch let error as DFTResultValidationError {
             guard case .coverageInvalid = error else {
@@ -1415,8 +1439,11 @@ struct DFTEngineImplementationTests {
         let transformedReference = try #require(
             result.payload.transformedDesign?.artifact
         )
-        let transformedData = try #require(
-            await store.data(for: transformedReference.path)
+        let transformedData = try await store.data(
+            for: DFTArtifactBinding.require(
+                transformedReference,
+                in: result.artifactBindings
+            )
         )
         let transformedSnapshot = try LogicDesignSnapshotCodec.decode(transformedData)
         let transformedCells = try #require(transformedSnapshot.gate?.modules.first?.cells)
@@ -1550,7 +1577,12 @@ struct DFTEngineImplementationTests {
         #expect(completed.payload.bistStructure?.memoryBindings == configured.memoryBindings)
         #expect(completed.payload.bistStructure?.memoryCellMapping == mapping)
         let transformedReference = try #require(completed.payload.transformedDesign?.artifact)
-        let transformedData = try #require(await store.data(for: transformedReference.path))
+        let transformedData = try await store.data(
+            for: DFTArtifactBinding.require(
+                transformedReference,
+                in: completed.artifactBindings
+            )
+        )
         let transformed = try LogicDesignSnapshotCodec.decode(transformedData)
         let module = try #require(transformed.gate?.modules.first)
         #expect(module.cells.contains { $0.type == "MBIST_CONTROLLER" })
@@ -1562,7 +1594,7 @@ struct DFTEngineImplementationTests {
         #expect(macro.pins.first { $0.name == "WE" }?.netID?.contains("mbist_") == true)
 
         let memoryRequest = request
-        let externalResponse = DFTResult(
+        let externalResponse = try DFTResult(
             schemaVersion: DFTRequest.currentSchemaVersion,
             runID: "run-bist",
             status: DFTExecutionStatus.completed,
@@ -1670,22 +1702,28 @@ struct DFTEngineImplementationTests {
             from: Data(contentsOf: requestURL)
         )
         let store = InMemoryDFTArtifactStore()
+        let reader = FixtureDFTArtifactReader(
+            inputRoot: fixtureRoot,
+            outputStore: store
+        )
         let result = try await DefaultDFTEngine(
             artifactStore: store,
-            designLoader: FileSystemDFTDesignLoader(rootURL: fixtureRoot),
-            cellLibraryLoader: FileSystemDFTCellLibraryLoader(rootURL: fixtureRoot),
-            timingLibraryLoader: FileSystemDFTTimingLibraryLoader(rootURL: fixtureRoot),
-            constraintLoader: FileSystemDFTConstraintLoader(rootURL: fixtureRoot)
+            designLoader: FileSystemDFTDesignLoader(artifactReader: reader),
+            cellLibraryLoader: FileSystemDFTCellLibraryLoader(
+                artifactReader: reader
+            ),
+            timingLibraryLoader: FileSystemDFTTimingLibraryLoader(
+                artifactReader: reader
+            ),
+            constraintLoader: FileSystemDFTConstraintLoader(
+                artifactReader: reader
+            )
         ).execute(request)
 
         #expect(result.status == .completed)
         #expect(result.artifacts.count == 3)
         #expect(result.payload.designDiff != nil)
 
-        let reader = FixtureDFTArtifactReader(
-            inputRoot: fixtureRoot,
-            outputStore: store
-        )
         try await DFTResultSemanticVerifier().validate(
             result,
             for: request,
@@ -1697,8 +1735,8 @@ struct DFTEngineImplementationTests {
                 for: request,
                 reading: TamperedDFTArtifactReader(
                     base: reader,
-                    tamperedPath: try #require(
-                        result.payload.transformedDesign?.artifact.path
+                    tamperedArtifact: try #require(
+                        result.payload.transformedDesign?.artifact
                     )
                 )
             )
@@ -1709,42 +1747,46 @@ struct DFTEngineImplementationTests {
                 for: request,
                 reading: TamperedDFTArtifactReader(
                     base: reader,
-                    tamperedPath: try #require(
-                        result.artifacts.first {
-                            $0.artifactID == "dft-scan-implementation"
-                        }?.path
+                    tamperedArtifact: try #require(
+                        result.artifactBindings.first {
+                            $0.logicalID == "dft-scan-implementation"
+                        }?.reference
                     )
                 )
             )
         }
-        var detachedResult = result
-        detachedResult.payload.scanImplementation?
+        var detachedPayload = result.payload
+        detachedPayload.scanImplementation?
             .chains[0].elements[0].scanInNetID = "detached-net"
+        let detachedResult = try replacing(result, payload: detachedPayload)
         #expect(throws: DFTResultValidationError.self) {
             try DFTResultValidator().validate(detachedResult, for: request)
         }
 
         var mismatchedReference = request.design
-        mismatchedReference.artifact = ArtifactReference(
-            id: mismatchedReference.artifact.id,
-            locator: mismatchedReference.artifact.locator,
+        mismatchedReference.artifact = try ArtifactReference(
             digest: try ContentDigest(
                 algorithm: .sha256,
                 hexadecimalValue: String(repeating: "0", count: 64)
             ),
             byteCount: mismatchedReference.artifact.byteCount,
-            producer: mismatchedReference.artifact.producer
+            descriptor: mismatchedReference.artifact.descriptor
         )
-        #expect(throws: DFTDesignLoaderError.self) {
-            _ = try FileSystemDFTDesignLoader(rootURL: fixtureRoot).load(
-                mismatchedReference
+        await #expect(throws: DFTDesignLoaderError.self) {
+            _ = try await FileSystemDFTDesignLoader(
+                artifactReader: reader
+            ).load(
+                mismatchedReference,
+                binding: request.requireBinding(
+                    for: request.design.artifact
+                )
             )
         }
     }
 
     @Test("DFT result directly exposes stable Foundation evidence")
     func resultPreservesFoundationArtifactIdentity() throws {
-        let artifact = testArtifact(
+        let artifactBinding = testArtifactBinding(
             artifactID: "dft-result",
             path: "dft/runs/run-foundation/result.json",
             kind: .report,
@@ -1754,7 +1796,7 @@ struct DFTEngineImplementationTests {
             role: .output
         )
         let timestamp = Date(timeIntervalSince1970: 10)
-        let result = DFTResult(
+        let result = try DFTResult(
             schemaVersion: DFTRequest.currentSchemaVersion,
             runID: "run-foundation",
             status: .completed,
@@ -1763,7 +1805,7 @@ struct DFTEngineImplementationTests {
                 code: "DFT_FIXTURE_WARNING",
                 message: "Fixture warning."
             )],
-            artifacts: [artifact],
+            artifactBindings: [artifactBinding],
             provenance: try DFTExecutionSupport.provenance(
                 engineID: "dft.atpg",
                 implementationID: "fixture-atpg",
@@ -1777,8 +1819,8 @@ struct DFTEngineImplementationTests {
             )
         )
         #expect(result.artifacts.count == 1)
-        #expect(result.artifacts[0].id.rawValue == "dft-result")
-        #expect(result.artifacts[0].locator.location.value == artifact.path)
+        #expect(result.artifacts[0] == artifactBinding.reference)
+        #expect(result.artifactBindings[0].logicalID == "dft-result")
         #expect(result.diagnostics[0].code.rawValue == "DFT_FIXTURE_WARNING")
         #expect(result.evidence.provenance == result.provenance)
     }
@@ -1786,18 +1828,20 @@ struct DFTEngineImplementationTests {
     @Test("DFT result retains Foundation-derived artifact identity")
     func resultRetainsDerivedArtifactIdentity() throws {
         let timestamp = Date(timeIntervalSince1970: 10)
-        let result = DFTResult(
+        let resultBinding = testArtifactBinding(
+            artifactID: "derived-result",
+            path: "result.json",
+            kind: .report,
+            format: .json,
+            sha256: String(repeating: "a", count: 64),
+            byteCount: 1,
+            role: .output
+        )
+        let result = try DFTResult(
             schemaVersion: DFTRequest.currentSchemaVersion,
             runID: "run-foundation",
             status: .completed,
-            artifacts: [testArtifact(
-                path: "result.json",
-                kind: .report,
-                format: .json,
-                sha256: String(repeating: "a", count: 64),
-                byteCount: 1,
-                role: .output
-            )],
+            artifactBindings: [resultBinding],
             provenance: try DFTExecutionSupport.provenance(
                 engineID: "dft.atpg",
                 implementationID: "fixture-atpg",
@@ -1810,13 +1854,13 @@ struct DFTEngineImplementationTests {
                 faultCoverage: nil
             )
         )
-        #expect(!result.artifacts[0].artifactID.isEmpty)
+        #expect(!result.artifacts[0].id.description.isEmpty)
     }
 
     @Test("invalid domain diagnostic codes map to a safe Foundation code")
     func invalidDiagnosticCodeFallsBackWithoutTerminating() throws {
         let timestamp = Date(timeIntervalSince1970: 10)
-        let result = DFTResult(
+        let result = try DFTResult(
             schemaVersion: DFTRequest.currentSchemaVersion,
             runID: "run-foundation",
             status: .blocked,
@@ -1928,18 +1972,18 @@ struct DFTEngineImplementationTests {
             runner: runner,
             artifactStore: store
         ).execute(request)
-        #expect(persisted.evidence.id == expected.evidence.id)
-        #expect(persisted.artifacts.map(\.artifactID) == [
+        #expect(persisted.evidence.id != expected.evidence.id)
+        #expect(persisted.artifactBindings.map(\.logicalID) == [
             "dft-external-result",
             "dft-external-stdout",
             "dft-external-stderr",
         ])
-        let stderrReference = try #require(
-            persisted.artifacts.first {
-                $0.artifactID == "dft-external-stderr"
+        let stderrBinding = try #require(
+            persisted.artifactBindings.first {
+                $0.logicalID == "dft-external-stderr"
             }
         )
-        #expect(await store.data(for: stderrReference.path) == Data())
+        #expect(try await store.data(for: stderrBinding) == Data())
 
         do {
             _ = try await DFTExternalToolExecutor(
@@ -1958,7 +2002,7 @@ struct DFTEngineImplementationTests {
             ))
         }
 
-        let mismatchedResult = DFTResult(
+        let mismatchedResult = try DFTResult(
             schemaVersion: expected.schemaVersion,
             runID: expected.runID,
             status: expected.status,
@@ -1967,8 +2011,8 @@ struct DFTEngineImplementationTests {
                 implementationID: "stub-atpg",
                 implementationVersion: "1.0.0",
                 inputs: [],
-                startedAt: expected.provenance.startedAt,
-                completedAt: expected.provenance.completedAt
+                startedAt: expected.provenance.startedAt.foundationDate,
+                completedAt: expected.provenance.completedAt.foundationDate
             ),
             payload: expected.payload
         )
@@ -1982,6 +2026,29 @@ struct DFTEngineImplementationTests {
         } catch let error as DFTExternalToolError {
             #expect(error == .provenanceInputMismatch)
         }
+    }
+
+    private func replacing(
+        _ result: DFTResult,
+        artifactBindings: [DFTArtifactBinding]? = nil,
+        payload: DFTPayload? = nil
+    ) throws -> DFTResult {
+        try DFTResult(
+            schemaVersion: result.schemaVersion,
+            runID: result.runID,
+            status: result.status,
+            diagnostics: result.dftDiagnostics,
+            artifactBindings: artifactBindings ?? result.artifactBindings,
+            provenance: result.provenance,
+            payload: payload ?? result.payload
+        )
+    }
+
+    private func deduplicatedBindings(
+        _ bindings: [DFTArtifactBinding]
+    ) -> [DFTArtifactBinding] {
+        var references = Set<ArtifactReference>()
+        return bindings.filter { references.insert($0.reference).inserted }
     }
 
     private func makeProcessSpecificATPGRequest() -> DFTRequest {
@@ -2017,7 +2084,7 @@ struct DFTEngineImplementationTests {
         atpgConfiguration: DFTATPGConfiguration? = nil,
         bistConfiguration: DFTBISTConfiguration? = nil
     ) -> DFTRequest {
-        let designArtifact = testArtifact(
+        let designBinding = testArtifactBinding(
             artifactID: "design",
             path: "design.json",
             kind: .netlist,
@@ -2026,36 +2093,70 @@ struct DFTEngineImplementationTests {
             byteCount: 10,
             role: .input
         )
-        let inputArtifacts = [designArtifact] + (cellLibrary.map { [$0.artifact] } ?? [])
+        let constraintBinding = testArtifactBinding(
+            artifactID: "constraints",
+            path: "constraints.sdc",
+            kind: .constraint,
+            format: .sdc,
+            sha256: String(repeating: "c", count: 64),
+            byteCount: 10,
+            role: .input
+        )
+        let pdkBinding = testArtifactBinding(
+            artifactID: "pdk",
+            path: "pdk.json",
+            kind: .technology,
+            format: .json,
+            sha256: String(repeating: "e", count: 64),
+            byteCount: 10,
+            role: .input
+        )
+        var inputBindings = [designBinding, constraintBinding, pdkBinding]
+        if let cellLibrary {
+            inputBindings.append(testArtifactBinding(
+                logicalID: "cell-library",
+                reference: cellLibrary.artifact,
+                path: "cell-library.json"
+            ))
+            if let timingLibraryArtifact = cellLibrary.timingLibraryArtifact {
+                inputBindings.append(testArtifactBinding(
+                    logicalID: "cell-timing-library",
+                    reference: timingLibraryArtifact,
+                    path: "cell-timing.lib.json"
+                ))
+            }
+        }
+        if let mapping = bistConfiguration?.logicCellMapping {
+            inputBindings.append(testArtifactBinding(
+                logicalID: "logic-bist-cell-mapping",
+                reference: mapping.artifact,
+                path: "logic-bist-cell-mapping.json"
+            ))
+        }
+        if let mapping = bistConfiguration?.memoryCellMapping {
+            inputBindings.append(testArtifactBinding(
+                logicalID: "memory-bist-cell-mapping",
+                reference: mapping.artifact,
+                path: "memory-bist-cell-mapping.json"
+            ))
+        }
         return DFTRequest(
             runID: "run-\(operation.rawValue)",
-            inputs: inputArtifacts,
+            inputBindings: deduplicatedBindings(inputBindings),
             design: LogicDesignReference(
-                artifact: designArtifact,
+                artifact: designBinding.reference,
                 topDesignName: "top",
                 designDigest: designDigest
             ),
             constraints: DFTConstraintReference(
-                artifact: testArtifact(
-                    artifactID: "constraints",
-                    path: "constraints.sdc",
-                    kind: .constraint,
-                    format: .sdc,
-                    sha256: String(repeating: "c", count: 64),
-                    byteCount: 10,
-                    role: .input
-                ),
+                artifact: constraintBinding.reference,
                 modeIDs: ["functional", "test"]
             ),
             pdk: PDKReference(
-                manifest: testArtifact(
-                    artifactID: "pdk",
+                manifest: pdkBinding.reference,
+                manifestLocator: testArtifactLocator(
                     path: "pdk.json",
-                    kind: .technology,
-                    format: .json,
-                    sha256: String(repeating: "e", count: 64),
-                    byteCount: 10,
-                    role: .input
+                    reference: pdkBinding.reference
                 ),
                 processID: "test-process",
                 version: "1",
@@ -2507,9 +2608,11 @@ private struct FixtureConstraintLoader: DFTConstraintLoading {
     var clockSignal = "scan_clk"
 
     func load(
-        _ reference: DFTConstraintReference
-    ) throws -> [TimingConstraintSet] {
-        reference.modeIDs.map { modeID in
+        _ reference: DFTConstraintReference,
+        bindings: [DFTArtifactBinding]
+    ) async throws -> [TimingConstraintSet] {
+        _ = bindings
+        return reference.modeIDs.map { modeID in
             TimingConstraintSet(
                 modeID: modeID,
                 clocks: [
@@ -2536,8 +2639,10 @@ private struct FixtureConstraintLoader: DFTConstraintLoading {
 
 private struct MissingModeConstraintLoader: DFTConstraintLoading {
     func load(
-        _ reference: DFTConstraintReference
-    ) throws -> [TimingConstraintSet] {
+        _ reference: DFTConstraintReference,
+        bindings: [DFTArtifactBinding]
+    ) async throws -> [TimingConstraintSet] {
+        _ = bindings
         guard let modeID = reference.modeIDs.first else {
             return []
         }
@@ -2568,9 +2673,11 @@ private struct MissingModeConstraintLoader: DFTConstraintLoading {
 
 private struct FixtureLogicBISTCellMappingLoader: DFTLogicBISTCellMappingLoading {
     func load(
-        _ mapping: DFTLogicBISTCellMapping
-    ) throws -> DFTLogicBISTCellMappingManifest {
-        mapping.manifest
+        _ mapping: DFTLogicBISTCellMapping,
+        binding: DFTArtifactBinding
+    ) async throws -> DFTLogicBISTCellMappingManifest {
+        _ = binding
+        return mapping.manifest
     }
 }
 
@@ -2578,18 +2685,21 @@ private struct FixedLogicBISTCellMappingLoader: DFTLogicBISTCellMappingLoading {
     let manifest: DFTLogicBISTCellMappingManifest
 
     func load(
-        _ mapping: DFTLogicBISTCellMapping
-    ) throws -> DFTLogicBISTCellMappingManifest {
-        _ = mapping
+        _ mapping: DFTLogicBISTCellMapping,
+        binding: DFTArtifactBinding
+    ) async throws -> DFTLogicBISTCellMappingManifest {
+        _ = (mapping, binding)
         return manifest
     }
 }
 
 private struct FixtureMemoryBISTCellMappingLoader: DFTMemoryBISTCellMappingLoading {
     func load(
-        _ mapping: DFTMemoryBISTCellMapping
-    ) throws -> DFTMemoryBISTCellMappingManifest {
-        mapping.manifest
+        _ mapping: DFTMemoryBISTCellMapping,
+        binding: DFTArtifactBinding
+    ) async throws -> DFTMemoryBISTCellMappingManifest {
+        _ = binding
+        return mapping.manifest
     }
 }
 
@@ -2597,12 +2707,14 @@ private struct FixtureDFTArtifactReader: DFTArtifactReading {
     let inputRoot: URL
     let outputStore: InMemoryDFTArtifactStore
 
-    func data(for reference: ArtifactReference) async throws -> Data {
-        if reference.locator.role == .output {
-            return try await outputStore.data(for: reference)
+    func data(for binding: DFTArtifactBinding) async throws -> Data {
+        if binding.descriptor.role == .output {
+            return try await outputStore.data(for: binding)
         }
         return try Data(
-            contentsOf: inputRoot.appending(path: reference.path),
+            contentsOf: inputRoot.appending(
+                path: binding.requireLocalRelativePath().stringValue
+            ),
             options: .mappedIfSafe
         )
     }
@@ -2610,11 +2722,11 @@ private struct FixtureDFTArtifactReader: DFTArtifactReading {
 
 private struct TamperedDFTArtifactReader: DFTArtifactReading {
     let base: any DFTArtifactReading
-    let tamperedPath: String
+    let tamperedArtifact: ArtifactReference
 
-    func data(for reference: ArtifactReference) async throws -> Data {
-        var data = try await base.data(for: reference)
-        if reference.path == tamperedPath {
+    func data(for binding: DFTArtifactBinding) async throws -> Data {
+        var data = try await base.data(for: binding)
+        if binding.reference == tamperedArtifact {
             data.append(0)
         }
         return data

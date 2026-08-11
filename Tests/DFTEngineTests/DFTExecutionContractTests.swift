@@ -1,4 +1,5 @@
 import CircuiteFoundation
+import CircuiteFoundationFoundation
 import DFTCore
 import DFTEngine
 import Foundation
@@ -35,7 +36,7 @@ struct DFTExecutionContractTests {
 
     @Test("DFT implementation executes the Foundation Engine contract directly")
     func implementationExecutesFoundationEngineContract() async throws {
-        let input = testArtifact(
+        let inputBinding = testArtifactBinding(
             artifactID: "design-input",
             path: "design.json",
             kind: .netlist,
@@ -44,35 +45,41 @@ struct DFTExecutionContractTests {
             byteCount: 10,
             role: .input
         )
+        let constraintBinding = testArtifactBinding(
+            artifactID: "constraints",
+            path: "constraints.sdc",
+            kind: .constraint,
+            format: .sdc,
+            sha256: String(repeating: "c", count: 64),
+            byteCount: 4,
+            role: .input
+        )
+        let pdkBinding = testArtifactBinding(
+            artifactID: "pdk",
+            path: "pdk.json",
+            kind: .technology,
+            format: .json,
+            sha256: String(repeating: "e", count: 64),
+            byteCount: 4,
+            role: .input
+        )
         let request = DFTRequest(
             runID: "foundation-run",
-            inputs: [input],
+            inputBindings: [inputBinding, constraintBinding, pdkBinding],
             design: LogicDesignReference(
-                artifact: input,
+                artifact: inputBinding.reference,
                 topDesignName: "top",
                 designDigest: String(repeating: "b", count: 64)
             ),
             constraints: DFTConstraintReference(
-                artifact: testArtifact(
-                    artifactID: "constraints",
-                    path: "constraints.sdc",
-                    kind: .constraint,
-                    format: .sdc,
-                    sha256: String(repeating: "c", count: 64),
-                    byteCount: 4,
-                    role: .input
-                ),
+                artifact: constraintBinding.reference,
                 modeIDs: ["test"]
             ),
             pdk: PDKReference(
-                manifest: testArtifact(
-                    artifactID: "pdk",
+                manifest: pdkBinding.reference,
+                manifestLocator: testArtifactLocator(
                     path: "pdk.json",
-                    kind: .technology,
-                    format: .json,
-                    sha256: String(repeating: "e", count: 64),
-                    byteCount: 4,
-                    role: .input
+                    reference: pdkBinding.reference
                 ),
                 processID: "fixture-process",
                 version: "1",
@@ -81,7 +88,7 @@ struct DFTExecutionContractTests {
             operation: .atpg
         )
         let timestamp = Date(timeIntervalSince1970: 100)
-        let result = DFTResult(
+        let result = try DFTResult(
             schemaVersion: DFTRequest.currentSchemaVersion,
             runID: request.runID,
             status: .blocked,

@@ -57,8 +57,11 @@ struct DFTArtifactStoreTests {
             runID: "run-batch"
         )
         #expect(references.count == 2)
-        #expect(Set(references.map(\.path)).count == 2)
-        #expect(references.allSatisfy { $0.path.contains("/batch-") })
+        let paths = try references.map {
+            try $0.requireLocalRelativePath().stringValue
+        }
+        #expect(Set(paths).count == 2)
+        #expect(paths.allSatisfy { $0.contains("/batch-") })
 
         var conflicting = second
         conflicting.data = Data("replacement".utf8)
@@ -96,8 +99,12 @@ struct DFTArtifactStoreTests {
                 Issue.record("Could not remove artifact-store fixture: \(error.localizedDescription)")
             }
         }
+        try FileManager.default.createDirectory(
+            at: root,
+            withIntermediateDirectories: false
+        )
 
-        let store = FileSystemDFTArtifactStore(rootURL: root)
+        let store = try FileSystemDFTArtifactStore(rootURL: root)
         let original = DFTArtifactContent(
             artifactID: "artifact-a",
             fileName: "result.json",
@@ -135,7 +142,11 @@ struct DFTArtifactStoreTests {
                 )
             }
         }
-        let store = FileSystemDFTArtifactStore(rootURL: root)
+        try FileManager.default.createDirectory(
+            at: root,
+            withIntermediateDirectories: false
+        )
+        let store = try FileSystemDFTArtifactStore(rootURL: root)
         let contents = [
             DFTArtifactContent(
                 artifactID: "batch-a",
@@ -158,11 +169,12 @@ struct DFTArtifactStoreTests {
             runID: "run-batch"
         )
         #expect(references.count == contents.count)
-        #expect(
-            Set(references.map {
-                URL(filePath: $0.path).deletingLastPathComponent().path
-            }).count == 1
-        )
+        let parentPaths = try references.map {
+            try $0.requireLocalRelativePath().segments
+                .dropLast()
+                .joined(separator: "/")
+        }
+        #expect(Set(parentPaths).count == 1)
         for (content, reference) in zip(contents, references) {
             #expect(try await store.data(for: reference) == content.data)
         }
@@ -170,7 +182,7 @@ struct DFTArtifactStoreTests {
             try await store.storeBatch(contents, runID: "run-batch")
                 == references
         )
-        let concurrentStore = FileSystemDFTArtifactStore(rootURL: root)
+        let concurrentStore = try FileSystemDFTArtifactStore(rootURL: root)
         async let firstPublication = store.storeBatch(
             contents,
             runID: "run-concurrent"
@@ -261,7 +273,7 @@ struct DFTArtifactStoreTests {
     }
 
     @Test("file-system input loaders reject a symlink that escapes the root")
-    func fileSystemInputLoaderRejectsEscapedSymlink() throws {
+    func fileSystemInputLoaderRejectsEscapedSymlink() async throws {
         let root = FileManager.default.temporaryDirectory
             .appending(path: "dft-input-root-\(UUID().uuidString)")
         let outside = FileManager.default.temporaryDirectory
@@ -291,7 +303,7 @@ struct DFTArtifactStoreTests {
             at: root.appending(path: "design.json"),
             withDestinationURL: outsideDesign
         )
-        let artifact = testArtifact(
+        let binding = testArtifactBinding(
             artifactID: "design",
             path: "design.json",
             kind: .netlist,
@@ -301,13 +313,16 @@ struct DFTArtifactStoreTests {
             role: .input
         )
         let reference = LogicDesignReference(
-            artifact: artifact,
+            artifact: binding.reference,
             topDesignName: "top",
             designDigest: String(repeating: "1", count: 64)
         )
 
-        #expect(throws: DFTDesignLoaderError.invalidPath("design.json")) {
-            _ = try FileSystemDFTDesignLoader(rootURL: root).load(reference)
+        let store = try FileSystemDFTArtifactStore(rootURL: root)
+        await #expect(throws: DFTDesignLoaderError.self) {
+            _ = try await FileSystemDFTDesignLoader(
+                artifactReader: store
+            ).load(reference, binding: binding)
         }
     }
 }

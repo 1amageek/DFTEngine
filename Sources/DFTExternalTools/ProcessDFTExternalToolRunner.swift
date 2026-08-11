@@ -1,5 +1,6 @@
 import DFTCore
 import CircuiteFoundation
+import CircuiteFoundationCrypto
 import Foundation
 import SignoffToolSupport
 

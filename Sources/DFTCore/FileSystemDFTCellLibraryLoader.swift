@@ -1,41 +1,32 @@
 import CircuiteFoundation
+import CircuiteFoundationCrypto
 import Foundation
 
 public struct FileSystemDFTCellLibraryLoader: DFTCellLibraryLoading {
-    public let rootURL: URL
+    public let artifactReader: any DFTArtifactReading
 
-    public init(rootURL: URL) {
-        self.rootURL = rootURL.standardizedFileURL
+    public init(artifactReader: any DFTArtifactReading) {
+        self.artifactReader = artifactReader
     }
 
-    public func load(_ reference: DFTCellLibraryReference) throws -> DFTCellLibraryManifest {
-        guard reference.artifact.format == .json else {
-            throw DFTCellLibraryError.unsupportedFormat(reference.artifact.format)
+    public func load(
+        _ reference: DFTCellLibraryReference,
+        binding: DFTArtifactBinding
+    ) async throws -> DFTCellLibraryManifest {
+        guard reference.artifact.descriptor.format == .json else {
+            throw DFTCellLibraryError.unsupportedFormat(reference.artifact.descriptor.format)
         }
-        let url = try resolve(reference.artifact.path)
         let data: Data
         do {
-            data = try Data(contentsOf: url, options: .mappedIfSafe)
+            data = try await DFTArtifactDataLoader.load(
+                reference: reference.artifact,
+                binding: binding,
+                reader: artifactReader
+            )
         } catch {
             throw DFTCellLibraryError.readFailed(
-                path: reference.artifact.path,
+                path: binding.materializationDescription,
                 message: error.localizedDescription
-            )
-        }
-        if reference.artifact.byteCount != UInt64(data.count) {
-            throw DFTCellLibraryError.byteCountMismatch(
-                path: reference.artifact.path,
-                expected: Int64(reference.artifact.byteCount),
-                actual: Int64(data.count)
-            )
-        }
-        let expected = reference.artifact.digest.hexadecimalValue
-        let actual = try SHA256ContentDigester().digest(data: data).hexadecimalValue
-        guard actual == expected else {
-            throw DFTCellLibraryError.artifactDigestMismatch(
-                path: reference.artifact.path,
-                expected: expected,
-                actual: actual
             )
         }
         let manifest: DFTCellLibraryManifest
@@ -43,20 +34,12 @@ public struct FileSystemDFTCellLibraryLoader: DFTCellLibraryLoading {
             manifest = try DFTCellLibraryManifestCodec.decode(data)
         } catch {
             throw DFTCellLibraryError.manifestDecodeFailed(
-                path: reference.artifact.path,
+                path: binding.materializationDescription,
                 message: error.localizedDescription
             )
         }
         try validate(manifest, reference: reference)
         return manifest
-    }
-
-    private func resolve(_ path: String) throws -> URL {
-        do {
-            return try DFTProjectArtifactResolver(rootURL: rootURL).resolve(path)
-        } catch {
-            throw DFTCellLibraryError.invalidPath(path)
-        }
     }
 
     private func validate(

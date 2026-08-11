@@ -1,4 +1,5 @@
 import CircuiteFoundation
+import CircuiteFoundationCrypto
 @testable import DFTCLIKit
 import DFTCore
 import DFTExternalTools
@@ -14,7 +15,7 @@ struct DFTCLIReplayTests {
         defer { removeTemporaryDirectory(root) }
         let compiler = try fakeCompiler(in: root)
         let simulator = try fakeSimulator(in: root)
-        let store = FileSystemDFTArtifactStore(rootURL: root)
+        let store = try FileSystemDFTArtifactStore(rootURL: root)
         let request = try await replayRequest(store: store)
         let requestURL = root.appending(path: "replay-request.json")
         let compilerDescriptorURL = root.appending(path: "compiler.json")
@@ -65,8 +66,8 @@ struct DFTCLIReplayTests {
             ),
         ])
         #expect(result.artifacts.count == 3)
-        for artifact in result.artifacts {
-            #expect(try await !store.data(for: artifact).isEmpty)
+        for artifactBinding in result.artifactBindings {
+            #expect(try await !store.data(for: artifactBinding).isEmpty)
         }
     }
 
@@ -76,7 +77,7 @@ struct DFTCLIReplayTests {
         defer { removeTemporaryDirectory(root) }
         let compiler = try fakeCompiler(in: root)
         let simulator = try fakeSimulator(in: root)
-        let store = FileSystemDFTArtifactStore(rootURL: root)
+        let store = try FileSystemDFTArtifactStore(rootURL: root)
         let request = try await replayRequest(store: store)
         let requestURL = root.appending(path: "replay-request.json")
         let compilerDescriptorURL = root.appending(path: "compiler.json")
@@ -198,14 +199,21 @@ struct DFTCLIReplayTests {
         return DFTScanPatternReplayRequest(
             runID: runID,
             topModule: "scan_dut",
-            patternArtifact: pattern,
-            scanNetlistArtifact: netlist,
+            patternArtifact: pattern.reference,
+            scanNetlistArtifact: netlist.reference,
             scanImplementation: DFTScanImplementationReference(
-                artifact: implementationArtifact,
+                artifact: implementationArtifact.reference,
                 transformedDesignDigest: implementation.transformedDesignDigest
             ),
-            faultUniverseArtifact: universeArtifact,
-            cellModelArtifacts: [model],
+            faultUniverseArtifact: universeArtifact.reference,
+            cellModelArtifacts: [model.reference],
+            inputBindings: [
+                pattern,
+                netlist,
+                implementationArtifact,
+                universeArtifact,
+                model,
+            ],
             preprocessorDefines: ["FUNCTIONAL"],
             faultIDs: ["scan-out-sa1"]
         )

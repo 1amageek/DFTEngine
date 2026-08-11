@@ -3,6 +3,7 @@ import Foundation
 import LogicIR
 import Testing
 import CircuiteFoundation
+import CircuiteFoundationCrypto
 
 @Suite("DFT oracle correlation")
 struct DFTOracleCorrelationTests {
@@ -25,7 +26,7 @@ struct DFTOracleCorrelationTests {
         )
 
         let loader = InMemoryDFTOracleArtifactLoader(
-            artifacts: [corpus.cases[0].oracleArtifact.path: oracleData]
+            artifacts: [corpus.cases[0].oracleArtifact.reference.id: oracleData]
         )
         let correlation = try await DFTOracleCorrelationEngine(artifactLoader: loader).correlate(
             corpus: corpus,
@@ -227,7 +228,7 @@ struct DFTOracleCorrelationTests {
                     expectedDetectedFaultIDs: ["fault-1"],
                     expectedCoverage: 1.0
                 ),
-                oracleArtifact: testArtifact(
+                oracleArtifact: testArtifactBinding(
                     artifactID: "oracle-case-1",
                     path: "evidence/oracle-case-1.json",
                     kind: .report,
@@ -252,12 +253,12 @@ struct DFTOracleCorrelationTests {
             expectedCoverage: 1.0
         )
         let oracleData = try DFTArtifactJSONEncoder().encode(expectation)
-        let oracleArtifact = testArtifact(
+        let oracleArtifact = testArtifactBinding(
             artifactID: "oracle-case-1",
             path: "evidence/oracle-case-1.json",
             kind: .report,
             format: .json,
-            sha256: try SHA256ContentDigester().digest(data: oracleData, using: .sha256).hexadecimalValue,
+            sha256: try SHA256ContentDigester().digest(data: oracleData).hexadecimalValue,
             byteCount: Int64(oracleData.count),
             role: .output
         )
@@ -300,8 +301,8 @@ struct DFTOracleCorrelationTests {
                 reason: "fixture"
             )]
         )
-        return DFTResult(
-            schemaVersion: 1,
+        return try DFTResult(
+            schemaVersion: DFTRequest.currentSchemaVersion,
             runID: "native-run",
             status: .completed,
             provenance: try DFTExecutionSupport.provenance(

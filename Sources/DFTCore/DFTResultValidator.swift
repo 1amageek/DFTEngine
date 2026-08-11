@@ -31,36 +31,35 @@ public struct DFTResultValidator: Sendable {
               producer.build?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false else {
             throw DFTResultValidationError.producerIdentityIncomplete
         }
-        try validateArtifacts(result.artifacts)
+        try validateArtifacts(result.artifactBindings)
         if result.status == .completed {
             try validateCompletedPayload(
                 result.payload,
                 artifacts: Set(result.artifacts),
+                artifactBindings: result.artifactBindings,
                 for: request
             )
         }
     }
 
-    private func validateArtifacts(_ artifacts: [ArtifactReference]) throws {
-        guard Set(artifacts).count == artifacts.count else {
+    private func validateArtifacts(_ bindings: [DFTArtifactBinding]) throws {
+        guard Set(bindings).count == bindings.count else {
             throw DFTResultValidationError.artifactInvalid("references must be unique")
         }
-        let artifactIDs = artifacts.map { $0.id.rawValue }
+        let artifactIDs = bindings.map(\.logicalID)
         guard Set(artifactIDs).count == artifactIDs.count else {
             throw DFTResultValidationError.artifactInvalid("artifact IDs must be unique")
         }
-        let paths = artifacts.map(\.path)
-        guard Set(paths).count == paths.count else {
-            throw DFTResultValidationError.artifactInvalid("artifact paths must be unique")
-        }
-        for artifact in artifacts {
-            let permitsEmptyLog = artifact.kind == .report && artifact.format == .raw
+        for binding in bindings {
+            let artifact = binding.reference
+            let permitsEmptyLog = artifact.descriptor.kind == .report
+                && artifact.descriptor.format == .raw
             guard (artifact.byteCount > 0 || permitsEmptyLog),
                   artifact.digest.algorithm == .sha256,
                   artifact.digest.hexadecimalValue.count == 64,
                   artifact.digest.hexadecimalValue.allSatisfy(\.isHexDigit) else {
                 throw DFTResultValidationError.artifactInvalid(
-                    "\(artifact.path) requires a non-empty SHA-256 identity"
+                    "\(binding.logicalID) requires a non-empty SHA-256 identity"
                 )
             }
         }
@@ -69,6 +68,7 @@ public struct DFTResultValidator: Sendable {
     private func validateCompletedPayload(
         _ payload: DFTPayload,
         artifacts: Set<ArtifactReference>,
+        artifactBindings: [DFTArtifactBinding],
         for request: DFTRequest
     ) throws {
         switch request.operation {
@@ -83,6 +83,7 @@ public struct DFTResultValidator: Sendable {
                     transformedDesign: transformedDesign,
                     plan: scanPlan,
                     artifacts: artifacts,
+                    artifactBindings: artifactBindings,
                     request: request
                   ),
                   request.insertionPolicy?.generateDesignDiff != true
@@ -98,10 +99,10 @@ public struct DFTResultValidator: Sendable {
                   let patterns = payload.patterns,
                   let evidence = payload.coverageEvidence,
                   !patterns.patterns.isEmpty,
-                  artifacts.contains(where: {
-                      $0.id.rawValue == "dft-fault-universe"
-                        && $0.kind == .input
-                        && $0.format == .json
+                  artifactBindings.contains(where: {
+                      $0.logicalID == "dft-fault-universe"
+                        && $0.descriptor.kind == .input
+                        && $0.descriptor.format == .json
                   }) else {
                 throw DFTResultValidationError.completedPayloadIncomplete(.atpg)
             }
@@ -118,6 +119,7 @@ public struct DFTResultValidator: Sendable {
                           scanImplementation: scanImplementation,
                           patterns: patterns,
                           artifacts: artifacts,
+                          artifactBindings: artifactBindings,
                           request: request
                       ) else {
                     throw DFTResultValidationError.completedPayloadIncomplete(.atpg)
@@ -174,6 +176,7 @@ public struct DFTResultValidator: Sendable {
         transformedDesign: LogicDesignReference,
         plan: DFTScanPlan,
         artifacts: Set<ArtifactReference>,
+        artifactBindings: [DFTArtifactBinding],
         request: DFTRequest
     ) -> Bool {
         guard let architecture = request.scanArchitecture,
@@ -190,10 +193,10 @@ public struct DFTResultValidator: Sendable {
               !implementation.scanEnableNetID.isEmpty,
               !implementation.testModeNetID.isEmpty,
               implementation.chains.count == plan.chains.count,
-              artifacts.contains(where: {
-                  $0.id.rawValue == "dft-scan-implementation"
-                    && $0.kind == .report
-                    && $0.format == .json
+              artifactBindings.contains(where: {
+                  $0.logicalID == "dft-scan-implementation"
+                    && $0.descriptor.kind == .report
+                    && $0.descriptor.format == .json
               }) else {
             return false
         }
@@ -426,6 +429,7 @@ public struct DFTResultValidator: Sendable {
         scanImplementation: DFTScanImplementationReference,
         patterns: DFTTestPatternSet,
         artifacts: Set<ArtifactReference>,
+        artifactBindings: [DFTArtifactBinding],
         request: DFTRequest
     ) -> Bool {
         guard let architecture = request.scanArchitecture,
@@ -440,10 +444,10 @@ public struct DFTResultValidator: Sendable {
               plan.clockPeriodPicoseconds > 0,
               plan.scanEnableSignal == architecture.scanEnableSignal,
               plan.testModeSignal == architecture.testModeSignal,
-              artifacts.contains(where: {
-                  $0.id.rawValue == "dft-scan-pattern-execution-plan"
-                    && $0.kind == .testPattern
-                    && $0.format == .json
+              artifactBindings.contains(where: {
+                  $0.logicalID == "dft-scan-pattern-execution-plan"
+                    && $0.descriptor.kind == .testPattern
+                    && $0.descriptor.format == .json
               }),
               !plan.patterns.isEmpty,
               plan.patterns.count == patterns.patterns.count,

@@ -1,4 +1,5 @@
 import CircuiteFoundation
+import CircuiteFoundationCrypto
 import Foundation
 
 public struct VerifiedDFTScanImplementationLoader: DFTScanImplementationLoading {
@@ -9,18 +10,23 @@ public struct VerifiedDFTScanImplementationLoader: DFTScanImplementationLoading 
     }
 
     public func load(
-        _ reference: DFTScanImplementationReference
+        _ reference: DFTScanImplementationReference,
+        binding: DFTArtifactBinding
     ) async throws -> DFTScanImplementation {
-        guard reference.artifact.format == .json else {
+        guard reference.artifact.descriptor.format == .json else {
             throw DFTScanImplementationLoaderError.unsupportedFormat(
-                reference.artifact.format
+                reference.artifact.descriptor.format
             )
         }
-        let data = try await artifactReader.data(for: reference.artifact)
+        let data = try await DFTArtifactDataLoader.load(
+            reference: reference.artifact,
+            binding: binding,
+            reader: artifactReader
+        )
         let actualByteCount = UInt64(data.count)
         guard actualByteCount == reference.artifact.byteCount else {
             throw DFTScanImplementationLoaderError.byteCountMismatch(
-                path: reference.artifact.path,
+                path: binding.materializationDescription,
                 expected: reference.artifact.byteCount,
                 actual: actualByteCount
             )
@@ -28,7 +34,7 @@ public struct VerifiedDFTScanImplementationLoader: DFTScanImplementationLoading 
         let actualDigest = try SHA256ContentDigester().digest(data: data)
         guard actualDigest == reference.artifact.digest else {
             throw DFTScanImplementationLoaderError.artifactDigestMismatch(
-                path: reference.artifact.path,
+                path: binding.materializationDescription,
                 expected: reference.artifact.digest.hexadecimalValue,
                 actual: actualDigest.hexadecimalValue
             )
@@ -41,7 +47,7 @@ public struct VerifiedDFTScanImplementationLoader: DFTScanImplementationLoading 
             )
         } catch {
             throw DFTScanImplementationLoaderError.decodeFailed(
-                path: reference.artifact.path,
+                path: binding.materializationDescription,
                 message: error.localizedDescription
             )
         }

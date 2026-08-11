@@ -109,8 +109,14 @@ public struct DeterministicATPGEngine: ATPGExecuting {
                 )
             }
             do {
+                let constraintBindings = try request.constraints.artifacts.map {
+                    try request.requireBinding(for: $0)
+                }
                 try DFTConstraintValidator().validate(
-                    constraintLoader.load(request.constraints),
+                    try await constraintLoader.load(
+                        request.constraints,
+                        bindings: constraintBindings
+                    ),
                     request: request
                 )
             } catch {
@@ -120,7 +126,7 @@ public struct DeterministicATPGEngine: ATPGExecuting {
                     startedAt: startedAt,
                     code: "DFT_CONSTRAINT_VALIDATION_FAILED",
                     message: error.localizedDescription,
-                    entity: request.constraints.artifacts.first?.path ?? "constraints",
+                    entity: "constraints",
                     actions: ["provide_constraint_loader", "repair_test_mode_constraints"]
                 )
             }
@@ -144,13 +150,18 @@ public struct DeterministicATPGEngine: ATPGExecuting {
                         startedAt: startedAt,
                         code: "DFT_CELL_LIBRARY_LOADER_MISSING",
                         message: "ATPG cannot use a process-scoped cell library without a manifest loader.",
-                        entity: cellLibraryReference.artifact.path,
+                        entity: cellLibraryReference.artifact.id.description,
                         actions: ["provide_cell_library_loader", "persist_cell_library_manifest"]
                     )
                 }
                 let manifest: DFTCellLibraryManifest
                 do {
-                    manifest = try cellLibraryLoader.load(cellLibraryReference)
+                    manifest = try await cellLibraryLoader.load(
+                        cellLibraryReference,
+                        binding: request.requireBinding(
+                            for: cellLibraryReference.artifact
+                        )
+                    )
                     try validate(cellLibrary: manifest, reference: cellLibraryReference, pdk: request.pdk)
                     guard let timingReference = cellLibraryReference.timingLibraryArtifact,
                           let timingLibraryLoader else {
@@ -159,7 +170,10 @@ public struct DeterministicATPGEngine: ATPGExecuting {
                             cellName: "<timing-library>"
                         )
                     }
-                    let timingLibrary = try timingLibraryLoader.load(timingReference)
+                    let timingLibrary = try await timingLibraryLoader.load(
+                        timingReference,
+                        binding: request.requireBinding(for: timingReference)
+                    )
                     _ = try DFTCellLibraryTimingValidator().validate(
                         manifest: manifest,
                         timingLibrary: timingLibrary
@@ -171,7 +185,7 @@ public struct DeterministicATPGEngine: ATPGExecuting {
                         startedAt: startedAt,
                         code: "DFT_CELL_LIBRARY_LOAD_FAILED",
                         message: error.localizedDescription,
-                        entity: cellLibraryReference.artifact.path,
+                        entity: cellLibraryReference.artifact.id.description,
                         actions: ["verify_cell_library_digest", "align_cell_library_with_pdk", "attach_qualification_evidence"]
                     )
                 }
@@ -212,7 +226,12 @@ public struct DeterministicATPGEngine: ATPGExecuting {
                 }
                 let loadedSnapshot: LogicDesignSnapshot
                 do {
-                    loadedSnapshot = try designLoader.load(request.design)
+                    loadedSnapshot = try await designLoader.load(
+                        request.design,
+                        binding: request.requireBinding(
+                            for: request.design.artifact
+                        )
+                    )
                 } catch {
                     return try blocked(
                         request: request,
@@ -220,7 +239,7 @@ public struct DeterministicATPGEngine: ATPGExecuting {
                         startedAt: startedAt,
                         code: "DFT_DESIGN_LOAD_FAILED",
                         message: "Could not load the canonical design for gate-level ATPG: \(error.localizedDescription)",
-                        entity: request.design.artifact.path,
+                        entity: request.design.artifact.id.description,
                         actions: ["verify_design_artifact_integrity", "repair_gate_level_snapshot"]
                     )
                 }
@@ -236,7 +255,7 @@ public struct DeterministicATPGEngine: ATPGExecuting {
                         startedAt: startedAt,
                         code: "DFT_FAULT_EXTRACTION_FAILED",
                         message: "Could not derive a gate-level fault universe: \(error.localizedDescription)",
-                        entity: request.design.artifact.path,
+                        entity: request.design.artifact.id.description,
                         actions: ["repair_gate_connectivity", "use_declared_fault_universe"]
                     )
                 }
@@ -263,13 +282,18 @@ public struct DeterministicATPGEngine: ATPGExecuting {
                }),
                let designLoader {
                 do {
-                    declaredGateSnapshot = try designLoader.load(request.design)
+                    declaredGateSnapshot = try await designLoader.load(
+                        request.design,
+                        binding: request.requireBinding(
+                            for: request.design.artifact
+                        )
+                    )
                 } catch {
                     diagnostics.append(DFTDiagnostic(
                         severity: .error,
                         code: "DFT_DECLARED_FAULT_DESIGN_LOAD_FAILED",
                         message: "Declared-fault ATPG could not load the canonical design: \(error.localizedDescription)",
-                        entity: request.design.artifact.path,
+                        entity: request.design.artifact.id.description,
                         suggestedActions: ["verify_design_artifact_integrity", "provide_a_qualified_fault_model"]
                     ))
                 }
@@ -295,14 +319,19 @@ public struct DeterministicATPGEngine: ATPGExecuting {
                                 startedAt: startedAt,
                                 code: "DFT_SCAN_IMPLEMENTATION_LOADER_MISSING",
                                 message: "Scan-pattern ATPG requires a digest-verifying scan implementation loader.",
-                                entity: scanReference.artifact.path,
+                                entity: scanReference.artifact.id.description,
                                 actions: ["inject_scan_implementation_loader"]
                             )
                         }
                         let implementation: DFTScanImplementation
                         do {
                             implementation = try await scanImplementationLoader
-                                .load(scanReference)
+                                .load(
+                                    scanReference,
+                                    binding: request.requireBinding(
+                                        for: scanReference.artifact
+                                    )
+                                )
                         } catch {
                             return try blocked(
                                 request: request,
@@ -310,7 +339,7 @@ public struct DeterministicATPGEngine: ATPGExecuting {
                                 startedAt: startedAt,
                                 code: "DFT_SCAN_IMPLEMENTATION_LOAD_FAILED",
                                 message: error.localizedDescription,
-                                entity: scanReference.artifact.path,
+                                entity: scanReference.artifact.id.description,
                                 actions: [
                                     "verify_scan_implementation_digest",
                                     "bind_atpg_to_the_transformed_design",
@@ -973,7 +1002,7 @@ public struct DeterministicATPGEngine: ATPGExecuting {
                 implementationID: implementationID,
                 status: isBlocked ? .blocked : .completed,
                 diagnostics: diagnostics,
-                artifacts: artifacts,
+                artifactBindings: artifacts,
                 payload: DFTPayload(
                     transformedDesign: nil,
                     faultCoverage: coverage,

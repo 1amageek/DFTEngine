@@ -58,8 +58,8 @@ public extension DFTRequest {
                 suggestedActions: ["recompute_design_digest"]
             ))
         }
-        issues.append(contentsOf: validateLocator(
-            design.artifact.locator,
+        issues.append(contentsOf: validateArtifact(
+            design.artifact,
             entity: "design.artifact"
         ))
         if pdk.processID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -129,22 +129,37 @@ public extension DFTRequest {
         for input in inputs {
             issues.append(contentsOf: validateArtifact(input, entity: "inputs"))
         }
-        let inputIDs = inputs.compactMap(\.artifactID)
-        if Set(inputIDs).count != inputIDs.count {
+        let bindingLogicalIDs = inputBindings.map(\.logicalID)
+        if Set(bindingLogicalIDs).count != bindingLogicalIDs.count {
             issues.append(DFTRequestValidationIssue(
                 code: "DFT_INPUT_ARTIFACT_IDS_DUPLICATE",
-                message: "Input artifact IDs must be unique.",
-                entity: "inputs",
+                message: "Input artifact logical IDs must be unique.",
+                entity: "inputBindings",
                 suggestedActions: ["assign_unique_artifact_ids"]
             ))
         }
-        let inputPaths = inputs.map(\.path)
-        if Set(inputPaths).count != inputPaths.count {
+        var materializations: [String: ArtifactID] = [:]
+        for binding in inputBindings {
+            let materialization = binding.materializationDescription
+            if let existing = materializations[materialization],
+               existing != binding.reference.id {
+                issues.append(DFTRequestValidationIssue(
+                    code: "DFT_INPUT_MATERIALIZATION_CONFLICT",
+                    message: "One materialization cannot identify different immutable content.",
+                    entity: materialization,
+                    suggestedActions: ["repair_artifact_availability"]
+                ))
+            } else {
+                materializations[materialization] = binding.reference.id
+            }
+        }
+        for reference in executionInputArtifacts
+            where !inputBindings.contains(where: { $0.reference == reference }) {
             issues.append(DFTRequestValidationIssue(
-                code: "DFT_INPUT_ARTIFACT_PATHS_DUPLICATE",
-                message: "Input artifact paths must be unique.",
-                entity: "inputs",
-                suggestedActions: ["remove_duplicate_input_artifacts"]
+                code: "DFT_INPUT_BINDING_MISSING",
+                message: "Every execution input requires an exact availability binding.",
+                entity: reference.id.description,
+                suggestedActions: ["provide_exact_artifact_availability"]
             ))
         }
         if let cellLibrary {
@@ -157,8 +172,8 @@ public extension DFTRequest {
                     timingLibraryArtifact,
                     entity: "cellLibrary.timingLibraryArtifact"
                 ))
-                if timingLibraryArtifact.format != .liberty
-                    && timingLibraryArtifact.format != .json {
+                if timingLibraryArtifact.descriptor.format != .liberty
+                    && timingLibraryArtifact.descriptor.format != .json {
                     issues.append(DFTRequestValidationIssue(
                         code: "DFT_TIMING_LIBRARY_FORMAT_UNSUPPORTED",
                         message: "Cell timing must be supplied as Liberty or canonical TimingLibrary JSON.",
@@ -190,7 +205,7 @@ public extension DFTRequest {
                 scanImplementation.artifact,
                 entity: "scanImplementation.artifact"
             ))
-            if scanImplementation.artifact.format != .json {
+            if scanImplementation.artifact.descriptor.format != .json {
                 issues.append(DFTRequestValidationIssue(
                     code: "DFT_SCAN_IMPLEMENTATION_FORMAT_UNSUPPORTED",
                     message: "Scan implementation evidence must use canonical JSON.",
@@ -507,24 +522,6 @@ public extension DFTRequest {
         entity: String
     ) -> [DFTRequestValidationIssue] {
         var issues: [DFTRequestValidationIssue] = []
-        do {
-            _ = try ArtifactID(rawValue: artifact.artifactID)
-        } catch {
-            issues.append(DFTRequestValidationIssue(
-                code: "DFT_ARTIFACT_ID_INVALID",
-                message: "Artifact IDs must be valid CircuiteFoundation tokens.",
-                entity: "\(entity).artifactID",
-                suggestedActions: ["assign_a_stable_artifact_id"]
-            ))
-        }
-        if !isSafePath(artifact.path) {
-            issues.append(DFTRequestValidationIssue(
-                code: "DFT_ARTIFACT_PATH_INVALID",
-                message: "Artifact paths must be project-relative and remain inside the project root.",
-                entity: "\(entity).path",
-                suggestedActions: ["provide_a_safe_project_relative_path"]
-            ))
-        }
         let digest = artifact.digest.hexadecimalValue
         if artifact.digest.algorithm != .sha256 || !isSHA256(digest) {
             issues.append(DFTRequestValidationIssue(
@@ -537,35 +534,8 @@ public extension DFTRequest {
         return issues
     }
 
-    private func validateLocator(
-        _ locator: ArtifactLocator,
-        entity: String
-    ) -> [DFTRequestValidationIssue] {
-        guard !locator.path.isEmpty else {
-            return [DFTRequestValidationIssue(
-                code: "DFT_ARTIFACT_PATH_INVALID",
-                message: "Artifact locators require a non-empty path.",
-                entity: "\(entity).path",
-                suggestedActions: ["provide_a_safe_project_relative_path"]
-            )]
-        }
-        return []
-    }
-
     private func isSHA256(_ value: String) -> Bool {
         value.count == 64 && value.allSatisfy(\.isHexDigit)
-    }
-
-    private func isSafePath(_ value: String) -> Bool {
-        guard !value.isEmpty,
-              !value.hasPrefix("/"),
-              !value.hasPrefix("~"),
-              !value.contains("\\"),
-              !value.unicodeScalars.contains(where: CharacterSet.controlCharacters.contains) else {
-            return false
-        }
-        let components = value.split(separator: "/", omittingEmptySubsequences: false)
-        return !components.contains { $0.isEmpty || $0 == "." || $0 == ".." }
     }
 
     private func isSafeComponent(_ value: String) -> Bool {

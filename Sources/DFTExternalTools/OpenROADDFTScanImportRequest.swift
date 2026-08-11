@@ -2,7 +2,7 @@ import CircuiteFoundation
 import DFTCore
 
 public struct OpenROADDFTScanImportRequest: Sendable, Hashable, Codable {
-    public static let currentSchemaVersion = 1
+    public static let currentSchemaVersion = 2
 
     public var schemaVersion: Int
     public var runID: String
@@ -15,6 +15,7 @@ public struct OpenROADDFTScanImportRequest: Sendable, Hashable, Codable {
     public var scanDEFArtifact: ArtifactReference
     public var cellLibraryArtifact: ArtifactReference
     public var executionEvidenceArtifact: ArtifactReference
+    public var inputBindings: [DFTArtifactBinding]
     public var producer: DFTExternalToolDescriptor
 
     public init(
@@ -28,6 +29,7 @@ public struct OpenROADDFTScanImportRequest: Sendable, Hashable, Codable {
         scanDEFArtifact: ArtifactReference,
         cellLibraryArtifact: ArtifactReference,
         executionEvidenceArtifact: ArtifactReference,
+        inputBindings: [DFTArtifactBinding],
         producer: DFTExternalToolDescriptor
     ) {
         schemaVersion = Self.currentSchemaVersion
@@ -41,6 +43,13 @@ public struct OpenROADDFTScanImportRequest: Sendable, Hashable, Codable {
         self.scanDEFArtifact = scanDEFArtifact
         self.cellLibraryArtifact = cellLibraryArtifact
         self.executionEvidenceArtifact = executionEvidenceArtifact
+        self.inputBindings = inputBindings
         self.producer = producer
+    }
+
+    public func requireBinding(
+        for reference: ArtifactReference
+    ) throws -> DFTArtifactBinding {
+        try DFTArtifactBinding.require(reference, in: inputBindings)
     }
 }

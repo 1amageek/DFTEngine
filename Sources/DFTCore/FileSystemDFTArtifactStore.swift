@@ -1,17 +1,43 @@
 import Foundation
 import CircuiteFoundation
+import CircuiteFoundationCrypto
+import CircuiteFoundationFileSystem
 
 public actor FileSystemDFTArtifactStore: DFTArtifactStoring, DFTArtifactReading {
-    public let rootURL: URL
+    public nonisolated let rootURL: URL
+    public nonisolated let rootID: ArtifactRootID
 
-    public init(rootURL: URL) {
+    private let artifactAccess: ArtifactRootCapability
+    private let readBudget: ArtifactAccessBudget
+
+    public init(rootURL: URL) throws {
+        try self.init(
+            rootURL: rootURL,
+            rootID: ArtifactRootID(rawValue: "dft-project")
+        )
+    }
+
+    public init(rootURL: URL, rootID: ArtifactRootID) throws {
         self.rootURL = rootURL.standardizedFileURL
+        self.rootID = rootID
+        self.artifactAccess = try ArtifactRootCapability(
+            rootID: rootID,
+            directoryURL: rootURL,
+            digester: SHA256ContentDigester()
+        )
+        self.readBudget = try ArtifactAccessBudget(
+            maximumPageByteCount: 1_048_576,
+            maximumTotalByteCount: 1_073_741_824,
+            maximumPageCount: 1_024,
+            maximumWorkUnitCount: 4_096,
+            maximumDurationNanoseconds: 60_000_000_000
+        )
     }
 
     public func store(
         _ content: DFTArtifactContent,
         runID: String
-    ) async throws -> ArtifactReference {
+    ) async throws -> DFTArtifactBinding {
         try Self.validate(runID: runID, content: content)
         let directory = rootURL
             .appending(path: "dft")
@@ -54,25 +80,33 @@ public actor FileSystemDFTArtifactStore: DFTArtifactStoring, DFTArtifactReading 
                 throw DFTArtifactStoreError.writeFailed(error.localizedDescription)
             }
         }
-        let artifactPath = "dft/runs/\(runID)/\(content.fileName)"
         let digest = try SHA256ContentDigester().digest(data: content.data)
-        return ArtifactReference(
-            id: try ArtifactID(rawValue: content.artifactID),
-            locator: ArtifactLocator(
-                location: try ArtifactLocation(workspaceRelativePath: artifactPath),
+        let reference = try ArtifactReference(
+            digest: digest,
+            byteCount: UInt64(content.data.count),
+            descriptor: ArtifactDescriptor(
                 role: .output,
                 kind: content.kind,
                 format: content.format
-            ),
-            digest: digest,
-            byteCount: UInt64(content.data.count)
+            )
+        )
+        return try DFTArtifactBinding(
+            logicalID: content.artifactID,
+            reference: reference,
+            availability: .local(
+                artifactID: reference.id,
+                rootID: rootID,
+                relativePath: ArtifactRelativePath(
+                    segments: ["dft", "runs", runID, content.fileName]
+                )
+            )
         )
     }
 
     public func storeBatch(
         _ contents: [DFTArtifactContent],
         runID: String
-    ) async throws -> [ArtifactReference] {
+    ) async throws -> [DFTArtifactBinding] {
         guard !contents.isEmpty else { return [] }
         for content in contents {
             try Self.validate(runID: runID, content: content)
@@ -154,9 +188,10 @@ public actor FileSystemDFTArtifactStore: DFTArtifactStoring, DFTArtifactReading 
                     }
                 }
                 if publicationWonByAnotherStore {
-                    return try DFTArtifactBatch.references(
+                    return try DFTArtifactBatch.bindings(
                         for: contents,
-                        runID: runID
+                        runID: runID,
+                        rootID: rootID
                     )
                 }
                 if destinationExists {
@@ -169,30 +204,69 @@ public actor FileSystemDFTArtifactStore: DFTArtifactStoring, DFTArtifactReading 
                 )
             }
         }
-        return try DFTArtifactBatch.references(for: contents, runID: runID)
+        return try DFTArtifactBatch.bindings(
+            for: contents,
+            runID: runID,
+            rootID: rootID
+        )
     }
 
-    public func data(for reference: ArtifactReference) async throws -> Data {
-        let path = reference.path
-        guard !path.isEmpty,
-              !path.hasPrefix("/"),
-              !path.split(separator: "/").contains("..") else {
-            throw DFTArtifactStoreError.pathOutsideRoot(path)
+    public func data(for binding: DFTArtifactBinding) async throws -> Data {
+        let intent: ArtifactAccessIntent
+        do {
+            intent = try ArtifactAccessIntent(
+                expectedReference: binding.reference,
+                availability: binding.availability,
+                operation: .read,
+                budget: readBudget
+            )
+        } catch {
+            throw DFTArtifactStoreError.readFailed(
+                "\(binding.materializationDescription): \(error)"
+            )
         }
-        let url = rootURL.appendingPathComponent(path).standardizedFileURL
-        let resolvedRoot = rootURL.resolvingSymlinksInPath()
-        let resolvedURL = url.resolvingSymlinksInPath()
-        guard Self.isInside(resolvedURL, root: resolvedRoot) else {
-            throw DFTArtifactStoreError.pathOutsideRoot(path)
-        }
-        guard FileManager.default.fileExists(atPath: url.path) else {
-            throw DFTArtifactStoreError.artifactMissing(path)
+        let session: any ArtifactReadSession
+        do {
+            session = try await artifactAccess.open(intent)
+        } catch {
+            throw DFTArtifactStoreError.readFailed(
+                "\(binding.materializationDescription): \(error)"
+            )
         }
         do {
-            return try Data(contentsOf: url, options: .mappedIfSafe)
-        } catch {
-            throw DFTArtifactStoreError.readFailed(error.localizedDescription)
+            var data = Data()
+            var offset: UInt64 = 0
+            while true {
+                let page = try await session.readPage(
+                    ArtifactReadPageRequest(
+                        offset: offset,
+                        maximumByteCount: readBudget.maximumPageByteCount
+                    )
+                )
+                page.bytes.withUnsafeBytes { bytes in
+                    data.append(contentsOf: bytes)
+                }
+                offset = page.cumulativeByteCount
+                if page.completion == .complete {
+                    break
+                }
+            }
+            _ = try await session.close().wait()
+            return data
+        } catch let primaryError {
+            do {
+                _ = try await session.close().wait()
+            } catch let closeError {
+                throw DFTArtifactStoreError.readFailed(
+                    "read failed: \(primaryError); close failed: \(closeError)"
+                )
+            }
+            throw DFTArtifactStoreError.readFailed(String(describing: primaryError))
         }
+    }
+
+    public func shutdown() async throws {
+        try await artifactAccess.close().wait()
     }
 
     private static func isInside(_ candidate: URL, root: URL) -> Bool {
@@ -233,9 +307,7 @@ public actor FileSystemDFTArtifactStore: DFTArtifactStoring, DFTArtifactReading 
         guard isSafeComponent(content.fileName) else {
             throw DFTArtifactStoreError.invalidFileName(content.fileName)
         }
-        do {
-            _ = try ArtifactID(rawValue: content.artifactID)
-        } catch {
+        guard isSafeComponent(content.artifactID) else {
             throw DFTArtifactStoreError.invalidArtifactID(content.artifactID)
         }
     }

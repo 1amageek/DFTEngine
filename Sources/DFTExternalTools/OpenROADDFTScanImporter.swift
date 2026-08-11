@@ -19,13 +19,27 @@ public struct OpenROADDFTScanImporter: OpenROADDFTScanImportProviding {
         _ request: OpenROADDFTScanImportRequest
     ) async throws -> OpenROADDFTScanImportResult {
         try validate(request)
-        let inputs = [
+        let references = [
             request.sourceNetlistArtifact,
             request.transformedNetlistArtifact,
             request.scanDEFArtifact,
             request.cellLibraryArtifact,
             request.executionEvidenceArtifact,
         ]
+        let inputs: [DFTArtifactBinding]
+        do {
+            inputs = try references.map { reference in
+                try request.requireBinding(for: reference)
+            }
+        } catch {
+            throw OpenROADDFTScanImportError.artifactIntegrityMismatch(
+                path: references.first(where: { reference in
+                    !request.inputBindings.contains {
+                        $0.reference == reference
+                    }
+                })?.id.description ?? "request-input-binding"
+            )
+        }
         let data = try await load(inputs)
         let sourceSnapshot = try snapshot(
             data[0],
@@ -96,19 +110,21 @@ public struct OpenROADDFTScanImporter: OpenROADDFTScanImportProviding {
         }
     }
 
-    private func load(_ references: [ArtifactReference]) async throws -> [Data] {
+    private func load(_ bindings: [DFTArtifactBinding]) async throws -> [Data] {
         var result: [Data] = []
-        result.reserveCapacity(references.count)
-        for reference in references {
-            let data = try await artifactReader.data(for: reference)
-            let digest = try SHA256ContentDigester().digest(data: data)
-            guard UInt64(data.count) == reference.byteCount,
-                  digest == reference.digest else {
+        result.reserveCapacity(bindings.count)
+        for binding in bindings {
+            do {
+                result.append(try await DFTArtifactDataLoader.load(
+                    reference: binding.reference,
+                    binding: binding,
+                    reader: artifactReader
+                ))
+            } catch {
                 throw OpenROADDFTScanImportError.artifactIntegrityMismatch(
-                    path: reference.path
+                    path: binding.logicalID
                 )
             }
-            result.append(data)
         }
         return result
     }
@@ -398,7 +414,7 @@ public struct OpenROADDFTScanImporter: OpenROADDFTScanImportProviding {
 
     private func persist(
         request: OpenROADDFTScanImportRequest,
-        inputs: [ArtifactReference],
+        inputs: [DFTArtifactBinding],
         sourceSnapshot: LogicDesignSnapshot,
         transformedSnapshot: LogicDesignSnapshot,
         implementation: DFTScanImplementation,
@@ -414,7 +430,7 @@ public struct OpenROADDFTScanImporter: OpenROADDFTScanImportProviding {
             producer: request.producer,
             processID: cellLibrary.processID,
             pdkDigest: cellLibrary.pdkDigest,
-            inputs: inputs,
+            inputs: inputs.map(\.reference),
             sourceDesignDigest: sourceDigest,
             transformedDesignDigest: transformedDigest,
             scanImplementationDigest: try DFTDeterministicHasher()
@@ -459,7 +475,7 @@ public struct OpenROADDFTScanImporter: OpenROADDFTScanImportProviding {
                 error.localizedDescription
             )
         }
-        let artifacts: [ArtifactReference]
+        let artifacts: [DFTArtifactBinding]
         do {
             artifacts = try await artifactStore.storeBatch(
                 contents,
@@ -472,7 +488,7 @@ public struct OpenROADDFTScanImporter: OpenROADDFTScanImportProviding {
         }
         let groupedArtifacts = Dictionary(
             grouping: artifacts,
-            by: { $0.id.rawValue }
+            by: \.logicalID
         )
         guard groupedArtifacts.values.allSatisfy({ $0.count == 1 }) else {
             throw OpenROADDFTScanImportError.artifactPersistenceFailed(
@@ -496,22 +512,22 @@ public struct OpenROADDFTScanImporter: OpenROADDFTScanImportProviding {
             producer: request.producer,
             processID: cellLibrary.processID,
             pdkDigest: cellLibrary.pdkDigest,
-            inputs: inputs,
+            inputBindings: inputs,
             sourceDesign: LogicDesignReference(
-                artifact: sourceArtifact,
+                artifact: sourceArtifact.reference,
                 topDesignName: request.topModule,
                 designDigest: sourceDigest
             ),
             transformedDesign: LogicDesignReference(
-                artifact: transformedArtifact,
+                artifact: transformedArtifact.reference,
                 topDesignName: request.topModule,
                 designDigest: transformedDigest
             ),
             scanImplementation: DFTScanImplementationReference(
-                artifact: implementationArtifact,
+                artifact: implementationArtifact.reference,
                 transformedDesignDigest: transformedDigest
             ),
-            artifacts: artifacts
+            artifactBindings: artifacts
         )
     }
 

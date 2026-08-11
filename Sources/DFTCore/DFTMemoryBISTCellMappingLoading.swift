@@ -1,5 +1,6 @@
 public protocol DFTMemoryBISTCellMappingLoading: Sendable {
     func load(
-        _ mapping: DFTMemoryBISTCellMapping
-    ) throws -> DFTMemoryBISTCellMappingManifest
+        _ mapping: DFTMemoryBISTCellMapping,
+        binding: DFTArtifactBinding
+    ) async throws -> DFTMemoryBISTCellMappingManifest
 }

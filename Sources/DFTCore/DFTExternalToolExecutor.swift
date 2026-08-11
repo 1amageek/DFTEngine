@@ -94,7 +94,7 @@ public struct DFTExternalToolExecutor: Sendable {
         guard let artifactStore else {
             return result
         }
-        let persistedReferences = try await artifactStore.storeBatch(
+        let persistedBindings = try await artifactStore.storeBatch(
             [
             DFTArtifactContent(
                 artifactID: "dft-external-result",
@@ -120,14 +120,13 @@ public struct DFTExternalToolExecutor: Sendable {
             ],
             runID: request.runID
         )
-        let persistedResult = DFTResult(
+        let persistedResult = try DFTResult(
             schemaVersion: result.schemaVersion,
             runID: result.runID,
             status: result.status,
             diagnostics: result.dftDiagnostics,
-            artifacts: result.artifacts + persistedReferences,
+            artifactBindings: result.artifactBindings + persistedBindings,
             provenance: result.provenance,
-            evidenceID: result.evidence.id,
             payload: result.payload
         )
         try DFTResultValidator().validate(persistedResult, for: request)

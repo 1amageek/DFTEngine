@@ -5,11 +5,12 @@ import TimingCore
 import PDKCore
 
 public struct DFTRequest: DFTExecutionRequest {
-    public static let currentSchemaVersion = 1
+    public static let currentSchemaVersion = 2
 
     public var schemaVersion: Int
     public var runID: String
     public var inputs: [ArtifactReference]
+    public var inputBindings: [DFTArtifactBinding]
 
     public var design: LogicDesignReference
     public var constraints: DFTConstraintReference
@@ -27,7 +28,7 @@ public struct DFTRequest: DFTExecutionRequest {
 
     public init(
         runID: String,
-        inputs: [ArtifactReference],
+        inputBindings: [DFTArtifactBinding],
         design: LogicDesignReference,
         constraints: DFTConstraintReference,
         pdk: PDKReference,
@@ -43,7 +44,7 @@ public struct DFTRequest: DFTExecutionRequest {
     ) {
         self.schemaVersion = Self.currentSchemaVersion
         self.runID = runID
-        self.inputs = inputs
+        self.inputBindings = inputBindings
         self.design = design
         self.constraints = constraints
         self.pdk = pdk
@@ -56,10 +57,14 @@ public struct DFTRequest: DFTExecutionRequest {
         self.faultUniverse = faultUniverse
         self.atpgConfiguration = atpgConfiguration
         self.bistConfiguration = bistConfiguration
+        self.inputs = []
+        self.inputs = executionInputArtifacts
     }
 
     public var executionInputArtifacts: [ArtifactReference] {
-        var references = inputs + [design.artifact, pdk.manifest] + constraints.artifacts
+        var references = inputBindings.map(\.reference)
+            + [design.artifact, pdk.manifest]
+            + constraints.artifacts
         if let cellLibrary {
             references.append(cellLibrary.artifact)
             if let timingLibraryArtifact = cellLibrary.timingLibraryArtifact {
@@ -77,5 +82,11 @@ public struct DFTRequest: DFTExecutionRequest {
         }
         var identities = Set<ArtifactReference>()
         return references.filter { identities.insert($0).inserted }
+    }
+
+    public func requireBinding(
+        for reference: ArtifactReference
+    ) throws -> DFTArtifactBinding {
+        try DFTArtifactBinding.require(reference, in: inputBindings)
     }
 }

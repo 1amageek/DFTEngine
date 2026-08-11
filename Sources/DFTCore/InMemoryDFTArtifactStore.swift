@@ -1,39 +1,56 @@
 import Foundation
 import CircuiteFoundation
+import CircuiteFoundationCrypto
 
 public actor InMemoryDFTArtifactStore: DFTArtifactStoring, DFTArtifactReading {
-    private var contents: [String: DFTArtifactContent] = [:]
+    public nonisolated let rootID: ArtifactRootID
+    private var contents: [ArtifactID: Data] = [:]
 
-    public init() {}
+    public init() {
+        do {
+            self.rootID = try ArtifactRootID(rawValue: "dft-memory")
+        } catch {
+            preconditionFailure("The static DFT in-memory root ID is invalid: \(error)")
+        }
+    }
 
     public func store(
         _ content: DFTArtifactContent,
         runID: String
-    ) async throws -> ArtifactReference {
+    ) async throws -> DFTArtifactBinding {
         try Self.validate(runID: runID, content: content)
         let path = "dft/runs/\(runID)/\(content.fileName)"
-        if let existing = contents[path], existing != content {
-            throw DFTArtifactStoreError.artifactConflict(path)
-        }
-        contents[path] = content
         let digest = try SHA256ContentDigester().digest(data: content.data)
-        return ArtifactReference(
-            id: try ArtifactID(rawValue: content.artifactID),
-            locator: ArtifactLocator(
-                location: try ArtifactLocation(workspaceRelativePath: path),
+        let reference = try ArtifactReference(
+            digest: digest,
+            byteCount: UInt64(content.data.count),
+            descriptor: ArtifactDescriptor(
                 role: .output,
                 kind: content.kind,
                 format: content.format
-            ),
-            digest: digest,
-            byteCount: UInt64(content.data.count)
+            )
+        )
+        if let existing = contents[reference.id], existing != content.data {
+            throw DFTArtifactStoreError.artifactConflict(path)
+        }
+        contents[reference.id] = content.data
+        return try DFTArtifactBinding(
+            logicalID: content.artifactID,
+            reference: reference,
+            availability: .local(
+                artifactID: reference.id,
+                rootID: rootID,
+                relativePath: ArtifactRelativePath(
+                    segments: ["dft", "runs", runID, content.fileName]
+                )
+            )
         )
     }
 
     public func storeBatch(
         _ contents: [DFTArtifactContent],
         runID: String
-    ) async throws -> [ArtifactReference] {
+    ) async throws -> [DFTArtifactBinding] {
         guard !contents.isEmpty else { return [] }
         for content in contents {
             try Self.validate(runID: runID, content: content)
@@ -46,32 +63,32 @@ public actor InMemoryDFTArtifactStore: DFTArtifactStoring, DFTArtifactReading {
                 "dft/runs/\(runID)/<duplicate-batch-identity>"
             )
         }
-        let batchID = try DFTArtifactBatch.batchID(for: contents)
-        let references = try DFTArtifactBatch.references(
+        let bindings = try DFTArtifactBatch.bindings(
             for: contents,
-            runID: runID
+            runID: runID,
+            rootID: rootID
         )
-        for content in contents {
-            let path = "dft/runs/\(runID)/\(batchID)/\(content.fileName)"
-            if let existing = self.contents[path], existing != content {
-                throw DFTArtifactStoreError.artifactConflict(path)
+        for (content, binding) in zip(contents, bindings) {
+            if let existing = self.contents[binding.reference.id], existing != content.data {
+                throw DFTArtifactStoreError.artifactConflict(binding.materializationDescription)
             }
         }
-        for content in contents {
-            self.contents[
-                "dft/runs/\(runID)/\(batchID)/\(content.fileName)"
-            ] = content
+        for (content, binding) in zip(contents, bindings) {
+            self.contents[binding.reference.id] = content.data
         }
-        return references
+        return bindings
     }
 
-    public func data(for path: String) -> Data? {
-        contents[path]?.data
+    public func register(_ binding: DFTArtifactBinding, data: Data) throws {
+        guard binding.reference.byteCount == UInt64(data.count) else {
+            throw DFTArtifactStoreError.readFailed("registered byte count mismatch")
+        }
+        contents[binding.reference.id] = data
     }
 
-    public func data(for reference: ArtifactReference) async throws -> Data {
-        guard let data = contents[reference.path]?.data else {
-            throw DFTArtifactStoreError.artifactMissing(reference.path)
+    public func data(for binding: DFTArtifactBinding) async throws -> Data {
+        guard let data = contents[binding.reference.id] else {
+            throw DFTArtifactStoreError.artifactMissing(binding.materializationDescription)
         }
         return data
     }
@@ -86,9 +103,7 @@ public actor InMemoryDFTArtifactStore: DFTArtifactStoring, DFTArtifactReading {
         guard isSafeComponent(content.fileName) else {
             throw DFTArtifactStoreError.invalidFileName(content.fileName)
         }
-        do {
-            _ = try ArtifactID(rawValue: content.artifactID)
-        } catch {
+        guard isSafeComponent(content.artifactID) else {
             throw DFTArtifactStoreError.invalidArtifactID(content.artifactID)
         }
     }

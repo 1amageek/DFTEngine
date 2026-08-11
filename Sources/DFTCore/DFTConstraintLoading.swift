@@ -1,5 +1,8 @@
 import TimingCore
 
 public protocol DFTConstraintLoading: Sendable {
-    func load(_ reference: DFTConstraintReference) throws -> [TimingConstraintSet]
+    func load(
+        _ reference: DFTConstraintReference,
+        bindings: [DFTArtifactBinding]
+    ) async throws -> [TimingConstraintSet]
 }

@@ -62,8 +62,14 @@ public struct DeterministicBISTEngine: BISTExecuting {
                 )
             }
             do {
+                let constraintBindings = try request.constraints.artifacts.map {
+                    try request.requireBinding(for: $0)
+                }
                 try DFTConstraintValidator().validate(
-                    constraintLoader.load(request.constraints),
+                    try await constraintLoader.load(
+                        request.constraints,
+                        bindings: constraintBindings
+                    ),
                     request: request
                 )
             } catch {
@@ -73,7 +79,7 @@ public struct DeterministicBISTEngine: BISTExecuting {
                     startedAt: startedAt,
                     code: "DFT_CONSTRAINT_VALIDATION_FAILED",
                     message: error.localizedDescription,
-                    entity: request.constraints.artifacts.first?.path ?? "constraints",
+                    entity: "constraints",
                     actions: ["provide_constraint_loader", "repair_test_mode_constraints"]
                 )
             }
@@ -131,7 +137,10 @@ public struct DeterministicBISTEngine: BISTExecuting {
                     )
                 }
                 do {
-                    let loadedMapping = try memoryBISTCellMappingLoader.load(mapping)
+                    let loadedMapping = try await memoryBISTCellMappingLoader.load(
+                        mapping,
+                        binding: request.requireBinding(for: mapping.artifact)
+                    )
                     guard loadedMapping == mapping.manifest else {
                         throw DFTMemoryBISTCellMappingError.contentMismatch
                     }
@@ -146,7 +155,7 @@ public struct DeterministicBISTEngine: BISTExecuting {
                         startedAt: startedAt,
                         code: "DFT_BIST_MEMORY_CELL_MAPPING_LOAD_FAILED",
                         message: error.localizedDescription,
-                        entity: mapping.artifact.path,
+                        entity: mapping.artifact.id.description,
                         actions: ["verify_memory_bist_mapping_artifact", "align_mapping_with_request_pdk"]
                     )
                 }
@@ -174,7 +183,12 @@ public struct DeterministicBISTEngine: BISTExecuting {
                     )
                 }
                 do {
-                    let loadedMapping = try logicBISTCellMappingLoader.load(declaredMapping)
+                    let loadedMapping = try await logicBISTCellMappingLoader.load(
+                        declaredMapping,
+                        binding: request.requireBinding(
+                            for: declaredMapping.artifact
+                        )
+                    )
                     guard loadedMapping == declaredMapping.manifest,
                           declaredMapping.processID == request.pdk.processID,
                           declaredMapping.pdkDigest == request.pdk.digest else {
@@ -187,7 +201,7 @@ public struct DeterministicBISTEngine: BISTExecuting {
                         startedAt: startedAt,
                         code: "DFT_BIST_CELL_MAPPING_LOAD_FAILED",
                         message: error.localizedDescription,
-                        entity: declaredMapping.artifact.path,
+                        entity: declaredMapping.artifact.id.description,
                         actions: ["verify_bist_mapping_artifact", "align_inline_mapping_with_artifact"]
                     )
                 }
@@ -205,7 +219,10 @@ public struct DeterministicBISTEngine: BISTExecuting {
             }
             let sourceSnapshot: LogicDesignSnapshot
             do {
-                sourceSnapshot = try designLoader.load(request.design)
+                sourceSnapshot = try await designLoader.load(
+                    request.design,
+                    binding: request.requireBinding(for: request.design.artifact)
+                )
             } catch {
                 return try blocked(
                     request: request,
@@ -213,7 +230,7 @@ public struct DeterministicBISTEngine: BISTExecuting {
                     startedAt: startedAt,
                     code: "DFT_DESIGN_LOAD_FAILED",
                     message: "Could not load the canonical design for BIST: \(error.localizedDescription)",
-                    entity: request.design.artifact.path,
+                    entity: request.design.artifact.id.description,
                     actions: ["verify_design_artifact_integrity", "repair_gate_level_snapshot"]
                 )
             }
@@ -305,18 +322,9 @@ public struct DeterministicBISTEngine: BISTExecuting {
                 format: .json,
                 data: structureData
             )
-            let diffMetadata = DFTArtifactContent(
-                artifactID: "dft-bist-design-diff",
-                fileName: "bist-design-diff.json",
-                kind: .designDiff,
-                format: .json,
-                data: Data()
+            let transformedReference = try DFTArtifactBatch.reference(
+                for: transformedContent
             )
-            let provisionalReferences = try DFTArtifactBatch.references(
-                for: [transformedContent, structureContent, diffMetadata],
-                runID: request.runID
-            )
-            let transformedReference = provisionalReferences[0]
             let transformedDesign = LogicDesignReference(
                 artifact: transformedReference,
                 topDesignName: request.design.topDesignName,
@@ -396,7 +404,7 @@ public struct DeterministicBISTEngine: BISTExecuting {
                         entity: configuration.name
                     )
                 ],
-                artifacts: artifacts,
+                artifactBindings: artifacts,
                 payload: DFTPayload(
                     transformedDesign: transformedDesign,
                     faultCoverage: nil,

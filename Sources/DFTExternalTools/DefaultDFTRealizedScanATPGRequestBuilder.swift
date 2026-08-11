@@ -37,12 +37,17 @@ public struct DefaultDFTRealizedScanATPGRequestBuilder:
         )
 
         let reference = importResult.scanImplementation.artifact
-        let data = try await artifactReader.data(for: reference)
-        guard UInt64(data.count) == reference.byteCount,
-              try SHA256ContentDigester().digest(data: data)
-                == reference.digest else {
+        let binding = try importResult.requireBinding(for: reference)
+        let data: Data
+        do {
+            data = try await DFTArtifactDataLoader.load(
+                reference: reference,
+                binding: binding,
+                reader: artifactReader
+            )
+        } catch {
             throw DFTRealizedScanATPGRequestBuilderError
-                .inputIdentityMismatch(reference.path)
+                .inputIdentityMismatch(binding.logicalID)
         }
         let implementation: DFTScanImplementation
         do {
@@ -110,10 +115,11 @@ public struct DefaultDFTRealizedScanATPGRequestBuilder:
         )
         return DFTRequest(
             runID: configuration.runID,
-            inputs: [
-                importResult.transformedDesign.artifact,
-                importResult.scanImplementation.artifact,
-            ],
+            inputBindings: deduplicatedBindings(
+                importResult.inputBindings
+                    + importResult.artifactBindings
+                    + configuration.inputBindings
+            ),
             design: importResult.transformedDesign,
             constraints: configuration.constraints,
             pdk: configuration.pdk,
@@ -138,12 +144,17 @@ public struct DefaultDFTRealizedScanATPGRequestBuilder:
                 "the exact imported manifest and one timing library are required"
             )
         }
-        let data = try await artifactReader.data(for: reference.artifact)
-        guard UInt64(data.count) == reference.artifact.byteCount,
-              try SHA256ContentDigester().digest(data: data)
-                == reference.artifact.digest else {
+        let binding = try importResult.requireBinding(for: reference.artifact)
+        let data: Data
+        do {
+            data = try await DFTArtifactDataLoader.load(
+                reference: reference.artifact,
+                binding: binding,
+                reader: artifactReader
+            )
+        } catch {
             throw DFTRealizedScanATPGRequestBuilderError
-                .inputIdentityMismatch(reference.artifact.path)
+                .inputIdentityMismatch(binding.logicalID)
         }
         let manifest: DFTCellLibraryManifest
         do {
@@ -163,5 +174,12 @@ public struct DefaultDFTRealizedScanATPGRequestBuilder:
                 "manifest process, version, PDK, or canonical digest differs"
             )
         }
+    }
+
+    private func deduplicatedBindings(
+        _ bindings: [DFTArtifactBinding]
+    ) -> [DFTArtifactBinding] {
+        var references = Set<ArtifactReference>()
+        return bindings.filter { references.insert($0.reference).inserted }
     }
 }

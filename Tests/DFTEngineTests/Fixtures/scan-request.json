@@ -1,199 +1,249 @@
 {
-  "schemaVersion" : 1,
-  "runID" : "fixture-scan",
-  "inputs" : [
+  "schemaVersion": 2,
+  "runID": "fixture-scan",
+  "inputs": [
     {
-      "id" : "design",
-      "locator" : {
-        "location" : {
-          "storage" : "workspaceRelative",
-          "value" : "design.json"
-        },
-        "role" : "input",
-        "kind" : "netlist",
-        "format" : "json"
-      },
-      "digest" : {
-        "algorithm" : "sha256",
-        "hexadecimalValue" : "ceb2a27440cfad92ad81272660aacdebf3509cdf609ee1aba26f9be1aa0d0820"
-      },
-      "byteCount" : 2333
+      "id": "43697263756974654172746966616374436f6e74656e7400000100067368613235360020ceb2a27440cfad92ad81272660aacdebf3509cdf609ee1aba26f9be1aa0d0820000000000000091d",
+      "descriptor": {
+        "role": "input",
+        "kind": "netlist",
+        "format": "json"
+      }
     },
     {
-      "id" : "cell-library",
-      "locator" : {
-        "location" : {
-          "storage" : "workspaceRelative",
-          "value" : "cell-library.json"
-        },
-        "role" : "input",
-        "kind" : "technology",
-        "format" : "json"
-      },
-      "digest" : {
-        "algorithm" : "sha256",
-        "hexadecimalValue" : "31cd661158797749f75049cca3218e52071678a99883997ddd9c92f78f496ea4"
-      },
-      "byteCount" : 797
+      "id": "43697263756974654172746966616374436f6e74656e740000010006736861323536002031cd661158797749f75049cca3218e52071678a99883997ddd9c92f78f496ea4000000000000031d",
+      "descriptor": {
+        "role": "input",
+        "kind": "technology",
+        "format": "json"
+      }
     },
     {
-      "id" : "cell-timing-library",
-      "locator" : {
-        "location" : {
-          "storage" : "workspaceRelative",
-          "value" : "cell-timing.lib"
-        },
-        "role" : "input",
-        "kind" : "technology",
-        "format" : "liberty"
-      },
-      "digest" : {
-        "algorithm" : "sha256",
-        "hexadecimalValue" : "8a48cfd29ce2108c11ff95620a7e97bf42824b8da042590d3769c1ef75ff9b6d"
-      },
-      "byteCount" : 841
+      "id": "43697263756974654172746966616374436f6e74656e74000001000673686132353600208a48cfd29ce2108c11ff95620a7e97bf42824b8da042590d3769c1ef75ff9b6d0000000000000349",
+      "descriptor": {
+        "role": "input",
+        "kind": "technology",
+        "format": "liberty"
+      }
+    },
+    {
+      "id": "43697263756974654172746966616374436f6e74656e740000010006736861323536002032edaf3b4c6f05dfd5712f742e6823ffe0ae9eaceeaac292fcca90a2c29d8e5c000000000000008e",
+      "descriptor": {
+        "role": "input",
+        "kind": "constraint",
+        "format": "sdc"
+      }
+    },
+    {
+      "id": "43697263756974654172746966616374436f6e74656e7400000100067368613235360020ba127cddfd959037e88578decba3532339640a26b28bee3322b48ae7fe0b4a2e0000000000000406",
+      "descriptor": {
+        "role": "input",
+        "kind": "technology",
+        "format": "json"
+      }
     }
   ],
-  "design" : {
-    "artifact" : {
-      "id" : "design",
-      "locator" : {
-        "location" : {
-          "storage" : "workspaceRelative",
-          "value" : "design.json"
-        },
-        "role" : "input",
-        "kind" : "netlist",
-        "format" : "json"
-      },
-      "digest" : {
-        "algorithm" : "sha256",
-        "hexadecimalValue" : "ceb2a27440cfad92ad81272660aacdebf3509cdf609ee1aba26f9be1aa0d0820"
-      },
-      "byteCount" : 2333
+  "design": {
+    "artifact": {
+      "id": "43697263756974654172746966616374436f6e74656e7400000100067368613235360020ceb2a27440cfad92ad81272660aacdebf3509cdf609ee1aba26f9be1aa0d0820000000000000091d",
+      "descriptor": {
+        "role": "input",
+        "kind": "netlist",
+        "format": "json"
+      }
     },
-    "topDesignName" : "top",
-    "designDigest" : "d59378a080c442b84c1d5a0634650f18eba92923d439f8a9a0aeb2a0e2946761"
+    "topDesignName": "top",
+    "designDigest": "d59378a080c442b84c1d5a0634650f18eba92923d439f8a9a0aeb2a0e2946761"
   },
-  "cellLibrary" : {
-    "artifact" : {
-      "id" : "cell-library",
-      "locator" : {
-        "location" : {
-          "storage" : "workspaceRelative",
-          "value" : "cell-library.json"
-        },
-        "role" : "input",
-        "kind" : "technology",
-        "format" : "json"
-      },
-      "digest" : {
-        "algorithm" : "sha256",
-        "hexadecimalValue" : "31cd661158797749f75049cca3218e52071678a99883997ddd9c92f78f496ea4"
-      },
-      "byteCount" : 797
+  "cellLibrary": {
+    "artifact": {
+      "id": "43697263756974654172746966616374436f6e74656e740000010006736861323536002031cd661158797749f75049cca3218e52071678a99883997ddd9c92f78f496ea4000000000000031d",
+      "descriptor": {
+        "role": "input",
+        "kind": "technology",
+        "format": "json"
+      }
     },
-    "processID" : "fixture-process",
-    "version" : "1",
-    "manifestDigest" : "be147d8a803bee269c7ab87998d4813951b5ae0216595daf6d4b0449802257d2",
-    "timingLibraryArtifact" : {
-      "id" : "cell-timing-library",
-      "locator" : {
-        "location" : {
-          "storage" : "workspaceRelative",
-          "value" : "cell-timing.lib"
-        },
-        "role" : "input",
-        "kind" : "technology",
-        "format" : "liberty"
-      },
-      "digest" : {
-        "algorithm" : "sha256",
-        "hexadecimalValue" : "8a48cfd29ce2108c11ff95620a7e97bf42824b8da042590d3769c1ef75ff9b6d"
-      },
-      "byteCount" : 841
+    "processID": "fixture-process",
+    "version": "1",
+    "manifestDigest": "be147d8a803bee269c7ab87998d4813951b5ae0216595daf6d4b0449802257d2",
+    "timingLibraryArtifact": {
+      "id": "43697263756974654172746966616374436f6e74656e74000001000673686132353600208a48cfd29ce2108c11ff95620a7e97bf42824b8da042590d3769c1ef75ff9b6d0000000000000349",
+      "descriptor": {
+        "role": "input",
+        "kind": "technology",
+        "format": "liberty"
+      }
     }
   },
-  "constraints" : {
-    "modes" : [
+  "constraints": {
+    "modes": [
       {
-        "modeID" : "test",
-        "artifact" : {
-          "id" : "constraints",
-          "locator" : {
-            "location" : {
-              "storage" : "workspaceRelative",
-              "value" : "constraints.sdc"
-            },
-            "role" : "input",
-            "kind" : "constraint",
-            "format" : "sdc"
-          },
-          "digest" : {
-            "algorithm" : "sha256",
-            "hexadecimalValue" : "32edaf3b4c6f05dfd5712f742e6823ffe0ae9eaceeaac292fcca90a2c29d8e5c"
-          },
-          "byteCount" : 142
+        "modeID": "test",
+        "artifact": {
+          "id": "43697263756974654172746966616374436f6e74656e740000010006736861323536002032edaf3b4c6f05dfd5712f742e6823ffe0ae9eaceeaac292fcca90a2c29d8e5c000000000000008e",
+          "descriptor": {
+            "role": "input",
+            "kind": "constraint",
+            "format": "sdc"
+          }
         }
       }
     ]
   },
-  "pdk" : {
-    "manifest" : {
-      "id" : "pdk",
-      "locator" : {
-        "location" : {
-          "storage" : "workspaceRelative",
-          "value" : "pdk.json"
-        },
-        "role" : "input",
-        "kind" : "technology",
-        "format" : "json"
-      },
-      "digest" : {
-        "algorithm" : "sha256",
-        "hexadecimalValue" : "ba127cddfd959037e88578decba3532339640a26b28bee3322b48ae7fe0b4a2e"
-      },
-      "byteCount" : 1030
+  "pdk": {
+    "manifest": {
+      "id": "43697263756974654172746966616374436f6e74656e7400000100067368613235360020ba127cddfd959037e88578decba3532339640a26b28bee3322b48ae7fe0b4a2e0000000000000406",
+      "descriptor": {
+        "role": "input",
+        "kind": "technology",
+        "format": "json"
+      }
     },
-    "processID" : "fixture-process",
-    "version" : "1",
-    "digest" : "ba127cddfd959037e88578decba3532339640a26b28bee3322b48ae7fe0b4a2e"
+    "processID": "fixture-process",
+    "version": "1",
+    "digest": "ba127cddfd959037e88578decba3532339640a26b28bee3322b48ae7fe0b4a2e",
+    "manifestLocator": {
+      "location": {
+        "storage": "workspaceRelative",
+        "value": "pdk.json"
+      },
+      "role": "input",
+      "kind": "technology",
+      "format": "json"
+    }
   },
-  "operation" : "scanInsertion",
-  "scanArchitecture" : {
-    "name" : "core-scan",
-    "clocks" : [
+  "operation": "scanInsertion",
+  "scanArchitecture": {
+    "name": "core-scan",
+    "clocks": [
       {
-        "id" : "clk",
-        "signalName" : "scan_clk",
-        "periodNanoseconds" : 10,
-        "dutyCycle" : 0.5,
-        "isGenerated" : false
+        "id": "clk",
+        "signalName": "scan_clk",
+        "periodNanoseconds": 10,
+        "dutyCycle": 0.5,
+        "isGenerated": false
       }
     ],
-    "resets" : [],
-    "domains" : [
+    "resets": [],
+    "domains": [
       {
-        "id" : "core",
-        "clockID" : "clk",
-        "resetID" : null,
-        "chainCount" : 2,
-        "estimatedElementCount" : 5,
-        "maximumChainLength" : null
+        "id": "core",
+        "clockID": "clk",
+        "resetID": null,
+        "chainCount": 2,
+        "estimatedElementCount": 5,
+        "maximumChainLength": null
       }
     ],
-    "compression" : null,
-    "scanEnableSignal" : "scan_en",
-    "testModeSignal" : "test_mode",
-    "scanInPrefix" : "scan_in",
-    "scanOutPrefix" : "scan_out"
+    "compression": null,
+    "scanEnableSignal": "scan_en",
+    "testModeSignal": "test_mode",
+    "scanInPrefix": "scan_in",
+    "scanOutPrefix": "scan_out"
   },
-  "insertionPolicy" : {
-    "scanCellName" : "SDFF",
-    "preserveFunctionalPorts" : true,
-    "requireTestMode" : true,
-    "generateDesignDiff" : true,
-    "allowUnknownCells" : false
-  }
+  "insertionPolicy": {
+    "scanCellName": "SDFF",
+    "preserveFunctionalPorts": true,
+    "requireTestMode": true,
+    "generateDesignDiff": true,
+    "allowUnknownCells": false
+  },
+  "inputBindings": [
+    {
+      "logicalID": "design",
+      "reference": {
+        "id": "43697263756974654172746966616374436f6e74656e7400000100067368613235360020ceb2a27440cfad92ad81272660aacdebf3509cdf609ee1aba26f9be1aa0d0820000000000000091d",
+        "descriptor": {
+          "role": "input",
+          "kind": "netlist",
+          "format": "json"
+        }
+      },
+      "availability": {
+        "kind": "local",
+        "artifactID": "43697263756974654172746966616374436f6e74656e7400000100067368613235360020ceb2a27440cfad92ad81272660aacdebf3509cdf609ee1aba26f9be1aa0d0820000000000000091d",
+        "rootID": "dft-project",
+        "relativePath": [
+          "design.json"
+        ]
+      }
+    },
+    {
+      "logicalID": "cell-library",
+      "reference": {
+        "id": "43697263756974654172746966616374436f6e74656e740000010006736861323536002031cd661158797749f75049cca3218e52071678a99883997ddd9c92f78f496ea4000000000000031d",
+        "descriptor": {
+          "role": "input",
+          "kind": "technology",
+          "format": "json"
+        }
+      },
+      "availability": {
+        "kind": "local",
+        "artifactID": "43697263756974654172746966616374436f6e74656e740000010006736861323536002031cd661158797749f75049cca3218e52071678a99883997ddd9c92f78f496ea4000000000000031d",
+        "rootID": "dft-project",
+        "relativePath": [
+          "cell-library.json"
+        ]
+      }
+    },
+    {
+      "logicalID": "cell-timing-library",
+      "reference": {
+        "id": "43697263756974654172746966616374436f6e74656e74000001000673686132353600208a48cfd29ce2108c11ff95620a7e97bf42824b8da042590d3769c1ef75ff9b6d0000000000000349",
+        "descriptor": {
+          "role": "input",
+          "kind": "technology",
+          "format": "liberty"
+        }
+      },
+      "availability": {
+        "kind": "local",
+        "artifactID": "43697263756974654172746966616374436f6e74656e74000001000673686132353600208a48cfd29ce2108c11ff95620a7e97bf42824b8da042590d3769c1ef75ff9b6d0000000000000349",
+        "rootID": "dft-project",
+        "relativePath": [
+          "cell-timing.lib"
+        ]
+      }
+    },
+    {
+      "logicalID": "constraints",
+      "reference": {
+        "id": "43697263756974654172746966616374436f6e74656e740000010006736861323536002032edaf3b4c6f05dfd5712f742e6823ffe0ae9eaceeaac292fcca90a2c29d8e5c000000000000008e",
+        "descriptor": {
+          "role": "input",
+          "kind": "constraint",
+          "format": "sdc"
+        }
+      },
+      "availability": {
+        "kind": "local",
+        "artifactID": "43697263756974654172746966616374436f6e74656e740000010006736861323536002032edaf3b4c6f05dfd5712f742e6823ffe0ae9eaceeaac292fcca90a2c29d8e5c000000000000008e",
+        "rootID": "dft-project",
+        "relativePath": [
+          "constraints.sdc"
+        ]
+      }
+    },
+    {
+      "logicalID": "pdk",
+      "reference": {
+        "id": "43697263756974654172746966616374436f6e74656e7400000100067368613235360020ba127cddfd959037e88578decba3532339640a26b28bee3322b48ae7fe0b4a2e0000000000000406",
+        "descriptor": {
+          "role": "input",
+          "kind": "technology",
+          "format": "json"
+        }
+      },
+      "availability": {
+        "kind": "local",
+        "artifactID": "43697263756974654172746966616374436f6e74656e7400000100067368613235360020ba127cddfd959037e88578decba3532339640a26b28bee3322b48ae7fe0b4a2e0000000000000406",
+        "rootID": "dft-project",
+        "relativePath": [
+          "pdk.json"
+        ]
+      }
+    }
+  ]
 }

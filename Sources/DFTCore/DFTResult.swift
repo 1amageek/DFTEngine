@@ -1,41 +1,27 @@
 import Foundation
 import CircuiteFoundation
+import CircuiteFoundationCrypto
 
 /// DFT-owned execution result.
 public struct DFTResult: Sendable, Hashable, Codable, ArtifactProducing,
     EvidenceProviding, DiagnosticReporting
 {
-    public var schemaVersion: Int
-    public var runID: String
-    public var status: DFTExecutionStatus
-    public var dftDiagnostics: [DFTDiagnostic]
-    public var artifacts: [ArtifactReference] {
-        didSet {
-            evidence = EvidenceManifest(
-                id: evidence.id,
-                provenance: provenance,
-                artifacts: artifacts
-            )
-        }
-    }
-    public var provenance: ExecutionProvenance {
-        didSet {
-            evidence = EvidenceManifest(
-                id: evidence.id,
-                provenance: provenance,
-                artifacts: artifacts
-            )
-        }
-    }
-    public var payload: DFTPayload
-    public private(set) var evidence: EvidenceManifest
+    public let schemaVersion: Int
+    public let runID: String
+    public let status: DFTExecutionStatus
+    public let dftDiagnostics: [DFTDiagnostic]
+    public let artifactBindings: [DFTArtifactBinding]
+    public var artifacts: [ArtifactReference] { artifactBindings.map(\.reference) }
+    public let provenance: ExecutionProvenance
+    public let payload: DFTPayload
+    public let evidence: EvidenceManifest
 
     private enum CodingKeys: String, CodingKey {
         case schemaVersion
         case runID
         case status
         case dftDiagnostics
-        case artifacts
+        case artifactBindings
         case provenance
         case payload
         case evidence
@@ -46,22 +32,21 @@ public struct DFTResult: Sendable, Hashable, Codable, ArtifactProducing,
         runID: String,
         status: DFTExecutionStatus,
         diagnostics: [DFTDiagnostic] = [],
-        artifacts: [ArtifactReference] = [],
+        artifactBindings: [DFTArtifactBinding] = [],
         provenance: ExecutionProvenance,
-        evidenceID: UUID = UUID(),
         payload: DFTPayload
-    ) {
+    ) throws {
         self.schemaVersion = schemaVersion
         self.runID = runID
         self.status = status
         self.dftDiagnostics = diagnostics
-        self.artifacts = artifacts
+        self.artifactBindings = artifactBindings
         self.provenance = provenance
         self.payload = payload
-        self.evidence = EvidenceManifest(
-            id: evidenceID,
+        self.evidence = try EvidenceManifest.contentAddressed(
             provenance: provenance,
-            artifacts: artifacts
+            artifacts: artifactBindings.map(\.reference),
+            digester: SHA256ContentDigester()
         )
     }
 
@@ -71,11 +56,12 @@ public struct DFTResult: Sendable, Hashable, Codable, ArtifactProducing,
         runID = try container.decode(String.self, forKey: .runID)
         status = try container.decode(DFTExecutionStatus.self, forKey: .status)
         dftDiagnostics = try container.decode([DFTDiagnostic].self, forKey: .dftDiagnostics)
-        artifacts = try container.decode([ArtifactReference].self, forKey: .artifacts)
+        artifactBindings = try container.decode([DFTArtifactBinding].self, forKey: .artifactBindings)
         provenance = try container.decode(ExecutionProvenance.self, forKey: .provenance)
         payload = try container.decode(DFTPayload.self, forKey: .payload)
         evidence = try container.decode(EvidenceManifest.self, forKey: .evidence)
-        guard evidence.provenance == provenance, evidence.artifacts == artifacts else {
+        guard evidence.provenance == provenance,
+              evidence.artifacts == artifactBindings.map(\.reference) else {
             throw DecodingError.dataCorruptedError(
                 forKey: .evidence,
                 in: container,

@@ -1,42 +1,33 @@
 import CircuiteFoundation
+import CircuiteFoundationCrypto
 import Foundation
 import LogicIR
 
 public struct FileSystemDFTDesignLoader: DFTDesignLoading {
-    public let rootURL: URL
+    public let artifactReader: any DFTArtifactReading
 
-    public init(rootURL: URL) {
-        self.rootURL = rootURL.standardizedFileURL
+    public init(artifactReader: any DFTArtifactReading) {
+        self.artifactReader = artifactReader
     }
 
-    public func load(_ reference: LogicDesignReference) throws -> LogicDesignSnapshot {
-        guard reference.artifact.format == .json else {
-            throw DFTDesignLoaderError.unsupportedFormat(reference.artifact.format)
+    public func load(
+        _ reference: LogicDesignReference,
+        binding: DFTArtifactBinding
+    ) async throws -> LogicDesignSnapshot {
+        guard reference.artifact.descriptor.format == .json else {
+            throw DFTDesignLoaderError.unsupportedFormat(reference.artifact.descriptor.format)
         }
-        let url = try resolve(reference.artifact.path)
         let data: Data
         do {
-            data = try Data(contentsOf: url, options: .mappedIfSafe)
+            data = try await DFTArtifactDataLoader.load(
+                reference: reference.artifact,
+                binding: binding,
+                reader: artifactReader
+            )
         } catch {
             throw DFTDesignLoaderError.readFailed(
-                path: reference.artifact.path,
+                path: binding.materializationDescription,
                 message: error.localizedDescription
-            )
-        }
-        let actualByteCount = Int64(data.count)
-        guard actualByteCount == Int64(reference.artifact.byteCount) else {
-            throw DFTDesignLoaderError.byteCountMismatch(
-                path: reference.artifact.path,
-                expected: Int64(reference.artifact.byteCount),
-                actual: actualByteCount
-            )
-        }
-        let actualArtifactDigest = try SHA256ContentDigester().digest(data: data)
-        guard actualArtifactDigest == reference.artifact.digest else {
-            throw DFTDesignLoaderError.artifactDigestMismatch(
-                path: reference.artifact.path,
-                expected: reference.artifact.digest.hexadecimalValue,
-                actual: actualArtifactDigest.hexadecimalValue
             )
         }
         let snapshot: LogicDesignSnapshot
@@ -44,20 +35,11 @@ public struct FileSystemDFTDesignLoader: DFTDesignLoading {
             snapshot = try LogicDesignSnapshotCodec.decode(data)
         } catch {
             throw DFTDesignLoaderError.snapshotDecodeFailed(
-                path: reference.artifact.path,
+                path: binding.materializationDescription,
                 message: error.localizedDescription
             )
         }
         try DFTDesignSnapshotValidator().validate(snapshot, for: reference)
         return snapshot
     }
-
-    private func resolve(_ path: String) throws -> URL {
-        do {
-            return try DFTProjectArtifactResolver(rootURL: rootURL).resolve(path)
-        } catch {
-            throw DFTDesignLoaderError.invalidPath(path)
-        }
-    }
-
 }

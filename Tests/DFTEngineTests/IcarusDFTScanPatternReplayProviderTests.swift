@@ -1,4 +1,5 @@
 import CircuiteFoundation
+import CircuiteFoundationCrypto
 import DFTCore
 @testable import DFTExternalTools
 import DFTPatternExchange
@@ -82,8 +83,8 @@ struct IcarusDFTScanPatternReplayProviderTests {
             ),
         ])
         #expect(result.artifacts.count == 3)
-        for artifact in result.artifacts {
-            let data = try await store.data(for: artifact)
+        for artifactBinding in result.artifactBindings {
+            let data = try await store.data(for: artifactBinding)
             #expect(!data.isEmpty)
         }
     }
@@ -96,12 +97,10 @@ struct IcarusDFTScanPatternReplayProviderTests {
         let simulator = try fakeSimulator(in: workspace)
         let store = InMemoryDFTArtifactStore()
         var request = try await replayRequest(store: store)
-        request.patternArtifact = ArtifactReference(
-            id: request.patternArtifact.id,
-            locator: request.patternArtifact.locator,
+        request.patternArtifact = try ArtifactReference(
             digest: request.patternArtifact.digest,
             byteCount: request.patternArtifact.byteCount + 1,
-            producer: request.patternArtifact.producer
+            descriptor: request.patternArtifact.descriptor
         )
         let provider = try provider(
             compiler: compiler,
@@ -407,15 +406,22 @@ struct IcarusDFTScanPatternReplayProviderTests {
         return DFTScanPatternReplayRequest(
             runID: runID,
             topModule: "scan_dut",
-            patternArtifact: pattern,
-            scanNetlistArtifact: netlist,
+            patternArtifact: pattern.reference,
+            scanNetlistArtifact: netlist.reference,
             scanImplementation: DFTScanImplementationReference(
-                artifact: scanImplementationReference,
+                artifact: scanImplementationReference.reference,
                 transformedDesignDigest:
                     scanImplementation.transformedDesignDigest
             ),
-            faultUniverseArtifact: faultUniverseReference,
-            cellModelArtifacts: [model],
+            faultUniverseArtifact: faultUniverseReference.reference,
+            cellModelArtifacts: [model.reference],
+            inputBindings: [
+                pattern,
+                netlist,
+                scanImplementationReference,
+                faultUniverseReference,
+                model,
+            ],
             preprocessorDefines: ["FUNCTIONAL"],
             faultIDs: ["scan-out-sa1"]
         )

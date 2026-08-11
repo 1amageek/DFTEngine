@@ -63,8 +63,14 @@ public struct DeterministicScanInsertionEngine: ScanInserting {
                 )
             }
             do {
+                let constraintBindings = try request.constraints.artifacts.map {
+                    try request.requireBinding(for: $0)
+                }
                 try DFTConstraintValidator().validate(
-                    constraintLoader.load(request.constraints),
+                    try await constraintLoader.load(
+                        request.constraints,
+                        bindings: constraintBindings
+                    ),
                     request: request
                 )
             } catch {
@@ -75,7 +81,7 @@ public struct DeterministicScanInsertionEngine: ScanInserting {
                     startedAt: startedAt,
                     code: "DFT_CONSTRAINT_VALIDATION_FAILED",
                     message: error.localizedDescription,
-                    entity: request.constraints.artifacts.first?.path ?? "constraints",
+                    entity: "constraints",
                     actions: ["provide_constraint_loader", "repair_test_mode_constraints"]
                 )
             }
@@ -116,14 +122,19 @@ public struct DeterministicScanInsertionEngine: ScanInserting {
                     startedAt: startedAt,
                     code: "DFT_CELL_LIBRARY_LOADER_MISSING",
                     message: "Scan insertion cannot verify the process-scoped cell library manifest.",
-                    entity: cellLibraryReference.artifact.locator.path,
+                    entity: cellLibraryReference.artifact.id.description,
                     actions: ["provide_cell_library_loader", "persist_cell_library_manifest"]
                 )
             }
 
             let cellLibrary: DFTCellLibraryManifest
             do {
-                cellLibrary = try cellLibraryLoader.load(cellLibraryReference)
+                cellLibrary = try await cellLibraryLoader.load(
+                    cellLibraryReference,
+                    binding: request.requireBinding(
+                        for: cellLibraryReference.artifact
+                    )
+                )
                 try validate(cellLibrary: cellLibrary, reference: cellLibraryReference, pdk: request.pdk)
                 guard let timingReference = cellLibraryReference.timingLibraryArtifact,
                       let timingLibraryLoader else {
@@ -132,7 +143,10 @@ public struct DeterministicScanInsertionEngine: ScanInserting {
                         cellName: "<timing-library>"
                     )
                 }
-                let timingLibrary = try timingLibraryLoader.load(timingReference)
+                let timingLibrary = try await timingLibraryLoader.load(
+                    timingReference,
+                    binding: request.requireBinding(for: timingReference)
+                )
                 _ = try DFTCellLibraryTimingValidator().validate(
                     manifest: cellLibrary,
                     timingLibrary: timingLibrary
@@ -145,7 +159,7 @@ public struct DeterministicScanInsertionEngine: ScanInserting {
                     startedAt: startedAt,
                     code: "DFT_CELL_LIBRARY_LOAD_FAILED",
                     message: error.localizedDescription,
-                    entity: cellLibraryReference.artifact.locator.path,
+                    entity: cellLibraryReference.artifact.id.description,
                     actions: ["verify_cell_library_digest", "align_cell_library_with_pdk", "attach_qualification_evidence"]
                 )
             }
@@ -165,7 +179,10 @@ public struct DeterministicScanInsertionEngine: ScanInserting {
 
             let sourceSnapshot: LogicDesignSnapshot
             do {
-                sourceSnapshot = try designLoader.load(request.design)
+                sourceSnapshot = try await designLoader.load(
+                    request.design,
+                    binding: request.requireBinding(for: request.design.artifact)
+                )
             } catch {
                 return try blocked(
                     request: request,
@@ -174,7 +191,7 @@ public struct DeterministicScanInsertionEngine: ScanInserting {
                     startedAt: startedAt,
                     code: "DFT_DESIGN_LOAD_FAILED",
                     message: error.localizedDescription,
-                    entity: request.design.artifact.path,
+                    entity: request.design.artifact.id.description,
                     actions: ["verify_design_artifact_digest", "provide_valid_gate_level_snapshot"]
                 )
             }
@@ -239,10 +256,9 @@ public struct DeterministicScanInsertionEngine: ScanInserting {
             let provisionalContents = policy.generateDesignDiff
                 ? [transformedContent, scanImplementationContent, diffMetadata]
                 : [transformedContent, scanImplementationContent]
-            let transformedReference = try DFTArtifactBatch.references(
-                for: provisionalContents,
-                runID: request.runID
-            )[0]
+            let transformedReference = try DFTArtifactBatch.reference(
+                for: provisionalContents[0]
+            )
             let transformedDesign = LogicDesignReference(
                 artifact: transformedReference,
                 topDesignName: request.design.topDesignName,
@@ -336,7 +352,7 @@ public struct DeterministicScanInsertionEngine: ScanInserting {
                         entity: architecture.name
                     )
                 ],
-                artifacts: artifacts,
+                artifactBindings: artifacts,
                 payload: DFTPayload(
                     transformedDesign: transformedDesign,
                     faultCoverage: nil,

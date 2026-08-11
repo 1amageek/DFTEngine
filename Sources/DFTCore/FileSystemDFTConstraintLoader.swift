@@ -1,42 +1,44 @@
 import CircuiteFoundation
+import CircuiteFoundationCrypto
 import Foundation
 import TimingCore
 
 public struct FileSystemDFTConstraintLoader: DFTConstraintLoading {
-    public let rootURL: URL
+    public let artifactReader: any DFTArtifactReading
 
-    public init(rootURL: URL) {
-        self.rootURL = rootURL.standardizedFileURL
+    public init(artifactReader: any DFTArtifactReading) {
+        self.artifactReader = artifactReader
     }
 
-    public func load(_ reference: DFTConstraintReference) throws -> [TimingConstraintSet] {
-        try reference.modes.map { mode in
-            try load(mode)
+    public func load(
+        _ reference: DFTConstraintReference,
+        bindings: [DFTArtifactBinding]
+    ) async throws -> [TimingConstraintSet] {
+        var constraints: [TimingConstraintSet] = []
+        for mode in reference.modes {
+            let binding = try DFTArtifactBinding.require(mode.artifact, in: bindings)
+            constraints.append(try await load(mode, binding: binding))
         }
+        return constraints
     }
 
     private func load(
-        _ mode: DFTConstraintModeReference
-    ) throws -> TimingConstraintSet {
-        let path = mode.artifact.path
-        guard mode.artifact.format == .sdc else {
-            throw DFTConstraintError.invalidPath(path)
-        }
-        let url: URL
-        do {
-            url = try DFTProjectArtifactResolver(rootURL: rootURL).resolve(path)
-        } catch {
+        _ mode: DFTConstraintModeReference,
+        binding: DFTArtifactBinding
+    ) async throws -> TimingConstraintSet {
+        let path = binding.materializationDescription
+        guard mode.artifact.descriptor.format == .sdc else {
             throw DFTConstraintError.invalidPath(path)
         }
         let data: Data
         do {
-            data = try Data(contentsOf: url, options: .mappedIfSafe)
+            data = try await DFTArtifactDataLoader.load(
+                reference: mode.artifact,
+                binding: binding,
+                reader: artifactReader
+            )
         } catch {
             throw DFTConstraintError.readFailed(error.localizedDescription)
-        }
-        guard UInt64(data.count) == mode.artifact.byteCount,
-              try SHA256ContentDigester().digest(data: data) == mode.artifact.digest else {
-            throw DFTConstraintError.identityMismatch(path)
         }
         return try SDCParser().parse(data, modeID: mode.modeID)
     }

@@ -1,4 +1,5 @@
 import CircuiteFoundation
+import CircuiteFoundationCrypto
 import DFTCore
 import DFTPatternExchange
 import Foundation
@@ -48,7 +49,21 @@ public struct IcarusDFTScanPatternReplayProvider: DFTScanPatternReplayProviding 
             request.scanImplementation.artifact,
             request.faultUniverseArtifact,
         ] + request.cellModelArtifacts
-        let inputData = try await load(inputs)
+        let inputBindings: [DFTArtifactBinding]
+        do {
+            inputBindings = try inputs.map {
+                try request.requireBinding(for: $0)
+            }
+        } catch {
+            throw DFTScanPatternReplayError.artifactIntegrityMismatch(
+                path: inputs.first(where: { reference in
+                    !request.inputBindings.contains {
+                        $0.reference == reference
+                    }
+                })?.id.description ?? "request-input-binding"
+            )
+        }
+        let inputData = try await load(inputBindings)
         let patternData = inputData[0]
         let scanNetlistData = inputData[1]
         let scanImplementationData = inputData[2]
@@ -114,7 +129,7 @@ public struct IcarusDFTScanPatternReplayProvider: DFTScanPatternReplayProviding 
         do {
             let result = try await execute(
                 request: request,
-                inputs: inputs,
+                inputs: inputBindings,
                 scanImplementation: scanImplementation,
                 faultUniverse: faultUniverse,
                 faults: faults,
@@ -137,7 +152,7 @@ public struct IcarusDFTScanPatternReplayProvider: DFTScanPatternReplayProviding 
 
     private func execute(
         request: DFTScanPatternReplayRequest,
-        inputs: [ArtifactReference],
+        inputs: [DFTArtifactBinding],
         scanImplementation: DFTScanImplementation,
         faultUniverse: DFTFaultUniverse,
         faults: [DFTScanPatternReplayFault],
@@ -291,7 +306,7 @@ public struct IcarusDFTScanPatternReplayProvider: DFTScanPatternReplayProviding 
             simulator: simulatorDescriptor,
             scanImplementationDigest: scanImplementationDigest,
             faultUniverseDigest: faultUniverseDigest,
-            inputs: inputs,
+            inputs: inputs.map(\.reference),
             compilerInvocation: compilerInvocation,
             goldenInvocation: goldenInvocation,
             faultInvocations: faultInvocations,
@@ -305,7 +320,7 @@ public struct IcarusDFTScanPatternReplayProvider: DFTScanPatternReplayProviding 
                 error.localizedDescription
             )
         }
-        let artifacts: [ArtifactReference]
+        let artifacts: [DFTArtifactBinding]
         do {
             artifacts = try await artifactStore.storeBatch(
                 [
@@ -344,9 +359,9 @@ public struct IcarusDFTScanPatternReplayProvider: DFTScanPatternReplayProviding 
             simulator: simulatorDescriptor,
             scanImplementationDigest: scanImplementationDigest,
             faultUniverseDigest: faultUniverseDigest,
-            inputs: inputs,
+            inputBindings: inputs,
             observations: observations,
-            artifacts: artifacts
+            artifactBindings: artifacts
         )
     }
 
@@ -426,33 +441,33 @@ public struct IcarusDFTScanPatternReplayProvider: DFTScanPatternReplayProviding 
     private func validateInputArtifacts(
         _ request: DFTScanPatternReplayRequest
     ) throws {
-        guard request.patternArtifact.locator.kind == .testPattern,
-              request.patternArtifact.locator.format == .stil else {
+        guard request.patternArtifact.descriptor.kind == .testPattern,
+              request.patternArtifact.descriptor.format == .stil else {
             throw DFTScanPatternReplayError.invalidRequest(
                 "pattern artifact must be a STIL test-pattern artifact"
             )
         }
-        guard request.scanNetlistArtifact.locator.kind == .netlist,
-              isVerilog(request.scanNetlistArtifact.locator.format) else {
+        guard request.scanNetlistArtifact.descriptor.kind == .netlist,
+              isVerilog(request.scanNetlistArtifact.descriptor.format) else {
             throw DFTScanPatternReplayError.invalidRequest(
                 "scan netlist artifact must be a Verilog netlist artifact"
             )
         }
-        guard request.scanImplementation.artifact.locator.kind == .report,
-              request.scanImplementation.artifact.locator.format == .json else {
+        guard request.scanImplementation.artifact.descriptor.kind == .report,
+              request.scanImplementation.artifact.descriptor.format == .json else {
             throw DFTScanPatternReplayError.invalidRequest(
                 "scan implementation artifact must be a JSON report artifact"
             )
         }
-        guard request.faultUniverseArtifact.locator.kind == .input,
-              request.faultUniverseArtifact.locator.format == .json else {
+        guard request.faultUniverseArtifact.descriptor.kind == .input,
+              request.faultUniverseArtifact.descriptor.format == .json else {
             throw DFTScanPatternReplayError.invalidRequest(
                 "fault universe artifact must be a JSON input artifact"
             )
         }
         for artifact in request.cellModelArtifacts {
-            guard artifact.locator.kind == .model,
-                  isVerilog(artifact.locator.format) else {
+            guard artifact.descriptor.kind == .model,
+                  isVerilog(artifact.descriptor.format) else {
                 throw DFTScanPatternReplayError.invalidRequest(
                     "cell model artifacts must be Verilog model artifacts"
                 )
@@ -581,20 +596,22 @@ public struct IcarusDFTScanPatternReplayProvider: DFTScanPatternReplayProviding 
     }
 
     private func load(
-        _ references: [ArtifactReference]
+        _ bindings: [DFTArtifactBinding]
     ) async throws -> [Data] {
         var result: [Data] = []
-        result.reserveCapacity(references.count)
-        for reference in references {
-            let data = try await artifactReader.data(for: reference)
-            let digest = try SHA256ContentDigester().digest(data: data)
-            guard digest == reference.digest,
-                  UInt64(data.count) == reference.byteCount else {
+        result.reserveCapacity(bindings.count)
+        for binding in bindings {
+            do {
+                result.append(try await DFTArtifactDataLoader.load(
+                    reference: binding.reference,
+                    binding: binding,
+                    reader: artifactReader
+                ))
+            } catch {
                 throw DFTScanPatternReplayError.artifactIntegrityMismatch(
-                    path: reference.path
+                    path: binding.logicalID
                 )
             }
-            result.append(data)
         }
         return result
     }

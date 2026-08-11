@@ -5,7 +5,7 @@ import PDKCore
 public struct DFTRealizedScanATPGRequestConfiguration:
     Sendable, Hashable, Codable
 {
-    public static let currentSchemaVersion = 1
+    public static let currentSchemaVersion = 2
 
     public var schemaVersion: Int
     public var runID: String
@@ -15,6 +15,7 @@ public struct DFTRealizedScanATPGRequestConfiguration:
     public var clocks: [DFTScanClock]
     public var domainClockIDs: [String: String]
     public var atpg: DFTATPGConfiguration
+    public var inputBindings: [DFTArtifactBinding]
 
     public init(
         runID: String,
@@ -23,7 +24,8 @@ public struct DFTRealizedScanATPGRequestConfiguration:
         cellLibrary: DFTCellLibraryReference,
         clocks: [DFTScanClock],
         domainClockIDs: [String: String],
-        atpg: DFTATPGConfiguration
+        atpg: DFTATPGConfiguration,
+        inputBindings: [DFTArtifactBinding]
     ) {
         schemaVersion = Self.currentSchemaVersion
         self.runID = runID
@@ -33,6 +35,7 @@ public struct DFTRealizedScanATPGRequestConfiguration:
         self.clocks = clocks
         self.domainClockIDs = domainClockIDs
         self.atpg = atpg
+        self.inputBindings = inputBindings
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -44,6 +47,7 @@ public struct DFTRealizedScanATPGRequestConfiguration:
         case clocks
         case domainClockIDs
         case atpg
+        case inputBindings
     }
 
     public init(from decoder: Decoder) throws {
@@ -75,6 +79,10 @@ public struct DFTRealizedScanATPGRequestConfiguration:
         atpg = try container.decode(
             DFTATPGConfiguration.self,
             forKey: .atpg
+        )
+        inputBindings = try container.decode(
+            [DFTArtifactBinding].self,
+            forKey: .inputBindings
         )
     }
 }

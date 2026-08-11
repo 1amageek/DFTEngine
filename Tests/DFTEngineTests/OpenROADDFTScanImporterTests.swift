@@ -1,4 +1,5 @@
 import CircuiteFoundation
+import CircuiteFoundationFoundation
 @testable import DFTCLIKit
 import DFTCore
 @testable import DFTExternalTools
@@ -38,7 +39,9 @@ struct OpenROADDFTScanImporterTests {
                 == result.transformedDesign.designDigest
         )
         let implementationData = try await store.data(
-            for: result.scanImplementation.artifact
+            for: result.requireBinding(
+                for: result.scanImplementation.artifact
+            )
         )
         let implementation = try JSONDecoder().decode(
             DFTScanImplementation.self,
@@ -57,8 +60,8 @@ struct OpenROADDFTScanImporterTests {
                 .isEmpty
         )
         #expect(result.artifacts.count == 4)
-        for artifact in result.artifacts {
-            #expect(try await !store.data(for: artifact).isEmpty)
+        for artifactBinding in result.artifactBindings {
+            #expect(try await !store.data(for: artifactBinding).isEmpty)
         }
     }
 
@@ -66,12 +69,10 @@ struct OpenROADDFTScanImporterTests {
     func rejectsTamperedScanDEF() async throws {
         let store = InMemoryDFTArtifactStore()
         var request = try await makeRequest(store: store)
-        request.scanDEFArtifact = ArtifactReference(
-            id: request.scanDEFArtifact.id,
-            locator: request.scanDEFArtifact.locator,
+        request.scanDEFArtifact = try ArtifactReference(
             digest: request.scanDEFArtifact.digest,
             byteCount: request.scanDEFArtifact.byteCount + 1,
-            producer: request.scanDEFArtifact.producer
+            descriptor: request.scanDEFArtifact.descriptor
         )
 
         await #expect(throws: OpenROADDFTScanImportError.self) {
@@ -86,7 +87,7 @@ struct OpenROADDFTScanImporterTests {
     func rejectsDisconnectedScanOrder() async throws {
         let store = InMemoryDFTArtifactStore()
         var request = try await makeRequest(store: store)
-        request.scanDEFArtifact = try await store.store(
+        let replacement = try await store.store(
             DFTArtifactContent(
                 artifactID: "openroad-disconnected-scandef",
                 fileName: "disconnected-scan.def",
@@ -111,6 +112,12 @@ struct OpenROADDFTScanImporterTests {
             ),
             runID: request.runID
         )
+        replaceInputBinding(
+            replacement,
+            replacing: request.scanDEFArtifact,
+            in: &request
+        )
+        request.scanDEFArtifact = replacement.reference
 
         await #expect(throws: OpenROADDFTScanImportError.self) {
             _ = try await OpenROADDFTScanImporter(
@@ -147,7 +154,7 @@ struct OpenROADDFTScanImporterTests {
     func rejectsInternalNetReportedAsPin() async throws {
         let store = InMemoryDFTArtifactStore()
         var request = try await makeRequest(store: store)
-        request.scanDEFArtifact = try await store.store(
+        let replacement = try await store.store(
             DFTArtifactContent(
                 artifactID: "openroad-internal-endpoint-scandef",
                 fileName: "internal-endpoint-scan.def",
@@ -171,6 +178,12 @@ struct OpenROADDFTScanImporterTests {
             ),
             runID: request.runID
         )
+        replaceInputBinding(
+            replacement,
+            replacing: request.scanDEFArtifact,
+            in: &request
+        )
+        request.scanDEFArtifact = replacement.reference
 
         await #expect(throws: OpenROADDFTScanImportError.self) {
             _ = try await OpenROADDFTScanImporter(
@@ -184,7 +197,7 @@ struct OpenROADDFTScanImporterTests {
     func rejectsOmittedSourceScanCandidate() async throws {
         let store = InMemoryDFTArtifactStore()
         var request = try await makeRequest(store: store)
-        request.sourceNetlistArtifact = try await store.store(
+        let sourceReplacement = try await store.store(
             DFTArtifactContent(
                 artifactID: "openroad-source-with-orphan",
                 fileName: "source-with-orphan.v",
@@ -202,7 +215,13 @@ struct OpenROADDFTScanImporterTests {
             ),
             runID: request.runID
         )
-        request.transformedNetlistArtifact = try await store.store(
+        replaceInputBinding(
+            sourceReplacement,
+            replacing: request.sourceNetlistArtifact,
+            in: &request
+        )
+        request.sourceNetlistArtifact = sourceReplacement.reference
+        let transformedReplacement = try await store.store(
             DFTArtifactContent(
                 artifactID: "openroad-transformed-with-orphan",
                 fileName: "transformed-with-orphan.v",
@@ -220,6 +239,12 @@ struct OpenROADDFTScanImporterTests {
             ),
             runID: request.runID
         )
+        replaceInputBinding(
+            transformedReplacement,
+            replacing: request.transformedNetlistArtifact,
+            in: &request
+        )
+        request.transformedNetlistArtifact = transformedReplacement.reference
 
         await #expect(throws: OpenROADDFTScanImportError.self) {
             _ = try await OpenROADDFTScanImporter(
@@ -233,7 +258,7 @@ struct OpenROADDFTScanImporterTests {
     func importsThroughCLI() async throws {
         let root = try temporaryDirectory()
         defer { removeTemporaryDirectory(root) }
-        let store = FileSystemDFTArtifactStore(rootURL: root)
+        let store = try FileSystemDFTArtifactStore(rootURL: root)
         let request = try await makeRequest(store: store)
         let requestURL = root.appending(path: "openroad-import-request.json")
         let resultURL = root.appending(path: "openroad-import-result.json")
@@ -262,7 +287,7 @@ struct OpenROADDFTScanImporterTests {
     func composesRealizedScanATPGThroughCLI() async throws {
         let root = try temporaryDirectory()
         defer { removeTemporaryDirectory(root) }
-        let store = FileSystemDFTArtifactStore(rootURL: root)
+        let store = try FileSystemDFTArtifactStore(rootURL: root)
         let importRequest = try await makeRequest(store: store)
         let importResult = try await OpenROADDFTScanImporter(
             artifactReader: store,
@@ -275,21 +300,21 @@ struct OpenROADDFTScanImporterTests {
             to: importResultURL,
             options: .atomic
         )
-        let constraint = try fixtureArtifact(
+        let constraint = try fixtureArtifactBinding(
             id: "test-constraint",
             path: "constraints.sdc",
             kind: .constraint,
             format: .sdc,
             digest: String(repeating: "c", count: 64)
         )
-        let pdkManifest = try fixtureArtifact(
+        let pdkManifest = try fixtureArtifactBinding(
             id: "test-pdk",
             path: "pdk.json",
             kind: .technology,
             format: .json,
             digest: importResult.pdkDigest
         )
-        let timingLibrary = try fixtureArtifact(
+        let timingLibrary = try fixtureArtifactBinding(
             id: "test-timing",
             path: "timing.lib",
             kind: .timingLibrary,
@@ -297,7 +322,11 @@ struct OpenROADDFTScanImporterTests {
             digest: String(repeating: "d", count: 64)
         )
         let cellLibraryManifest = try DFTCellLibraryManifestCodec.decode(
-            await store.data(for: importRequest.cellLibraryArtifact)
+            try await store.data(
+                for: importRequest.requireBinding(
+                    for: importRequest.cellLibraryArtifact
+                )
+            )
         )
         let cellLibrary = DFTCellLibraryReference(
             artifact: importRequest.cellLibraryArtifact,
@@ -306,16 +335,20 @@ struct OpenROADDFTScanImporterTests {
             manifestDigest: try DFTCellLibraryManifestCodec.digest(
                 cellLibraryManifest
             ),
-            timingLibraryArtifact: timingLibrary
+            timingLibraryArtifact: timingLibrary.reference
         )
         let configuration = DFTRealizedScanATPGRequestConfiguration(
             runID: "openroad-atpg-test",
             constraints: DFTConstraintReference(
-                artifact: constraint,
+                artifact: constraint.reference,
                 modeIDs: ["scan"]
             ),
             pdk: PDKReference(
-                manifest: pdkManifest,
+                manifest: pdkManifest.reference,
+                manifestLocator: testArtifactLocator(
+                    path: "pdk.json",
+                    reference: pdkManifest.reference
+                ),
                 processID: importResult.processID,
                 version: "test",
                 digest: importResult.pdkDigest
@@ -334,7 +367,8 @@ struct OpenROADDFTScanImporterTests {
                 patternLength: 16,
                 faultSource: .gateLevel,
                 maximumExhaustiveInputCount: 8
-            )
+            ),
+            inputBindings: [constraint, pdkManifest, timingLibrary]
         )
         try DFTArtifactJSONEncoder().encode(configuration).write(
             to: configurationURL,
@@ -395,13 +429,13 @@ struct OpenROADDFTScanImporterTests {
         }
 
         var detachedCellLibrary = configuration
-        detachedCellLibrary.cellLibrary.artifact = try fixtureArtifact(
+        detachedCellLibrary.cellLibrary.artifact = try fixtureArtifactBinding(
             id: "detached-cell-library",
             path: "detached-cell-library.json",
             kind: .technology,
             format: .json,
             digest: String(repeating: "e", count: 64)
-        )
+        ).reference
         await #expect(
             throws: DFTRealizedScanATPGRequestBuilderError.self
         ) {
@@ -526,11 +560,18 @@ struct OpenROADDFTScanImporterTests {
             topModule: "scan_dut",
             scanEnableSignal: "scan_enable",
             testModeSignal: "test_mode",
-            sourceNetlistArtifact: source,
-            transformedNetlistArtifact: transformed,
-            scanDEFArtifact: scanDEF,
-            cellLibraryArtifact: cellLibrary,
-            executionEvidenceArtifact: executionEvidence,
+            sourceNetlistArtifact: source.reference,
+            transformedNetlistArtifact: transformed.reference,
+            scanDEFArtifact: scanDEF.reference,
+            cellLibraryArtifact: cellLibrary.reference,
+            executionEvidenceArtifact: executionEvidence.reference,
+            inputBindings: [
+                source,
+                transformed,
+                scanDEF,
+                cellLibrary,
+                executionEvidence,
+            ],
             producer: DFTExternalToolDescriptor(
                 engineID: "dft.scan-insertion",
                 implementationID: "openroad",
@@ -552,29 +593,31 @@ struct OpenROADDFTScanImporterTests {
         return url
     }
 
-    private func fixtureArtifact(
+    private func fixtureArtifactBinding(
         id: String,
         path: String,
         kind: ArtifactKind,
         format: ArtifactFormat,
         digest: String
-    ) throws -> ArtifactReference {
-        ArtifactReference(
-            id: try ArtifactID(rawValue: id),
-            locator: ArtifactLocator(
-                location: try ArtifactLocation(
-                    workspaceRelativePath: path
-                ),
-                role: .input,
-                kind: kind,
-                format: format
-            ),
-            digest: try ContentDigest(
-                algorithm: .sha256,
-                hexadecimalValue: digest
-            ),
-            byteCount: 1
+    ) throws -> DFTArtifactBinding {
+        testArtifactBinding(
+            artifactID: id,
+            path: path,
+            kind: kind,
+            format: format,
+            sha256: digest,
+            byteCount: 1,
+            role: .input
         )
+    }
+
+    private func replaceInputBinding(
+        _ binding: DFTArtifactBinding,
+        replacing reference: ArtifactReference,
+        in request: inout OpenROADDFTScanImportRequest
+    ) {
+        request.inputBindings.removeAll { $0.reference == reference }
+        request.inputBindings.append(binding)
     }
 
     private func removeTemporaryDirectory(_ url: URL) {

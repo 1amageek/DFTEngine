@@ -2,7 +2,7 @@ import CircuiteFoundation
 import DFTCore
 
 public struct DFTScanPatternReplayResult: Sendable, Hashable, Codable {
-    public static let currentSchemaVersion = 1
+    public static let currentSchemaVersion = 2
 
     public var schemaVersion: Int
     public var runID: String
@@ -10,9 +10,12 @@ public struct DFTScanPatternReplayResult: Sendable, Hashable, Codable {
     public var simulator: DFTExternalToolDescriptor
     public var scanImplementationDigest: String
     public var faultUniverseDigest: String
-    public var inputs: [ArtifactReference]
+    public var inputBindings: [DFTArtifactBinding]
     public var observations: [DFTScanPatternReplayObservation]
-    public var artifacts: [ArtifactReference]
+    public var artifactBindings: [DFTArtifactBinding]
+
+    public var inputs: [ArtifactReference] { inputBindings.map(\.reference) }
+    public var artifacts: [ArtifactReference] { artifactBindings.map(\.reference) }
 
     public init(
         runID: String,
@@ -20,9 +23,9 @@ public struct DFTScanPatternReplayResult: Sendable, Hashable, Codable {
         simulator: DFTExternalToolDescriptor,
         scanImplementationDigest: String,
         faultUniverseDigest: String,
-        inputs: [ArtifactReference],
+        inputBindings: [DFTArtifactBinding],
         observations: [DFTScanPatternReplayObservation],
-        artifacts: [ArtifactReference]
+        artifactBindings: [DFTArtifactBinding]
     ) {
         schemaVersion = Self.currentSchemaVersion
         self.runID = runID
@@ -30,8 +33,8 @@ public struct DFTScanPatternReplayResult: Sendable, Hashable, Codable {
         self.simulator = simulator
         self.scanImplementationDigest = scanImplementationDigest
         self.faultUniverseDigest = faultUniverseDigest
-        self.inputs = inputs
+        self.inputBindings = inputBindings
         self.observations = observations
-        self.artifacts = artifacts
+        self.artifactBindings = artifactBindings
     }
 }

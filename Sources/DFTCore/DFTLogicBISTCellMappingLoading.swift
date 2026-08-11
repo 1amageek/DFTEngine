@@ -1,5 +1,6 @@
 public protocol DFTLogicBISTCellMappingLoading: Sendable {
     func load(
-        _ mapping: DFTLogicBISTCellMapping
-    ) throws -> DFTLogicBISTCellMappingManifest
+        _ mapping: DFTLogicBISTCellMapping,
+        binding: DFTArtifactBinding
+    ) async throws -> DFTLogicBISTCellMappingManifest
 }
