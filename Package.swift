@@ -1,43 +1,30 @@
 // swift-tools-version: 6.3
 import PackageDescription
-import Foundation
 
-let workspaceRoot = URL(fileURLWithPath: #filePath)
-    .deletingLastPathComponent()
-    .deletingLastPathComponent()
-let isLSIWorkspace = FileManager.default.fileExists(
-    atPath: workspaceRoot.appendingPathComponent("docs/workspace-packages.json").path
+let circuiteFoundationDependency: Package.Dependency = .package(
+    url: "https://github.com/1amageek/CircuiteFoundation.git",
+    exact: "26.812.0"
 )
 
-let circuiteFoundationDependency: Package.Dependency = isLSIWorkspace && FileManager.default.fileExists(
-    atPath: workspaceRoot.appendingPathComponent("CircuiteFoundation/Package.swift").path
+let logicDesignDependency: Package.Dependency = .package(
+    url: "https://github.com/1amageek/LogicDesign.git",
+    exact: "26.812.0"
 )
-    ? .package(path: "../CircuiteFoundation")
-    : .package(url: "https://github.com/1amageek/CircuiteFoundation.git", revision: "dc792c88e189c822c9f83ea86cf139ee68560dca")
 
-let logicDesignDependency: Package.Dependency = isLSIWorkspace && FileManager.default.fileExists(
-    atPath: workspaceRoot.appendingPathComponent("LogicDesign/Package.swift").path
+let timingEngineDependency: Package.Dependency = .package(
+    url: "https://github.com/1amageek/TimingEngine.git",
+    exact: "26.812.0"
 )
-    ? .package(path: "../LogicDesign")
-    : .package(url: "https://github.com/1amageek/LogicDesign.git", revision: "e8f8e1dace0445ddd816929c4ca0fe17cca12a7b")
 
-let timingEngineDependency: Package.Dependency = isLSIWorkspace && FileManager.default.fileExists(
-    atPath: workspaceRoot.appendingPathComponent("TimingEngine/Package.swift").path
+let pdkKitDependency: Package.Dependency = .package(
+    url: "https://github.com/1amageek/PDKKit.git",
+    exact: "26.812.0"
 )
-    ? .package(path: "../TimingEngine")
-    : .package(url: "https://github.com/1amageek/TimingEngine.git", revision: "7809651994017a932314b747b948ac14e32e779b")
 
-let pdkKitDependency: Package.Dependency = isLSIWorkspace && FileManager.default.fileExists(
-    atPath: workspaceRoot.appendingPathComponent("PDKKit/Package.swift").path
+let signoffToolSupportDependency: Package.Dependency = .package(
+    url: "https://github.com/1amageek/SignoffToolSupport.git",
+    exact: "26.812.0"
 )
-    ? .package(path: "../PDKKit")
-    : .package(url: "https://github.com/1amageek/PDKKit.git", revision: "3ab7e3b6094d2de672b582d90076cf58b6527766")
-
-let signoffToolSupportDependency: Package.Dependency = isLSIWorkspace && FileManager.default.fileExists(
-    atPath: workspaceRoot.appendingPathComponent("SignoffToolSupport/Package.swift").path
-)
-    ? .package(path: "../SignoffToolSupport")
-    : .package(url: "https://github.com/1amageek/SignoffToolSupport.git", revision: "2c36104106bdfc8c279629c162c3ced9d7401328")
 
 let package = Package(
     name: "DFTEngine",

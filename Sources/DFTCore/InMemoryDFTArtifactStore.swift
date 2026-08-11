@@ -5,6 +5,7 @@ import CircuiteFoundationCrypto
 public actor InMemoryDFTArtifactStore: DFTArtifactStoring, DFTArtifactReading {
     public nonisolated let rootID: ArtifactRootID
     private var contents: [ArtifactID: Data] = [:]
+    private var materializations: [String: ArtifactReference] = [:]
 
     public init() {
         do {
@@ -30,10 +31,15 @@ public actor InMemoryDFTArtifactStore: DFTArtifactStoring, DFTArtifactReading {
                 format: content.format
             )
         )
+        if let existingReference = materializations[path],
+           existingReference != reference {
+            throw DFTArtifactStoreError.artifactConflict(path)
+        }
         if let existing = contents[reference.id], existing != content.data {
             throw DFTArtifactStoreError.artifactConflict(path)
         }
         contents[reference.id] = content.data
+        materializations[path] = reference
         return try DFTArtifactBinding(
             logicalID: content.artifactID,
             reference: reference,
@@ -68,22 +74,31 @@ public actor InMemoryDFTArtifactStore: DFTArtifactStoring, DFTArtifactReading {
             runID: runID,
             rootID: rootID
         )
-        for (content, binding) in zip(contents, bindings) {
-            if let existing = self.contents[binding.reference.id], existing != content.data {
-                throw DFTArtifactStoreError.artifactConflict(binding.materializationDescription)
+        let publications = try zip(contents, bindings).map { content, binding in
+            (
+                content: content,
+                binding: binding,
+                path: try binding.requireLocalRelativePath().stringValue
+            )
+        }
+        for publication in publications {
+            let content = publication.content
+            let binding = publication.binding
+            let path = publication.path
+            if let existingReference = materializations[path],
+               existingReference != binding.reference {
+                throw DFTArtifactStoreError.artifactConflict(path)
+            }
+            if let existing = self.contents[binding.reference.id],
+               existing != content.data {
+                throw DFTArtifactStoreError.artifactConflict(path)
             }
         }
-        for (content, binding) in zip(contents, bindings) {
-            self.contents[binding.reference.id] = content.data
+        for publication in publications {
+            self.contents[publication.binding.reference.id] = publication.content.data
+            materializations[publication.path] = publication.binding.reference
         }
         return bindings
-    }
-
-    public func register(_ binding: DFTArtifactBinding, data: Data) throws {
-        guard binding.reference.byteCount == UInt64(data.count) else {
-            throw DFTArtifactStoreError.readFailed("registered byte count mismatch")
-        }
-        contents[binding.reference.id] = data
     }
 
     public func data(for binding: DFTArtifactBinding) async throws -> Data {
